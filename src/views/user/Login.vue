@@ -11,11 +11,14 @@
         </div>
 
         <div class="login-head">
-          <h1 class="login-title">欢迎回来</h1>
-          <p class="login-desc">智能剧本创作平台，请使用运维管理员账号登录</p>
+          <h1 class="login-title">{{ isRecovery ? '找回登录密码' : '欢迎回来' }}</h1>
+          <p class="login-desc">
+            {{ isRecovery ? '通过账号绑定的手机号接收短信验证码，重置运维管理员登录密码' : '智能剧本创作平台，请使用运维管理员账号登录' }}
+          </p>
         </div>
 
         <el-form
+          v-if="!isRecovery"
           ref="formRef"
           :model="loginForm"
           :rules="rules"
@@ -79,9 +82,7 @@
           </el-button>
         </el-form>
 
-        <div class="login-footer">
-          账号由平台统一维护，如需开通或找回密码请联系管理员
-        </div>
+        <PasswordRecoveryPanel v-else @back="mode = 'login'" />
       </div>
     </div>
 
@@ -92,10 +93,9 @@
         v-if="!imageFailed"
         :src="visualImage"
         class="visual-img"
-        alt="品牌视觉图"
+        alt="运维人员监控平台运行、审核剧本内容与管理安全的卡通插画"
         @error="imageFailed = true"
       />
-      <div class="visual-overlay"></div>
       <div class="visual-caption">
         <p class="visual-slogan">让每一个好故事，从这里开始</p>
         <p class="visual-sub">剧云策 · AI 驱动的智能剧本创作平台</p>
@@ -105,7 +105,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import visualImage from '@/assets/images/login-operations-v2.png'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
@@ -113,6 +114,7 @@ import { getCodeImg, login } from '@/api/login'
 import { safeRedirectPath } from '@/utils/ruoyi-response'
 import { ElMessage } from 'element-plus'
 import { Document, User, Lock } from '@element-plus/icons-vue'
+import PasswordRecoveryPanel from '@/components/PasswordRecoveryPanel.vue'
 
 const REMEMBER_KEY = 'login-remember-username'
 
@@ -122,15 +124,15 @@ const userStore = useUserStore()
 const permissionStore = usePermissionStore()
 const formRef = ref(null)
 const loading = ref(false)
+// login=账号密码登录；recovery=同一张卡片内切换为手机号找回密码
+const mode = ref('login')
+const isRecovery = computed(() => mode.value === 'recovery')
 const captchaEnabled = ref(true)
 const captchaReady = ref(false)
 const codeUrl = ref('')
 const uuid = ref('')
 const rememberUsername = ref(false)
 const imageFailed = ref(false)
-// Unsplash 公开图片，加载失败时自动隐藏并回退为渐变视觉面板
-const visualImage =
-  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1600&q=80'
 
 const loginForm = reactive({
   username: '',
@@ -168,7 +170,7 @@ async function refreshCaptcha() {
 }
 
 function handleForgot() {
-  ElMessage.info('请联系系统管理员重置密码')
+  mode.value = 'recovery'
 }
 
 function loadRememberedUsername() {
@@ -277,6 +279,7 @@ function persistRememberedUsername() {
   display: none;
   width: 50%;
   overflow: hidden;
+  border-left: 1px solid #e5e5e5;
 }
 
 @media (min-width: 992px) {
@@ -460,36 +463,22 @@ function persistRememberedUsername() {
   transform: scale(0.99);
 }
 
-.login-footer {
-  margin-top: 40px;
-  text-align: center;
-  font-size: 12px;
-  color: #bfbfbf;
-  line-height: 1.5;
-}
-
 /* ==================== 右侧视觉面板 ==================== */
 .visual-bg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(80% 60% at 20% 10%, rgba(255, 255, 255, 0.14) 0%, transparent 60%),
-    radial-gradient(60% 50% at 85% 90%, rgba(255, 255, 255, 0.1) 0%, transparent 55%),
-    linear-gradient(150deg, #2b3038 0%, #1f2329 55%, #12151a 100%);
+  background: #ffffff;
 }
 
 .visual-img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.visual-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.08) 45%, rgba(0, 0, 0, 0.12) 100%);
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  width: 99.36%;
+  height: 69%;
+  max-width: 772.8px;
+  object-fit: contain;
 }
 
 .visual-caption {
@@ -497,7 +486,7 @@ function persistRememberedUsername() {
   left: 48px;
   right: 48px;
   bottom: 48px;
-  color: #ffffff;
+  color: #1f2329;
 }
 
 .visual-slogan {
@@ -505,23 +494,20 @@ function persistRememberedUsername() {
   font-weight: 600;
   letter-spacing: 2px;
   margin: 0 0 10px 0;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
 
 .visual-sub {
   font-size: 14px;
-  opacity: 0.82;
+  color: #737373;
   letter-spacing: 1px;
   margin: 0;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ==================== 入场动画 ==================== */
 @media (prefers-reduced-motion: no-preference) {
   .brand-row,
   .login-head,
-  .login-form,
-  .login-footer {
+  .login-form {
     animation: fade-up 0.5s ease both;
   }
 
@@ -531,10 +517,6 @@ function persistRememberedUsername() {
 
   .login-form {
     animation-delay: 0.16s;
-  }
-
-  .login-footer {
-    animation-delay: 0.24s;
   }
 
   .visual-caption {

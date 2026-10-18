@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 
 test('admin login cannot submit twice while form validation is pending', async () => {
   const source = await readFile(new URL('../src/views/user/Login.vue', import.meta.url), 'utf8')
@@ -10,7 +10,7 @@ test('admin login cannot submit twice while form validation is pending', async (
   let release
   const validation = new Promise(resolve => { release = resolve })
   let requests = 0
-  const context = { ref, reactive, watch() {}, onMounted() {},
+  const context = { computed, ref, reactive, watch() {}, onMounted() {},
     localStorage: { getItem() {}, removeItem() {} },
     useRoute: () => ({ query: { redirect: '/system/user' } }),
     useRouter: () => ({ replace: async () => {}, currentRoute: { value: { path: '/system/user' } } }),
