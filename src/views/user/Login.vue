@@ -67,7 +67,7 @@
 
           <el-button v-if="!captchaReady" text @click="refreshCaptcha">验证码加载失败，点击重试</el-button>
           <div class="form-options">
-            <el-checkbox v-model="rememberUsername">记住账号</el-checkbox>
+            <el-checkbox v-model="rememberPassword">记住密码</el-checkbox>
             <a class="forgot-link" @click.prevent="handleForgot">忘记密码？</a>
           </div>
 
@@ -116,7 +116,10 @@ import { ElMessage } from 'element-plus'
 import { Document, User, Lock } from '@element-plus/icons-vue'
 import PasswordRecoveryPanel from '@/components/PasswordRecoveryPanel.vue'
 
-const REMEMBER_KEY = 'login-remember-username'
+// 记住密码：勾选后把账号和密码一起写进本机 localStorage，取消勾选立即清除。
+const REMEMBER_KEY = 'login-remember-credential'
+// 兼容早期只保存账号的键，读到后迁移为账号+密码结构。
+const LEGACY_REMEMBER_KEY = 'login-remember-username'
 
 const router = useRouter()
 const route = useRoute()
@@ -131,7 +134,7 @@ const captchaEnabled = ref(true)
 const captchaReady = ref(false)
 const codeUrl = ref('')
 const uuid = ref('')
-const rememberUsername = ref(false)
+const rememberPassword = ref(false)
 const imageFailed = ref(false)
 
 const loginForm = reactive({
@@ -173,25 +176,32 @@ function handleForgot() {
   mode.value = 'recovery'
 }
 
-function loadRememberedUsername() {
-  try {
-    const saved = localStorage.getItem(REMEMBER_KEY)
-    if (saved) {
-      loginForm.username = saved
-      rememberUsername.value = true
-    }
-  } catch (error) {
-    /* localStorage 不可用时忽略 */
+function loadRememberedCredential() {
+  let raw = ''
+  try { raw = localStorage.getItem(REMEMBER_KEY) || '' } catch { return }
+  if (!raw) {
+    try {
+      const legacy = localStorage.getItem(LEGACY_REMEMBER_KEY)
+      if (legacy) {
+        loginForm.username = legacy
+        rememberPassword.value = true
+      }
+    } catch { /* localStorage 不可用时忽略 */ }
+    return
   }
+  try {
+    const saved = JSON.parse(raw) || {}
+    loginForm.username = saved.username || ''
+    loginForm.password = saved.password || ''
+    rememberPassword.value = Boolean(saved.username || saved.password)
+  } catch { /* 结构损坏时按未记住处理 */ }
 }
 
-watch(rememberUsername, (val) => {
+watch(rememberPassword, (val) => {
+  if (val) return
   try {
-    if (val && loginForm.username) {
-      localStorage.setItem(REMEMBER_KEY, loginForm.username)
-    } else if (!val) {
-      localStorage.removeItem(REMEMBER_KEY)
-    }
+    localStorage.removeItem(REMEMBER_KEY)
+    localStorage.removeItem(LEGACY_REMEMBER_KEY)
   } catch (error) {
     /* localStorage 不可用时忽略 */
   }
@@ -199,7 +209,7 @@ watch(rememberUsername, (val) => {
 
 onMounted(() => {
   refreshCaptcha()
-  loadRememberedUsername()
+  loadRememberedCredential()
 })
 
 const handleLogin = async () => {
@@ -226,7 +236,7 @@ const handleLogin = async () => {
     await userStore.fetchUserInfo()
     // 登录后先注册动态路由，再进入目标页，避免 /dashboard 未匹配
     await permissionStore.generateRoutes({ force: true })
-    persistRememberedUsername()
+    persistRememberedCredential()
     ElMessage.success('登录成功')
     const target = safeRedirectPath(route.query?.redirect)
     await router.replace(target)
@@ -245,12 +255,13 @@ const handleLogin = async () => {
   }
 }
 
-function persistRememberedUsername() {
+function persistRememberedCredential() {
   try {
-    if (rememberUsername.value) {
-      localStorage.setItem(REMEMBER_KEY, loginForm.username)
+    if (rememberPassword.value) {
+      localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username: loginForm.username, password: loginForm.password }))
     } else {
       localStorage.removeItem(REMEMBER_KEY)
+      localStorage.removeItem(LEGACY_REMEMBER_KEY)
     }
   } catch (error) {
     /* localStorage 不可用时忽略 */
