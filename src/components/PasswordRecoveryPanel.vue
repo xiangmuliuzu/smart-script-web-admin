@@ -6,7 +6,6 @@
       <el-button type="primary" class="result-back" @click="emit('back')">返回登录</el-button>
     </div>
     <el-form v-else ref="formRef" :model="form" :rules="rules" label-position="top" class="recovery-form" size="large" @submit.prevent="submit">
-      <el-alert type="info" :closable="false" show-icon class="recovery-tip" title="仅支持已绑定手机号的运维管理员账号，验证码 5 分钟内有效。" />
       <el-form-item label="手机号" prop="phone">
         <el-input v-model="form.phone" maxlength="11" placeholder="请输入账号绑定的手机号" autocomplete="tel" />
       </el-form-item>
@@ -121,7 +120,6 @@ onBeforeUnmount(stopCountdown)
 
 <style scoped>
 .recovery-form :deep(.el-form-item) { margin-bottom: 16px; }
-.recovery-tip { margin-bottom: 16px; }
 .code-row { display: flex; gap: 10px; width: 100%; }
 .code-row .el-input { flex: 1; }
 .code-button { flex: none; width: 116px; }
