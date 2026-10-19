@@ -31,6 +31,11 @@ export default defineConfig(({ mode }) => {
           target,
           changeOrigin: true
         },
+        // 静态资源（上传的图片、文档等）
+        '/profile': {
+          target,
+          changeOrigin: true
+        },
         // PC端管理API（提现审核、合同管理、结算管理、财务异常等），统一前缀 /pc/copyright。
         // 只代理 /pc/copyright 而非 /pc：否则会拦截 SPA 用户端路由（/pc/user/**），
         // 导致直接访问或刷新用户端页面时被转发到后端并返回 JSON 401。
