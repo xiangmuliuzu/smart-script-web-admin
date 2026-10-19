@@ -98,7 +98,11 @@
             <el-empty v-if="!materialLinks.length" description="未提供审核材料" :image-size="56" />
             <ul v-else class="material-list">
               <li v-for="(item, index) in materialLinks" :key="`${item.url}-${index}`">
-                <el-link :href="item.url" target="_blank" rel="noopener noreferrer" type="primary">{{ item.name }}</el-link>
+                <span class="material-name">{{ item.name }}</span>
+                <div class="material-actions">
+                  <el-button link type="primary" size="small" @click="previewMaterial(item)">在线预览</el-button>
+                  <el-button link type="primary" size="small" @click="downloadMaterial(item)">下载</el-button>
+                </div>
               </li>
             </ul>
           </section>
@@ -199,6 +203,13 @@
         </el-timeline>
       </div>
     </el-drawer>
+
+    <!-- 材料预览对话框 -->
+    <MaterialPreviewDialog
+      v-model="previewVisible"
+      :material-url="currentMaterial.url"
+      :material-name="currentMaterial.name"
+    />
   </PageContainer>
 </template>
 
@@ -207,10 +218,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useContactUser } from '@/composables/useContactUser'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import { getCopyrightSealList, getCopyrightSealDetail, getCopyrightSealLogs, reviewCopyrightSeal, updateCopyrightSealStatus, resolveAbnormalCopyrightSeal } from '@/api/copyright'
+import { resolveAssetUrl } from '@/utils/url'
 
 
 defineOptions({ name: 'CopyrightSealReview' })
@@ -236,6 +249,8 @@ const resolveSubmitting = ref(false)
 const statusChangingSealId = ref(null)
 const resolveReason = ref('')
 const reviewForm = ref({ sealId: null, action: 'approve', reason: '' })
+const previewVisible = ref(false)
+const currentMaterial = ref({ url: '', name: '' })
 let selectedSealId = null
 let listRequest = 0
 let detailRequest = 0
@@ -251,16 +266,16 @@ const materialLinks = computed(() => {
     values = String(source).split(',').map(value => value.trim()).filter(Boolean)
   }
   return values.map((item, index) => {
-    const url = safeUrl(typeof item === 'string' ? item : item?.url)
-    if (!url) return null
+    const rawUrl = typeof item === 'string' ? item : item?.url
+    if (!rawUrl) return null
+    const url = resolveAssetUrl(rawUrl)
     return { url, name: typeof item === 'object' && item?.name ? item.name : `审核材料 ${index + 1}` }
   }).filter(Boolean)
 })
 
 function safeUrl(value) {
   if (typeof value !== 'string') return ''
-  const url = value.trim()
-  return url.startsWith('/') && !url.startsWith('//') || /^https:\/\//i.test(url) ? url : ''
+  return resolveAssetUrl(value)
 }
 
 function reviewLabel(status) {
@@ -466,6 +481,29 @@ async function resolveAbnormal() {
   }
 }
 
+function previewMaterial(material) {
+  currentMaterial.value = {
+    url: material.url,
+    name: material.name
+  }
+  previewVisible.value = true
+}
+
+function downloadMaterial(material) {
+  if (!material.url) {
+    ElMessage.warning('文件地址无效')
+    return
+  }
+  
+  const link = document.createElement('a')
+  link.href = material.url
+  link.download = material.name || 'material'
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 onMounted(loadRows)
 </script>
 
@@ -475,7 +513,11 @@ onMounted(loadRows)
 .material-block { margin-top: 24px; }
 .material-block h3 { margin: 0 0 12px; color: #303133; font-size: 14px; }
 .seal-image { width: 100%; height: 220px; border: 1px solid #ebeef5; border-radius: 4px; }
-.material-list { margin: 0; padding-left: 20px; line-height: 2.2; }
+.material-list { margin: 0; padding: 0; list-style: none; }
+.material-list li { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; }
+.material-list li:last-child { border-bottom: none; }
+.material-name { flex: 1; color: #303133; font-size: 14px; }
+.material-actions { display: flex; gap: 8px; }
 .review-actions { margin-top: 20px; }
 .log-header { display: flex; justify-content: space-between; align-items: center; }
 .operator { color: #606266; font-size: 13px; }
