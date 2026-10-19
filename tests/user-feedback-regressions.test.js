@@ -1,0 +1,95 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { runInNewContext } from 'node:vm'
+import { parse } from '@vue/compiler-sfc'
+import { reactive, ref, computed } from 'vue'
+import { materialImageBlob } from '../src/utils/material-preview.js'
+
+async function setup(file, exports, overrides = {}) {
+  const source = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')
+  const { descriptor } = parse(source)
+  const code = descriptor.scriptSetup.content.replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?$/gm, '')
+  const context = { reactive, ref, computed, onMounted() {}, onBeforeUnmount() {}, defineExpose() {}, ElMessage: { error() {}, warning() {}, info() {} }, ...overrides }
+  runInNewContext(`${code}\nthis.page = { ${exports} }`, context)
+  return context.page
+}
+
+for (const [view, api] of [['UserManage.vue', 'listAppUsers'], ['creator-apply/index.vue', 'listCreatorApplications'], ['feedback/index.vue', 'listFeedback']]) {
+  test(`${view}: exact nickname is trimmed, paginated and reset independently`, async () => {
+    const requests = []
+    const page = await setup(`views/user/${view}`, 'query, filterForm, handleSearch, handleReset, onPageChange', {
+      [api]: async params => { requests.push(params); return { rows: [], total: 0 } }
+    })
+    page.query.pageNum = 5
+    page.filterForm.nickname = ' 222 '
+    page.handleSearch()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(requests[0].nickname, '222')
+    assert.equal(requests[0].keyword, undefined)
+    assert.equal(requests[0].pageNum, 1)
+    page.onPageChange(2)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(requests[1].nickname, '222')
+    assert.equal(requests[1].pageNum, 2)
+    page.handleReset()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(requests[2].nickname, undefined)
+  })
+}
+
+test('feedback categories use the App enums and never display raw unexpected values', async () => {
+  const page = await setup('views/user/feedback/index.vue', 'categoryLabel, feedbackCategories')
+  assert.deepEqual(Object.keys(page.feedbackCategories), ['FEATURE', 'EXPERIENCE', 'BUG', 'COMPLAINT', 'OTHER'])
+  assert.equal(page.categoryLabel('FEATURE'), '功能建议')
+  assert.equal(page.categoryLabel('COMPLAINT'), '投诉')
+  assert.equal(page.categoryLabel('unexpected'), '其他')
+})
+
+test('rejected application is blocked before opening capability dialog; resubmission allows it', async () => {
+  const page = await setup('views/user/UserManage.vue', 'openCapabilityDialog, capabilityDialogVisible')
+  page.openCapabilityDialog({ userId: 1, authorCapability: false, creatorApplicationStatus: 'REJECTED' })
+  assert.equal(page.capabilityDialogVisible.value, false)
+  page.openCapabilityDialog({ userId: 1, authorCapability: false, creatorApplicationStatus: 'PENDING' })
+  assert.equal(page.capabilityDialogVisible.value, true)
+})
+
+test('material preview accepts the real unwrapped redeem response and releases image URLs', async () => {
+  const png = new Blob([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])])
+  const calls = []
+  const revoked = []
+  const page = await setup('components/MaterialPreview.vue', 'open, clear, visible, imageUrl', {
+    Blob, materialImageBlob,
+    redeemMaterialToken: async token => { assert.equal(token, 'one-time-token'); return { accessUrl: '/api/v1/admin/material/content/access' } },
+    request: async config => { calls.push(config); return png },
+    URL: { createObjectURL: () => 'blob:preview', revokeObjectURL: url => revoked.push(url) }
+  })
+  await page.open('one-time-token')
+  assert.equal(calls[0].url, '/api/v1/admin/material/content/access')
+  assert.equal(calls[0].responseType, 'blob')
+  assert.equal(page.visible.value, true)
+  assert.equal(page.imageUrl.value, 'blob:preview')
+  page.clear()
+  assert.deepEqual(revoked, ['blob:preview'])
+  assert.equal(page.visible.value, false)
+})
+
+test('HTML/SVG disguised as images are never previewed', async () => {
+  for (const body of ['<svg onload="alert(1)"></svg>', '<html><script>alert(1)</script></html>', '']) {
+    assert.equal(await materialImageBlob(new Blob([body], { type: 'image/png' })), null)
+  }
+})
+
+test('real-name material tokens refresh after viewing so the same detail can be viewed twice', async () => {
+  let refreshes = 0
+  const viewed = []
+  const page = await setup('views/user/realname/index.vue', 'viewMaterial, detail, detailVisible, materialPreview', {
+    getRealNameApplication: async () => ({ applicationId: 3, materialRefs: [`fresh-${++refreshes}`] })
+  })
+  page.detail.value = { applicationId: 3, materialRefs: ['first'] }
+  page.detailVisible.value = true
+  page.materialPreview.value = { open: async token => viewed.push(token) }
+  await page.viewMaterial(page.detail.value.materialRefs[0])
+  await page.viewMaterial(page.detail.value.materialRefs[0])
+  assert.deepEqual(viewed, ['first', 'fresh-1'])
+})

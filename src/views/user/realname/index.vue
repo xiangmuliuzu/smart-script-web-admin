@@ -1,13 +1,20 @@
 <template>
   <div class="a4-page">
+    <el-alert
+      title="认证结果由实名核验接口自动判定，此页面仅供查询。"
+      type="info"
+      :closable="false"
+      show-icon
+      class="records-notice"
+    />
     <el-card class="filter-card">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item>
           <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 150px" clearable>
             <el-option label="全部状态" value="" />
-            <el-option label="待审核" value="PENDING" />
+            <el-option label="未完成" value="PENDING" />
             <el-option label="已通过" value="APPROVED" />
-            <el-option label="已驳回" value="REJECTED" />
+            <el-option label="未通过" value="REJECTED" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -22,7 +29,7 @@
 
     <el-card class="table-card">
       <el-table :data="rows" style="width: 100%" v-loading="loading">
-        <el-table-column prop="applicationId" label="申请编号" width="110" />
+        <el-table-column prop="applicationId" label="认证编号" width="110" />
         <el-table-column prop="userId" label="用户 ID" width="90" />
         <el-table-column prop="nickname" label="昵称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="phoneMasked" label="手机号" width="130">
@@ -39,26 +46,20 @@
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="reviewerName" label="审核人" width="110">
-          <template #default="{ row }">{{ row.reviewerName || '—' }}</template>
+        <el-table-column label="认证时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.reviewedAt) }}</template>
         </el-table-column>
+        <el-table-column prop="rejectReason" label="未通过原因" min-width="200" show-overflow-tooltip />
         <el-table-column label="提交时间" width="170">
           <template #default="{ row }">{{ formatTime(row.submittedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="90" fixed="right">
           <template #default="{ row }">
             <el-button
               v-permission="['user:realname:query']"
               size="small"
               @click="openDetail(row)"
             >详情</el-button>
-            <el-button
-              v-if="row.status === 'PENDING'"
-              v-permission="['user:realname:audit']"
-              type="primary"
-              size="small"
-              @click="openDecide(row)"
-            >审核</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -80,20 +81,19 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="实名申请详情" width="560px">
+    <el-dialog v-model="detailVisible" @closed="materialPreview?.clear()" title="实名认证记录详情" width="560px">
       <div v-if="detailForbidden" class="forbidden-hint">无详情权限，无法查看材料信息</div>
       <el-descriptions v-else-if="detail" :column="1" border>
-        <el-descriptions-item label="申请编号">{{ detail.applicationId }}</el-descriptions-item>
+        <el-descriptions-item label="认证编号">{{ detail.applicationId }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
         <el-descriptions-item label="昵称">{{ detail.nickname }}</el-descriptions-item>
         <el-descriptions-item label="手机号">{{ detail.phoneMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="姓名（掩码）">{{ detail.realNameMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="证件号（掩码）">{{ detail.idNumberMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
-        <el-descriptions-item label="审核人">{{ detail.reviewerName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ formatTime(detail.submittedAt) }}</el-descriptions-item>
-        <el-descriptions-item label="审核时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
-        <el-descriptions-item label="驳回原因">{{ detail.rejectReason || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="认证时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="未通过原因">{{ detail.rejectReason || '—' }}</el-descriptions-item>
         <el-descriptions-item label="材料">
           <div v-if="detail.materialRefs && detail.materialRefs.length" class="material-list">
             <el-button
@@ -116,43 +116,20 @@
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-
-    <el-dialog v-model="decideVisible" title="实名审核决定" width="480px">
-      <el-form label-width="90px">
-        <el-form-item label="申请人">
-          {{ decideTarget ? `${decideTarget.nickname}（ID ${decideTarget.userId}）` : '' }}
-        </el-form-item>
-        <el-form-item label="决定">
-          <el-radio-group v-model="decideForm.decision">
-            <el-radio label="APPROVE">通过</el-radio>
-            <el-radio label="REJECT">驳回</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="decideForm.decision === 'REJECT'" label="驳回原因" required>
-          <el-input v-model="decideForm.rejectReason" type="textarea" :rows="3" placeholder="驳回时必填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="decideVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitDecide">确定</el-button>
-      </template>
-    </el-dialog>
+    <MaterialPreview ref="materialPreview" />
   </div>
 </template>
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import MaterialPreview from '@/components/MaterialPreview.vue'
+import { ElMessage } from 'element-plus'
 import {
   listRealNameApplications,
-  getRealNameApplication,
-  decideRealNameApplication,
-  redeemMaterialToken,
-  downloadMaterialContent
+  getRealNameApplication
 } from '@/api/user/realName'
 
 const loading = ref(false)
-const saving = ref(false)
 const rows = ref([])
 const total = ref(0)
 const errorText = ref('')
@@ -162,39 +139,41 @@ const filterForm = reactive({ status: '', keyword: '' })
 const detailVisible = ref(false)
 const detail = ref(null)
 const detailForbidden = ref(false)
-const decideVisible = ref(false)
-const decideTarget = ref(null)
-const decideForm = reactive({ decision: 'APPROVE', rejectReason: '' })
+
 
 const materialTtlHint = '5 分钟'
 const materialBusy = ref('')
+const materialPreview = ref(null)
 
 /**
  * 查看材料：先用短时令牌兑换一次性访问链接，再取回真实内容。
  *
- * 令牌是一次性的，查看后该引用即失效，因此刷新详情才能拿到新的令牌。
+ * 令牌是一次性的，查看后自动刷新详情获取新引用。
  */
 async function viewMaterial(token) {
+  if (materialBusy.value) return
   materialBusy.value = token
   try {
-    const res = await redeemMaterialToken(token)
-    const accessUrl = res?.data?.accessUrl
-    if (!accessUrl) {
-      ElMessage.error('材料访问链接获取失败')
-      return
-    }
-    await downloadMaterialContent(accessUrl, 'material')
+    await materialPreview.value.open(token)
   } catch (e) {
-    ElMessage.error(e?.message || '材料查看失败，请重新打开详情获取新的引用')
+    ElMessage.error(e?.message || '材料查看失败，请重新打开详情重试')
   } finally {
+    // 一次性令牌使用后刷新引用，支持在同一详情中再次查看。
+    if (detailVisible.value && detail.value) {
+      const id = detail.value.applicationId
+      try {
+        const result = await getRealNameApplication(id)
+        if (detailVisible.value && detail.value?.applicationId === id) detail.value = result?.data || result
+      } catch { /* 原详情仍可查看；重新打开可重试。 */ }
+    }
     materialBusy.value = ''
   }
 }
 
 function statusLabel(status) {
-  if (status === 'PENDING') return '待审核'
+  if (status === 'PENDING') return '未完成'
   if (status === 'APPROVED') return '已通过'
-  if (status === 'REJECTED') return '已驳回'
+  if (status === 'REJECTED') return '未通过'
   return status || '—'
 }
 
@@ -264,52 +243,6 @@ async function openDetail(row) {
   }
 }
 
-function openDecide(row) {
-  decideTarget.value = row
-  decideForm.decision = 'APPROVE'
-  decideForm.rejectReason = ''
-  decideVisible.value = true
-}
-
-async function submitDecide() {
-  const reject = decideForm.decision === 'REJECT'
-  if (reject && !decideForm.rejectReason.trim()) {
-    ElMessage.warning('驳回原因必填')
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      reject ? '确认驳回该实名申请？' : '确认通过该实名申请？',
-      '审核确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return
-  }
-  saving.value = true
-  try {
-    await decideRealNameApplication(decideTarget.value.applicationId, {
-      decision: decideForm.decision,
-      rejectReason: reject ? decideForm.rejectReason.trim() : undefined,
-      expectedStatus: 'PENDING'
-    })
-    ElMessage.success('审核已完成')
-    decideVisible.value = false
-    await load()
-  } catch (e) {
-    // 409 = 并发审核或状态已变化，提示刷新而不是重复提交
-    const status = e?.response?.status
-    if (status === 409) {
-      ElMessage.error('该申请已被处理或状态已变化，请刷新后查看')
-      await load()
-    } else {
-      ElMessage.error(e?.message || '审核失败')
-    }
-  } finally {
-    saving.value = false
-  }
-}
-
 onMounted(load)
 </script>
 
@@ -317,6 +250,10 @@ onMounted(load)
 .a4-page {
   padding: 20px;
   background-color: #f7f8fa;
+}
+
+.records-notice {
+  margin-bottom: 16px;
 }
 
 .filter-card {

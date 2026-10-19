@@ -32,6 +32,9 @@
           </el-select>
         </el-form-item>
         <el-form-item>
+          <el-input v-model="filterForm.nickname" placeholder="昵称（精确匹配）" clearable style="width: 180px" @keyup.enter="handleSearch" />
+        </el-form-item>
+        <el-form-item>
           <el-input
             v-model="filterForm.keyword"
             placeholder="昵称/账号/手机号"
@@ -96,8 +99,10 @@
                 v-permission="['user:creator:update']"
                 size="small"
                 :loading="creatorBusyId === row.userId"
+                :disabled="!row.authorCapability && row.creatorApplicationStatus === 'REJECTED'"
+                :title="row.creatorApplicationStatus === 'REJECTED' ? '申请已驳回，请用户重新提交申请' : ''"
                 @click="openCapabilityDialog(row)"
-              >{{ row.authorCapability ? '关闭' : '开通' }}</el-button>
+              >{{ row.authorCapability ? '关闭' : row.creatorApplicationStatus === 'REJECTED' ? '已驳回' : '开通' }}</el-button>
               <el-button
                 v-permission="['user:app:status']"
                 :type="row.status === '0' ? 'danger' : 'success'"
@@ -195,12 +200,14 @@ let loadRequestId = 0
 const query = reactive({
   pageNum: 1,
   pageSize: 10,
+  nickname: '',
   keyword: '',
   status: '',
   realNameStatus: '',
   authorCapability: ''
 })
 const filterForm = reactive({
+  nickname: '',
   keyword: '',
   status: '',
   realNameStatus: '',
@@ -246,6 +253,7 @@ async function loadUsers() {
     const res = await listAppUsers({
       pageNum: query.pageNum,
       pageSize: query.pageSize,
+      nickname: query.nickname || undefined,
       keyword: query.keyword || undefined,
       status: query.status || undefined,
       realNameStatus: query.realNameStatus || undefined,
@@ -265,6 +273,7 @@ async function loadUsers() {
 }
 
 function handleSearch() {
+  query.nickname = filterForm.nickname.trim()
   query.keyword = filterForm.keyword.trim()
   query.status = filterForm.status
   query.realNameStatus = filterForm.realNameStatus
@@ -274,6 +283,7 @@ function handleSearch() {
 }
 
 function handleReset() {
+  filterForm.nickname = ''
   filterForm.keyword = ''
   filterForm.status = ''
   filterForm.realNameStatus = ''
@@ -331,6 +341,10 @@ async function handleToggleStatus(row) {
 
 function openCapabilityDialog(row) {
   if (saving.value) return
+  if (!row.authorCapability && row.creatorApplicationStatus === 'REJECTED') {
+    ElMessage.warning('申请已驳回，请用户重新提交申请')
+    return
+  }
   capabilityTarget.value = row
   capabilityForm.enabled = !row.authorCapability
   capabilityForm.reason = ''
