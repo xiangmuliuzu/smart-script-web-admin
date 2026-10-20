@@ -71,6 +71,83 @@
           </div>
         </el-tab-pane>
 
+        <!-- 广告福利任务 -->
+        <el-tab-pane label="广告福利任务" name="ad">
+          <div class="card-header">
+            <div class="search-bar">
+              <el-input v-model="adQuery.adName" placeholder="任务名称" clearable style="width: 180px" @keyup.enter="fetchAdTasks" />
+              <el-select v-model="adQuery.adType" placeholder="广告形式" clearable style="width: 140px">
+                <el-option label="激励视频" value="reward_video" />
+                <el-option label="图文广告" value="reward_image" />
+              </el-select>
+              <el-button type="primary" class="black-button" @click="fetchAdTasks">查询</el-button>
+              <el-button type="primary" class="black-button" @click="handleAddAdTask">新增广告任务</el-button>
+            </div>
+          </div>
+          <el-table :data="adTaskList" v-loading="loading" style="width: 100%">
+            <el-table-column prop="adName" label="任务名称" min-width="150" />
+            <el-table-column label="广告形式" width="100">
+              <template #default="{ row }">{{ adTypeLabel(row.adType) }}</template>
+            </el-table-column>
+            <el-table-column prop="adUnitId" label="广告位编码" width="140" />
+            <el-table-column label="每日可看次数" width="110" align="center">
+              <template #default="{ row }">{{ row.frequencyLimit }}</template>
+            </el-table-column>
+            <el-table-column label="单次奖励积分" width="120" align="center">
+              <template #default="{ row }">
+                <span class="points-text">{{ row.rewardPoints }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="生效时间" min-width="180">
+              <template #default="{ row }">
+                {{ row.startDate || '立即生效' }} ~ {{ row.endDate || '长期有效' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.isEnabled === 1 ? 'success' : 'info'" size="small">
+                  {{ row.isEnabled === 1 ? '启用' : '停用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <div class="action-buttons">
+                  <el-button size="small" @click="handleEditAdTask(row)">编辑</el-button>
+                  <el-button size="small" @click="handleToggleAdTask(row)">
+                    {{ row.isEnabled === 1 ? '停用' : '启用' }}
+                  </el-button>
+                  <el-button size="small" type="danger" @click="handleDeleteAdTask(row)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- AI次数兑换配置 -->
+        <el-tab-pane label="AI次数兑换" name="exchange">
+          <el-alert
+            type="info" :closable="false" show-icon
+            title="调整后，App 端福利页与 AI 机会页的兑换提示会实时显示新比例，无需发版。"
+            style="margin-bottom: 16px"
+          />
+          <el-card shadow="never" style="max-width: 560px">
+            <div class="rate-current">
+              <span class="rate-label">当前兑换比例</span>
+              <span class="rate-value">{{ exchangeRate }} 积分 = 1 次 AI 机会</span>
+            </div>
+            <el-form label-width="160px" style="margin-top: 16px">
+              <el-form-item label="新兑换比例">
+                <el-input-number v-model="newRate" :min="1" :max="10000" controls-position="right" />
+                <span class="rate-hint">积分 = 1 次 AI 机会</span>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" class="black-button" :loading="saving" @click="handleUpdateRate">保存比例</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </el-tab-pane>
+
         <!-- 积分账户 -->
         <el-tab-pane label="积分账户" name="account">
           <div class="card-header">
@@ -199,11 +276,27 @@
         <el-form-item label="任务编码">
           <el-input v-model="taskForm.taskCode" placeholder="如：DAILY_LOGIN" />
         </el-form-item>
+        <el-form-item label="任务图标">
+          <el-select v-model="taskForm.icon" placeholder="选择图标" clearable style="width: 100%">
+            <el-option v-for="ic in ICON_OPTIONS" :key="ic" :label="ic" :value="ic" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="任务说明">
           <el-input v-model="taskForm.description" type="textarea" :rows="2" placeholder="任务描述" />
         </el-form-item>
+        <el-form-item label="生效日期">
+          <el-date-picker
+            v-model="taskDateRange" type="daterange" range-separator="~"
+            start-placeholder="开始日期" end-placeholder="结束日期(空=长期)"
+            value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%"
+          />
+        </el-form-item>
         <el-form-item label="目标次数">
           <el-input-number v-model="taskForm.targetCount" :min="1" :max="1000" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="每日上限">
+          <el-input-number v-model="taskForm.dailyLimit" :min="0" :max="1000" controls-position="right" style="width: 100%" />
+          <span class="rate-hint">0=不限；每日任务建议 1</span>
         </el-form-item>
         <el-form-item label="奖励积分">
           <el-input-number v-model="taskForm.rewardPoints" :min="0" :max="100000" controls-position="right" style="width: 100%" />
@@ -223,6 +316,49 @@
         <el-button type="primary" class="black-button" :loading="saving" @click="handleSubmitTask">确定</el-button>
       </template>
     </el-dialog>
+    <!-- 广告福利任务新增/编辑弹窗 -->
+    <el-dialog v-model="adDialogVisible" :title="isEditAdTask ? '编辑广告任务' : '新增广告任务'" width="540px">
+      <el-form :model="adForm" label-width="110px">
+        <el-form-item label="任务名称" required>
+          <el-input v-model="adForm.adName" placeholder="如：看激励视频得积分" />
+        </el-form-item>
+        <el-form-item label="广告形式" required>
+          <el-select v-model="adForm.adType" placeholder="请选择" style="width: 100%">
+            <el-option label="激励视频" value="reward_video" />
+            <el-option label="图文广告" value="reward_image" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="广告位编码">
+          <el-input v-model="adForm.adUnitId" placeholder="如：REWARD_VIDEO_01" />
+        </el-form-item>
+        <el-form-item label="每日可看次数">
+          <el-input-number v-model="adForm.frequencyLimit" :min="1" :max="100" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="单次奖励积分">
+          <el-input-number v-model="adForm.rewardPoints" :min="0" :max="10000" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="生效日期">
+          <el-date-picker
+            v-model="adDateRange" type="daterange" range-separator="~"
+            start-placeholder="开始日期" end-placeholder="结束日期"
+            value-format="YYYY-MM-DD" style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="adForm.sort" :min="0" :max="9999" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="adForm.isEnabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+        </el-form-item>
+        <el-form-item label="说明">
+          <el-input v-model="adForm.remark" type="textarea" :rows="2" placeholder="任务说明" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adDialogVisible = false">取消</el-button>
+        <el-button type="primary" class="black-button" :loading="saving" @click="handleSubmitAdTask">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -232,7 +368,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import adminFetch from '@/utils/adminFetch'
 
 const TASK_PREFIX = '/api/v1/admin/welfare/task'
+const AD_PREFIX = '/api/v1/admin/welfare/ad'
 const POINTS_PREFIX = '/api/v1/admin/welfare/points'
+const RATE_URL = '/api/v1/admin/ai/quota/exchange-rate'
 
 const activeTab = ref('task')
 const loading = ref(false)
@@ -246,8 +384,25 @@ const taskDialogVisible = ref(false)
 const isEditTask = ref(false)
 const taskForm = reactive({
   taskId: null, taskName: '', taskType: 'DAILY', taskCode: '', description: '',
-  targetCount: 1, rewardPoints: 0, sort: 0, status: 1, remark: ''
+  targetCount: 1, rewardPoints: 0, icon: '', dailyLimit: 0, sort: 0, status: 1, remark: ''
 })
+const taskDateRange = ref(null)
+const ICON_OPTIONS = ['calendar', 'book', 'upload', 'gift', 'star', 'check']
+
+// 广告福利任务
+const adQuery = reactive({ adName: '', adType: '', page: 1, pageSize: 10 })
+const adTaskList = ref([])
+const adDialogVisible = ref(false)
+const isEditAdTask = ref(false)
+const adDateRange = ref(null)
+const adForm = reactive({
+  adId: null, adName: '', adType: 'reward_video', adUnitId: '',
+  frequencyLimit: 5, rewardPoints: 10, sort: 0, isEnabled: 1, remark: ''
+})
+
+// AI次数兑换比例
+const exchangeRate = ref(10)
+const newRate = ref(10)
 
 // 积分账户
 const accQuery = reactive({ nickname: '', page: 1, pageSize: 10 })
@@ -261,6 +416,7 @@ const recordList = ref([])
 const dateRange = ref(null)
 
 const taskTypeLabel = (t) => ({ DAILY: '每日任务', READING: '阅读任务', UPLOAD: '上传任务', ACTIVITY: '活动任务' }[t] || t)
+const adTypeLabel = (t) => ({ reward_video: '激励视频', reward_image: '图文广告' }[t] || t)
 const sourceLabel = (s) => ({ TASK: '任务', AD: '广告', EXCHANGE: '兑换', REVERSAL: '补偿' }[s] || s)
 const formatDate = (d) => (d ? String(d).replace('T', ' ').slice(0, 19) : '')
 
@@ -280,6 +436,157 @@ const fetchTasks = async () => {
     ElMessage.error('获取任务配置失败')
   } finally {
     loading.value = false
+  }
+}
+
+const fetchAdTasks = async () => {
+  loading.value = true
+  try {
+    let url = `${AD_PREFIX}/list?page=${adQuery.page}&pageSize=${adQuery.pageSize}`
+    if (adQuery.adName) url += `&adName=${encodeURIComponent(adQuery.adName)}`
+    if (adQuery.adType) url += `&adType=${adQuery.adType}`
+    const res = await adminFetch(url)
+    const data = await res.json()
+    if (data.code === 200) {
+      adTaskList.value = data.rows || []
+    }
+  } catch (e) {
+    ElMessage.error('获取广告任务失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAddAdTask = () => {
+  isEditAdTask.value = false
+  adDateRange.value = null
+  Object.assign(adForm, {
+    adId: null, adName: '', adType: 'reward_video', adUnitId: '',
+    frequencyLimit: 5, rewardPoints: 10, sort: 0, isEnabled: 1, remark: ''
+  })
+  adDialogVisible.value = true
+}
+
+const handleEditAdTask = (row) => {
+  isEditAdTask.value = true
+  adDateRange.value = row.startDate ? [row.startDate, row.endDate] : null
+  Object.assign(adForm, {
+    adId: row.adId, adName: row.adName, adType: row.adType, adUnitId: row.adUnitId,
+    frequencyLimit: row.frequencyLimit, rewardPoints: row.rewardPoints,
+    sort: row.sort, isEnabled: row.isEnabled, remark: row.remark
+  })
+  adDialogVisible.value = true
+}
+
+const handleSubmitAdTask = async () => {
+  if (!adForm.adName || !adForm.adType) {
+    ElMessage.warning('请填写任务名称和广告形式')
+    return
+  }
+  saving.value = true
+  try {
+    const payload = { ...adForm }
+    if (adDateRange.value) {
+      payload.startDate = adDateRange.value[0]
+      payload.endDate = adDateRange.value[1]
+    } else {
+      payload.startDate = null
+      payload.endDate = null
+    }
+    const res = await adminFetch(AD_PREFIX, {
+      method: isEditAdTask.value ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success(isEditAdTask.value ? '修改成功' : '新增成功')
+      adDialogVisible.value = false
+      fetchAdTasks()
+    } else {
+      ElMessage.error(data.msg || '提交失败')
+    }
+  } catch (e) {
+    ElMessage.error('提交失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+const handleToggleAdTask = async (row) => {
+  try {
+    const res = await adminFetch(AD_PREFIX, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adId: row.adId, adName: row.adName, adType: row.adType,
+        isEnabled: row.isEnabled === 1 ? 0 : 1
+      })
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success(row.isEnabled === 1 ? '已停用' : '已启用')
+      fetchAdTasks()
+    }
+  } catch (e) {
+    ElMessage.error('操作失败')
+  }
+}
+
+const handleDeleteAdTask = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确认删除广告任务「${row.adName}」？`, '删除确认', {
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
+    })
+    const res = await adminFetch(`${AD_PREFIX}/${row.adId}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success('删除成功')
+      fetchAdTasks()
+    } else {
+      ElMessage.error(data.msg || '删除失败')
+    }
+  } catch (e) {
+    // 取消或失败
+  }
+}
+
+const fetchExchangeRate = async () => {
+  try {
+    const res = await adminFetch(RATE_URL)
+    const data = await res.json()
+    if (data.code === 200) {
+      exchangeRate.value = data.data
+      newRate.value = data.data
+    }
+  } catch (e) {
+    ElMessage.error('获取兑换比例失败')
+  }
+}
+
+const handleUpdateRate = async () => {
+  if (!newRate.value || newRate.value < 1) {
+    ElMessage.warning('兑换比例必须 >= 1')
+    return
+  }
+  saving.value = true
+  try {
+    const res = await adminFetch(RATE_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rate: newRate.value })
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success(`兑换比例已更新为 ${newRate.value} 积分=1次`)
+      exchangeRate.value = newRate.value
+    } else {
+      ElMessage.error(data.msg || '更新失败')
+    }
+  } catch (e) {
+    ElMessage.error('更新失败')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -325,7 +632,8 @@ const fetchRecords = async () => {
 
 const handleAddTask = () => {
   isEditTask.value = false
-  Object.assign(taskForm, { taskId: null, taskName: '', taskType: 'DAILY', taskCode: '', description: '', targetCount: 1, rewardPoints: 0, sort: 0, status: 1, remark: '' })
+  Object.assign(taskForm, { taskId: null, taskName: '', taskType: 'DAILY', taskCode: '', description: '', targetCount: 1, rewardPoints: 0, icon: '', dailyLimit: 0, sort: 0, status: 1, remark: '' })
+  taskDateRange.value = null
   taskDialogVisible.value = true
 }
 
@@ -334,8 +642,10 @@ const handleEditTask = (row) => {
   Object.assign(taskForm, {
     taskId: row.taskId, taskName: row.taskName, taskType: row.taskType, taskCode: row.taskCode,
     description: row.description, targetCount: row.targetCount, rewardPoints: row.rewardPoints,
+    icon: row.icon || '', dailyLimit: row.dailyLimit || 0,
     sort: row.sort, status: row.status, remark: row.remark
   })
+  taskDateRange.value = row.startTime ? [row.startTime, row.endTime] : null
   taskDialogVisible.value = true
 }
 
@@ -346,10 +656,15 @@ const handleSubmitTask = async () => {
   }
   saving.value = true
   try {
+    const payload = { ...taskForm }
+    if (taskDateRange.value) {
+      payload.startTime = taskDateRange.value[0]
+      payload.endTime = taskDateRange.value[1]
+    }
     const res = await adminFetch(TASK_PREFIX, {
       method: isEditTask.value ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...taskForm })
+      body: JSON.stringify(payload)
     })
     const data = await res.json()
     if (data.code === 200) {
@@ -401,6 +716,8 @@ const handleDeleteTask = async (row) => {
 
 const handleTabChange = (name) => {
   if (name === 'task') fetchTasks()
+  else if (name === 'ad') fetchAdTasks()
+  else if (name === 'exchange') fetchExchangeRate()
   else if (name === 'account') fetchAccounts()
   else if (name === 'record') fetchRecords()
 }
@@ -421,5 +738,9 @@ onMounted(() => {
 .points-text { color: #e6a23c; font-weight: 600; }
 .earn-text { color: #67c23a; font-weight: 600; }
 .spend-text { color: #f56c6c; font-weight: 600; }
+.rate-current { display: flex; align-items: baseline; gap: 12px; }
+.rate-label { color: #909399; font-size: 14px; }
+.rate-value { font-size: 22px; font-weight: 700; color: #303133; }
+.rate-hint { margin-left: 10px; color: #909399; }
 :deep(.el-tabs__nav-wrap) { margin-bottom: 8px; }
 </style>
