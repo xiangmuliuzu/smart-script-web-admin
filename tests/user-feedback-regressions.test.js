@@ -80,16 +80,14 @@ test('HTML/SVG disguised as images are never previewed', async () => {
   }
 })
 
-test('real-name material tokens refresh after viewing so the same detail can be viewed twice', async () => {
-  let refreshes = 0
-  const viewed = []
-  const page = await setup('views/user/realname/index.vue', 'viewMaterial, detail, detailVisible, materialPreview', {
-    getRealNameApplication: async () => ({ applicationId: 3, materialRefs: [`fresh-${++refreshes}`] })
+test('real-name record details remain available without material viewing', async () => {
+  const record = { applicationId: 3, status: 'APPROVED', realNameMasked: '张*' }
+  const page = await setup('views/user/realname/index.vue', 'openDetail, detail, detailVisible', {
+    getRealNameApplication: async id => { assert.equal(id, 3); return { data: record } }
   })
-  page.detail.value = { applicationId: 3, materialRefs: ['first'] }
-  page.detailVisible.value = true
-  page.materialPreview.value = { open: async token => viewed.push(token) }
-  await page.viewMaterial(page.detail.value.materialRefs[0])
-  await page.viewMaterial(page.detail.value.materialRefs[0])
-  assert.deepEqual(viewed, ['first', 'fresh-1'])
+  await page.openDetail({ applicationId: 3 })
+  assert.equal(page.detailVisible.value, true)
+  assert.equal(page.detail.value.realNameMasked, '张*')
+  const source = await readFile(new URL('../src/views/user/realname/index.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /MaterialPreview|viewMaterial|查看材料|查看报告|label="材料"/)
 })

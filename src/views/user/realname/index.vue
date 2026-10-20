@@ -81,8 +81,8 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="detailVisible" @closed="materialPreview?.clear()" title="实名认证记录详情" width="560px">
-      <div v-if="detailForbidden" class="forbidden-hint">无详情权限，无法查看材料信息</div>
+    <el-dialog v-model="detailVisible" title="实名认证记录详情" width="560px">
+      <div v-if="detailForbidden" class="forbidden-hint">无详情权限，无法查看认证详情</div>
       <el-descriptions v-else-if="detail" :column="1" border>
         <el-descriptions-item label="认证编号">{{ detail.applicationId }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
@@ -94,36 +94,16 @@
         <el-descriptions-item label="提交时间">{{ formatTime(detail.submittedAt) }}</el-descriptions-item>
         <el-descriptions-item label="认证时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
         <el-descriptions-item label="未通过原因">{{ detail.rejectReason || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="材料">
-          <div v-if="detail.materialRefs && detail.materialRefs.length" class="material-list">
-            <el-button
-              v-for="(ref, idx) in detail.materialRefs"
-              :key="ref"
-              size="small"
-              type="primary"
-              link
-              :loading="materialBusy === ref"
-              @click="viewMaterial(ref)"
-            >查看材料 {{ idx + 1 }}</el-button>
-            <div class="material-hint">
-              每次查看都会消耗该短时引用（{{ materialTtlHint }} 内有效，且只能使用一次）
-            </div>
-          </div>
-          <span v-else>—</span>
-        </el-descriptions-item>
       </el-descriptions>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-    <MaterialPreview ref="materialPreview" />
   </div>
 </template>
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import MaterialPreview from '@/components/MaterialPreview.vue'
-import { ElMessage } from 'element-plus'
 import {
   listRealNameApplications,
   getRealNameApplication
@@ -140,35 +120,6 @@ const detailVisible = ref(false)
 const detail = ref(null)
 const detailForbidden = ref(false)
 
-
-const materialTtlHint = '5 分钟'
-const materialBusy = ref('')
-const materialPreview = ref(null)
-
-/**
- * 查看材料：先用短时令牌兑换一次性访问链接，再取回真实内容。
- *
- * 令牌是一次性的，查看后自动刷新详情获取新引用。
- */
-async function viewMaterial(token) {
-  if (materialBusy.value) return
-  materialBusy.value = token
-  try {
-    await materialPreview.value.open(token)
-  } catch (e) {
-    ElMessage.error(e?.message || '材料查看失败，请重新打开详情重试')
-  } finally {
-    // 一次性令牌使用后刷新引用，支持在同一详情中再次查看。
-    if (detailVisible.value && detail.value) {
-      const id = detail.value.applicationId
-      try {
-        const result = await getRealNameApplication(id)
-        if (detailVisible.value && detail.value?.applicationId === id) detail.value = result?.data || result
-      } catch { /* 原详情仍可查看；重新打开可重试。 */ }
-    }
-    materialBusy.value = ''
-  }
-}
 
 function statusLabel(status) {
   if (status === 'PENDING') return '未完成'
@@ -295,17 +246,6 @@ onMounted(load)
   padding: 18px 0;
   color: #8c8c8c;
   font-size: 13px;
-}
-
-.material-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.material-hint {
-  font-size: 12px;
-  color: #8c8c8c;
 }
 
 .forbidden-hint {
