@@ -16,25 +16,29 @@ async function setup(file, exports, overrides = {}) {
 }
 
 for (const [view, api] of [['UserManage.vue', 'listAppUsers'], ['creator-apply/index.vue', 'listCreatorApplications'], ['feedback/index.vue', 'listFeedback']]) {
-  test(`${view}: exact nickname is trimmed, paginated and reset independently`, async () => {
+  test(`${view}: search, pagination and reset no longer include a nickname filter`, async () => {
     const requests = []
     const page = await setup(`views/user/${view}`, 'query, filterForm, handleSearch, handleReset, onPageChange', {
       [api]: async params => { requests.push(params); return { rows: [], total: 0 } }
     })
     page.query.pageNum = 5
-    page.filterForm.nickname = ' 222 '
+    assert.equal(Object.hasOwn(page.filterForm, 'nickname'), false)
+    assert.equal(Object.hasOwn(page.query, 'nickname'), false)
+    page.filterForm.keyword = '14786152186'
     page.handleSearch()
     await new Promise(resolve => setImmediate(resolve))
-    assert.equal(requests[0].nickname, '222')
-    assert.equal(requests[0].keyword, undefined)
+    assert.equal(Object.hasOwn(requests[0], 'nickname'), false)
+    assert.equal(requests[0].keyword, '14786152186')
     assert.equal(requests[0].pageNum, 1)
     page.onPageChange(2)
     await new Promise(resolve => setImmediate(resolve))
-    assert.equal(requests[1].nickname, '222')
+    assert.equal(Object.hasOwn(requests[1], 'nickname'), false)
+    assert.equal(requests[1].keyword, '14786152186')
     assert.equal(requests[1].pageNum, 2)
     page.handleReset()
     await new Promise(resolve => setImmediate(resolve))
-    assert.equal(requests[2].nickname, undefined)
+    assert.equal(Object.hasOwn(requests[2], 'nickname'), false)
+    assert.equal(requests[2].keyword, undefined)
   })
 }
 
