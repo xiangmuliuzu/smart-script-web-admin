@@ -18,9 +18,6 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-input v-model="filterForm.nickname" placeholder="昵称（精确匹配）" clearable style="width: 180px" @keyup.enter="handleSearch" />
-        </el-form-item>
-        <el-form-item>
           <el-input v-model="filterForm.keyword" placeholder="内容/昵称/账号" style="width: 200px" clearable />
         </el-form-item>
         <el-form-item>
@@ -167,8 +164,8 @@ const saving = ref(false)
 const rows = ref([])
 const total = ref(0)
 const errorText = ref('')
-const query = reactive({ pageNum: 1, pageSize: 10, status: '', category: '', nickname: '', keyword: '' })
-const filterForm = reactive({ status: '', category: '', nickname: '', keyword: '' })
+const query = reactive({ pageNum: 1, pageSize: 10, status: '', category: '', keyword: '' })
+const filterForm = reactive({ status: '', category: '', keyword: '' })
 
 const detailVisible = ref(false)
 const detail = ref(null)
@@ -254,7 +251,6 @@ async function load() {
       pageSize: query.pageSize,
       status: query.status || undefined,
       category: query.category || undefined,
-      nickname: query.nickname || undefined,
       keyword: query.keyword || undefined
     })
     rows.value = res?.rows || []
@@ -271,7 +267,6 @@ async function load() {
 function handleSearch() {
   query.status = filterForm.status
   query.category = filterForm.category
-  query.nickname = filterForm.nickname.trim()
   query.keyword = filterForm.keyword
   query.pageNum = 1
   load()
@@ -280,7 +275,6 @@ function handleSearch() {
 function handleReset() {
   filterForm.status = ''
   filterForm.category = ''
-  filterForm.nickname = ''
   filterForm.keyword = ''
   handleSearch()
 }

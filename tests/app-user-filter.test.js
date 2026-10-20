@@ -21,6 +21,8 @@ test('dropdown changes and Enter apply the current filters', () => {
   assert.equal(selects.length, 3)
   for (const select of selects) assert.match(select, /@change="handleSearch"/)
   assert.match(template, /@keyup\.enter="handleSearch"/)
+  assert.match(template, /placeholder="手机号"/)
+  assert.doesNotMatch(template, /filterForm\.nickname/)
 })
 
 test('search and reset preserve false filters, reset pagination and refresh rows', async () => {
@@ -30,14 +32,15 @@ test('search and reset preserve false filters, reset pagination and refresh rows
     return { rows: [{ userId: params.authorCapability === false ? 2 : 1 }], total: 1 }
   })
   page.query.pageNum = 5
-  Object.assign(page.filterForm, { authorCapability: false, status: '0', realNameStatus: 'PENDING', keyword: ' name ' })
+  Object.assign(page.filterForm, { authorCapability: false, status: '0', realNameStatus: 'PENDING', keyword: ' 14786152186 ' })
   page.handleSearch()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(requests[0].pageNum, 1)
   assert.equal(requests[0].authorCapability, false)
   assert.equal(requests[0].status, '0')
   assert.equal(requests[0].realNameStatus, 'PENDING')
-  assert.equal(requests[0].keyword, 'name')
+  assert.equal(requests[0].keyword, '14786152186')
+  assert.equal(Object.hasOwn(requests[0], 'nickname'), false)
   assert.equal(page.userList.value[0].userId, 2)
   page.handleReset()
   await new Promise(resolve => setImmediate(resolve))

@@ -32,12 +32,9 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-input v-model="filterForm.nickname" placeholder="昵称（精确匹配）" clearable style="width: 180px" @keyup.enter="handleSearch" />
-        </el-form-item>
-        <el-form-item>
           <el-input
             v-model="filterForm.keyword"
-            placeholder="昵称/账号/手机号"
+            placeholder="手机号"
             style="width: 200px"
             clearable
             @keyup.enter="handleSearch"
@@ -200,14 +197,12 @@ let loadRequestId = 0
 const query = reactive({
   pageNum: 1,
   pageSize: 10,
-  nickname: '',
   keyword: '',
   status: '',
   realNameStatus: '',
   authorCapability: ''
 })
 const filterForm = reactive({
-  nickname: '',
   keyword: '',
   status: '',
   realNameStatus: '',
@@ -253,7 +248,6 @@ async function loadUsers() {
     const res = await listAppUsers({
       pageNum: query.pageNum,
       pageSize: query.pageSize,
-      nickname: query.nickname || undefined,
       keyword: query.keyword || undefined,
       status: query.status || undefined,
       realNameStatus: query.realNameStatus || undefined,
@@ -273,7 +267,6 @@ async function loadUsers() {
 }
 
 function handleSearch() {
-  query.nickname = filterForm.nickname.trim()
   query.keyword = filterForm.keyword.trim()
   query.status = filterForm.status
   query.realNameStatus = filterForm.realNameStatus
@@ -283,7 +276,6 @@ function handleSearch() {
 }
 
 function handleReset() {
-  filterForm.nickname = ''
   filterForm.keyword = ''
   filterForm.status = ''
   filterForm.realNameStatus = ''
