@@ -170,6 +170,7 @@
         <el-descriptions-item label="AI评分">{{ currentReview.aiScore != null ? currentReview.aiScore + '分' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentReview.createTime }}</el-descriptions-item>
       </el-descriptions>
+      <ReviewWorkContentPanel :content="reviewContent" :loading="reviewContentLoading" />
       <el-form :model="reviewForm" label-width="80px" style="margin-top: 20px">
         <el-form-item label="审核结果">
           <el-radio-group v-model="reviewForm.action">
@@ -211,6 +212,7 @@
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
+      <ReviewWorkContentPanel :content="detailContent" :loading="detailContentLoading" />
       <template #footer>
         <!-- A3 联系用户入口（任务 25）：待作品关联真实 userId 后自动启用 -->
         <el-button type="primary" plain :disabled="!currentDetail.userId" @click="handleContactUser(currentDetail)">联系用户</el-button>
@@ -225,6 +227,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useContactUser } from '@/composables/useContactUser'
+import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
 
 // A3 联系用户（任务 25）：复用公共 composable 创建会话并跳转聊天详情
 const { handleContactUser } = useContactUser({
@@ -273,6 +276,8 @@ const statistics = ref({
 // 审核详情弹窗
 const reviewDialogVisible = ref(false)
 const currentReview = ref({})
+const reviewContent = ref(null)
+const reviewContentLoading = ref(false)
 const reviewForm = ref({
   action: 'approve',
   remark: ''
@@ -392,11 +397,27 @@ const disabledEndDate = (date) => {
 }
 
 // 处理审核
-const handleReview = (row) => {
+// 加载审核作品完整内容（简介/设定/章节正文）
+const loadReviewContent = async (reviewId) => {
+  try {
+    const res = await adminFetch(`/api/v1/admin/review/content/${reviewId}`)
+    const data = await res.json()
+    if (data.code === 200) return data.data
+  } catch (e) {
+    console.error('加载作品内容失败:', e)
+  }
+  return null
+}
+
+const handleReview = async (row) => {
   currentReview.value = row
   reviewForm.value.action = 'approve'
   reviewForm.value.remark = ''
+  reviewContent.value = null
   reviewDialogVisible.value = true
+  reviewContentLoading.value = true
+  reviewContent.value = await loadReviewContent(row.reviewId)
+  reviewContentLoading.value = false
 }
 
 // 提交审核结果
@@ -430,11 +451,17 @@ const handleSubmitReview = async () => {
 // 详情弹窗
 const detailDialogVisible = ref(false)
 const currentDetail = ref({})
+const detailContent = ref(null)
+const detailContentLoading = ref(false)
 
 // 处理详情
-const handleDetail = (row) => {
+const handleDetail = async (row) => {
   currentDetail.value = row
+  detailContent.value = null
   detailDialogVisible.value = true
+  detailContentLoading.value = true
+  detailContent.value = await loadReviewContent(row.reviewId)
+  detailContentLoading.value = false
 }
 
 // 导出审核报告
