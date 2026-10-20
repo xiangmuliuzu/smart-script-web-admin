@@ -239,6 +239,23 @@ export function downloadContract(contractId) {
   })
 }
 
+/** 编辑合同（模板/金额，仅待签署且无签署记录时允许） */
+export function updateContract(contractId, data) {
+  return adminV1Request({
+    url: `${PRODUCT_PREFIX}/copyright/contract/${contractId}`,
+    method: 'put',
+    data
+  })
+}
+
+/** 重建签署完成后的 PDF（补偿签署时生成失败或旧数据未生成的场景） */
+export function regenerateContractPdf(contractId) {
+  return adminV1Request({
+    url: `${PRODUCT_PREFIX}/copyright/contract/${contractId}/regenerate-pdf`,
+    method: 'post'
+  })
+}
+
 // 结算管理API
 export function getSettlementList(params) {
   const { pageNo, ...filters } = params || {}

@@ -67,6 +67,7 @@
               <el-button v-if="!row.sellerSignStatus" v-permission="'smartscript:copyright:contract:sign'" type="success" size="small" @click="sign(row, 'seller')">卖方签署</el-button>
             </template>
             <el-button v-if="row.status === 'completed'" v-permission="'smartscript:copyright:contract:archive'" type="info" size="small" @click="archive(row)">归档</el-button>
+            <el-button v-if="['completed', 'archived'].includes(row.status)" v-permission="'smartscript:copyright:contract:list'" type="primary" size="small" @click="regeneratePdf(row)">重建PDF</el-button>
             <el-button v-if="['pending', 'partial_signed'].includes(row.status)" v-permission="'smartscript:copyright:contract:cancel'" type="danger" size="small" @click="cancel(row)">作废</el-button>
           </div>
         </template>
@@ -158,7 +159,7 @@ import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { getContractList, getAvailableContractOrders, generateContract, previewContract, downloadContract, archiveContract, cancelContract, signContract } from '@/api/copyright'
+import { getContractList, getAvailableContractOrders, generateContract, previewContract, downloadContract, archiveContract, cancelContract, signContract, updateContract, regenerateContractPdf } from '@/api/copyright'
 
 const query = reactive({
   pageNo: 1,
@@ -279,7 +280,11 @@ const preview = async (row) => {
   
   try {
     const res = await previewContract(row.contractId)
-    previewContent.value = res?.content || res?.data?.content || ''
+    let html = res?.content || res?.data?.content || ''
+    // 签名/印章等 /profile/ 静态资源需经 API 代理前缀访问
+    const apiBase = import.meta.env.VITE_APP_BASE_API || '/dev-api'
+    html = html.replace(/src="\/profile\//g, `src="${apiBase}/profile/`)
+    previewContent.value = html
   } catch {
     ElMessage.error('预览加载失败')
     previewContent.value = '<p style="color: red;">加载失败</p>'
@@ -367,15 +372,11 @@ const confirmEdit = async () => {
   
   editLoading.value = true
   try {
-    const response = await fetch(`/api/v1/admin/contracts/${editForm.contractId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        templateId: editForm.templateId,
-        amount: editForm.amount
-      })
+    // 走统一封装（PUT /api/v1/admin/copyright/contract/{id}），自动携带 token 并解析 body.code
+    await updateContract(editForm.contractId, {
+      templateId: editForm.templateId,
+      amount: editForm.amount
     })
-    if (!response.ok) throw new Error('更新失败')
     ElMessage.success('合同已更新')
     editVisible.value = false
     loadRows()
@@ -383,6 +384,17 @@ const confirmEdit = async () => {
     ElMessage.error(error?.message || '更新失败')
   } finally {
     editLoading.value = false
+  }
+}
+
+const regeneratePdf = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确认重建合同 ${row.contractNo} 的签署完成 PDF？适用于 PDF 生成失败或未生成的旧数据。`, '重建PDF', { type: 'warning' })
+    await regenerateContractPdf(row.contractId)
+    ElMessage.success('PDF 已重建')
+    loadRows()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || 'PDF 重建失败')
   }
 }
 
