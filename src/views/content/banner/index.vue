@@ -39,7 +39,7 @@
       @page-change="loadList"
       @size-change="loadList"
     >
-      <el-table-column prop="bannerId" label="BannerID" width="90" />
+      <el-table-column prop="sortOrder" label="位次" width="80" />
       <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
       <el-table-column label="封面图" width="120">
         <template #default="{ row }">
@@ -56,26 +56,6 @@
       </el-table-column>
       <el-table-column label="展示位置" width="120">
         <template #default="{ row }">{{ contentEnumLabel(BANNER_POSITION, row.position) }}</template>
-      </el-table-column>
-      <el-table-column label="排序" width="140">
-        <template #default="{ row }">
-          <el-input-number
-            v-model="row.sortOrder"
-            :min="0"
-            :max="9999"
-            size="small"
-            controls-position="right"
-            style="width: 88px"
-          />
-          <el-button
-            v-permission="['content:banner:edit']"
-            size="small"
-            link
-            type="primary"
-            :loading="sortingId === row.bannerId"
-            @click="handleSort(row)"
-          >保存</el-button>
-        </template>
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
@@ -145,22 +125,24 @@
           </el-upload>
           <div class="banner-uploader__tip">支持 jpg/png 格式，大小不超过 2MB，建议尺寸 750×360</div>
         </el-form-item>
-        <el-form-item label="链接类型" prop="linkType">
-          <el-input v-model="form.linkType" placeholder="如 work / page / url" />
-        </el-form-item>
-        <el-form-item label="链接ID" prop="linkId">
-          <el-input-number v-model="form.linkId" :min="0" :max="9999999999" />
-        </el-form-item>
-        <el-form-item label="链接URL" prop="linkUrl">
-          <el-input v-model="form.linkUrl" placeholder="跳转URL（选填）" />
+        <el-form-item label="跳转作品" prop="linkId">
+          <el-select
+            v-model="form.linkId"
+            filterable
+            clearable
+            placeholder="输入作品名搜索"
+            style="width: 100%"
+          >
+            <el-option v-for="w in worksList" :key="w.workId" :label="w.title" :value="w.workId" />
+          </el-select>
         </el-form-item>
         <el-form-item label="展示位置" prop="position">
           <el-select v-model="form.position" placeholder="请选择展示位置" style="width: 100%" clearable>
             <el-option v-for="t in BANNER_POSITION" :key="t.value" :label="t.label" :value="t.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="排序" prop="sortOrder">
-          <el-input-number v-model="form.sortOrder" :min="0" :max="9999" />
+        <el-form-item label="位次" prop="sortOrder">
+          <el-input-number v-model="form.sortOrder" :min="1" :max="9999" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-switch
@@ -222,6 +204,7 @@ import {
   changeBannerStatus,
   changeBannerSort,
   deleteBanner,
+  listWork,
   uploadFile
 } from '@/api/content'
 import { BANNER_POSITION, contentEnumLabel } from '@/constants/contentEnum'
@@ -231,6 +214,7 @@ defineOptions({ name: 'ContentBanner' })
 
 const loading = ref(false)
 const list = ref([])
+const worksList = ref([])
 const total = ref(0)
 const queryParams = reactive({
   pageNum: 1,
@@ -271,6 +255,13 @@ function buildQuery() {
   }
 }
 
+async function loadWorks() {
+  try {
+    const res = await listWork({ pageNum: 1, pageSize: 999 })
+    worksList.value = res.rows || []
+  } catch {}
+}
+
 async function loadList() {
   loading.value = true
   try {
@@ -309,7 +300,7 @@ const defaultForm = () => ({
   linkId: 0,
   linkUrl: '',
   position: '',
-  sortOrder: 0,
+  sortOrder: null,
   status: 'on',
   startTime: '',
   endTime: '',
@@ -457,9 +448,9 @@ async function handleSubmit() {
     const payload = {
       title: form.title.trim(),
       imageUrl: form.imageUrl.trim(),
-      linkType: form.linkType?.trim() || '',
+      linkType: form.linkId ? 'work' : '',
       linkId: form.linkId,
-      linkUrl: form.linkUrl?.trim() || '',
+      linkUrl: '',
       position: form.position?.trim() || '',
       sortOrder: form.sortOrder,
       status: form.status,
@@ -542,7 +533,7 @@ async function handleDelete(row) {
   }
 }
 
-onMounted(loadList)
+onMounted(() => { loadList(); loadWorks() })
 </script>
 
 <style scoped>

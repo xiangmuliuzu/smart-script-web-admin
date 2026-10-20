@@ -279,10 +279,6 @@ export function uploadFile(file) {
 }
 
 // ---------------- 作品上传资料 ----------------
-export function listWorkFile(query) { return adminV1Request({ url: `${ADMIN_PREFIX}/workfile/list`, method: 'get', params: query }) }
-export function getWorkFile(fileId) { return adminV1Request({ url: `${ADMIN_PREFIX}/workfile/${fileId}`, method: 'get' }) }
-export function listWorkVersions(query) { return adminV1Request({ url: `${ADMIN_PREFIX}/workfile/versions`, method: 'get', params: query }) }
-export function getWorkVersion(versionId) { return adminV1Request({ url: `${ADMIN_PREFIX}/workfile/version/${versionId}`, method: 'get' }) }
 
 // ---------------- 外部视频-渠道管理 ----------------
 export function listDramaChannel(query) { return adminV1Request({ url: `${ADMIN_PREFIX}/dramaChannel/list`, method: 'get', params: query }) }

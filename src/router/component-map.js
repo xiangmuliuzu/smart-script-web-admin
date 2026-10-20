@@ -21,7 +21,6 @@ import ContentWork from '@/views/content/work/index.vue'
 import ContentBookstore from '@/views/content/bookstore/index.vue'
 import ContentRanking from '@/views/content/ranking/index.vue'
 import ContentBanner from '@/views/content/banner/index.vue'
-import ContentWorkfile from '@/views/content/workfile/index.vue'
 import ExternalDramaChannel from '@/views/content/external-drama/channel/index.vue'
 import ExternalDramaContent from '@/views/content/external-drama/drama/index.vue'
 import AuthOrders from '@/views/trade/AuthOrders.vue'
@@ -82,7 +81,6 @@ export const componentMap = {
   'content/bookstore/index': ContentBookstore,
   'content/ranking/index': ContentRanking,
   'content/banner/index': ContentBanner,
-  'content/workfile/index': ContentWorkfile,
   'content/external-drama/channel/index': ExternalDramaChannel,
   'content/external-drama/drama/index': ExternalDramaContent,
   'trade/AuthOrders': AuthOrders,

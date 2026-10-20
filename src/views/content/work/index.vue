@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <PageContainer>
-    <PageHeader title="作品管理" description="管理全部作品及其章节、书城展示作品与推荐" />
+    <PageHeader title="作品管理" description="管理全部作品及其章节、书城展示作品与推荐；书城作品仅列出被推荐到首页热门或搜索页的作品" />
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- ============ 全部作品 ============ -->
@@ -26,11 +26,6 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-select v-model="allQuery.workType" placeholder="全部作品类型" style="width: 160px" clearable>
-              <el-option v-for="t in WORK_TYPE" :key="t.value" :label="t.label" :value="t.value" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
             <el-select v-model="allQuery.tradeType" placeholder="全部交易类型" style="width: 160px" clearable>
               <el-option v-for="t in TRADE_TYPE" :key="t.value" :label="t.label" :value="t.value" />
             </el-select>
@@ -52,13 +47,9 @@
               <CoverThumb :url="row.cover" />
             </template>
           </el-table-column>
-          <el-table-column prop="workId" label="作品ID" width="90" />
-          <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="authorName" label="作者" width="120" show-overflow-tooltip />
-          <el-table-column prop="genreName" label="分类" width="120" show-overflow-tooltip />
-          <el-table-column label="作品类型" width="100">
-            <template #default="{ row }">{{ contentEnumLabel(WORK_TYPE, row.workType) }}</template>
-          </el-table-column>
+          <el-table-column prop="title" label="标题" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="genreName" label="分类" min-width="140" show-overflow-tooltip />
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
@@ -66,30 +57,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="上下架" width="90">
-            <template #default="{ row }">
-              <el-switch
-                v-permission="['content:work:list']"
-                v-model="row.status"
-                active-value="on_shelf"
-                inactive-value="off_shelf"
-                @change="() => handleAllStatusChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="交易" width="90">
-            <template #default="{ row }">
-              <el-switch
-                v-permission="['content:work:list']"
-                v-model="row.tradeEnabled"
-                active-value="1"
-                inactive-value="0"
-                :disabled="row.status !== 'on_shelf'"
-                @change="() => handleAllTradeChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="推荐状态" width="110">
+          <el-table-column label="推荐状态" min-width="130">
             <template #default="{ row }">
               <el-tag :type="recommendTagType(row.recommendStatus)" size="small">
                 {{ recommendText(row.recommendStatus) }}
@@ -121,16 +89,11 @@
           </el-table-column>
         </TableCard>
 
-        <el-dialog v-model="detailDialog.visible" title="作品详情" width="640px">
+        <el-dialog v-model="detailDialog.visible" title="作品详情" width="720px">
           <el-descriptions v-loading="detailDialog.loading" :column="2" border>
             <el-descriptions-item label="作品标题" :span="2">{{ detail.title || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
             <el-descriptions-item label="分类">{{ detail.genreName || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="作品类型">{{ contentEnumLabel(WORK_TYPE, detail.workType) }}</el-descriptions-item>
-            <el-descriptions-item label="篇幅类型">{{ detail.lengthType || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="简介" :span="2">{{ detail.summary || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="核心设定" :span="2">{{ detail.coreSetting || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="人物设定" :span="2">{{ detail.characterSetting || '—' }}</el-descriptions-item>
             <el-descriptions-item label="价格">{{ detail.price ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="交易类型">{{ contentEnumLabel(TRADE_TYPE, detail.tradeType) }}</el-descriptions-item>
             <el-descriptions-item label="交易状态">
@@ -150,10 +113,9 @@
             <el-descriptions-item label="收藏量">{{ detail.favoriteCount ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="销售量">{{ detail.saleCount ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="评分">{{ detail.rating ?? '—' }}</el-descriptions-item>
-            <el-descriptions-item label="质量等级">{{ detail.qualityLevel || '—' }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="审核时间">{{ detail.reviewTime || '—' }}</el-descriptions-item>
             <el-descriptions-item label="驳回理由" :span="2">{{ detail.rejectReason || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="作品简介" :span="2">{{ detail.summary || '—' }}</el-descriptions-item>
           </el-descriptions>
           <template #footer>
             <el-button @click="detailDialog.visible = false">关闭</el-button>
@@ -219,15 +181,6 @@
               <el-option label="搜索页" value="search" />
             </el-select>
           </el-form-item>
-
-          <el-form-item>
-            <el-alert
-              type="info"
-              :closable="false"
-              title="列出被推荐到书城展示位的作品"
-              style="width: 260px"
-            />
-          </el-form-item>
         </FilterBar>
 
         <TableCard
@@ -251,9 +204,9 @@
               <CoverThumb :url="row.cover" />
             </template>
           </el-table-column>
-          <el-table-column prop="workId" label="作品ID" width="90" />
-          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="authorName" label="作者" width="120" show-overflow-tooltip />
+          <el-table-column prop="title" label="标题" min-width="300" show-overflow-tooltip />
+          <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="genreName" label="分类" min-width="140" show-overflow-tooltip />
           <el-table-column label="推荐状态" width="120">
             <template #default="{ row }">
               <el-tag :type="recommendTagType(row.recommendStatus)" size="small">
@@ -332,11 +285,11 @@
         <template v-else>
           <el-form-item label="推荐到">
             <div style="display: flex; flex-direction: column; gap: 8px;">
-              <el-checkbox v-model="form.isHomeHot">首页热门（书城首页）</el-checkbox>
-              <el-checkbox v-model="form.isSearch">搜索页（搜索结果中）</el-checkbox>
+              <el-checkbox v-model="form.isHomeHot" @change="onHomeHotSwitchChange">首页热门（书城首页）</el-checkbox>
+              <el-checkbox v-model="form.isSearch" :disabled="!form.isHomeHot">搜索页（搜索结果中）</el-checkbox>
             </div>
             <div style="font-size: 12px; color: #909399; line-height: 1.6; margin-top: 2px;">
-              两个都不勾选即为取消推荐；勾选后需设置位次和失效时间
+              搜索页推荐需先加入首页热门；两个都不勾选即为取消推荐
             </div>
           </el-form-item>
           <el-form-item v-if="form.isHomeHot" label="首页位次">
@@ -381,10 +334,9 @@ import TableCard from '@/components/TableCard.vue'
 import CoverThumb from './cover-thumb.vue'
 import {
   listWork, getWork, listWorkChapters,
-  listBookstore, getBookstore, changeBookstoreStatus,
-  changeBookstoreTrade, updateBookstoreExt
+  listBookstore, getBookstore, updateBookstoreExt
 } from '@/api/content'
-import { WORK_TYPE, TRADE_TYPE, contentEnumLabel } from '@/constants/contentEnum'
+import { TRADE_TYPE, contentEnumLabel } from '@/constants/contentEnum'
 
 defineOptions({ name: 'ContentWork' })
 
@@ -394,7 +346,7 @@ const activeTab = ref('all')
 const allLoading = ref(false)
 const allList = ref([])
 const allTotal = ref(0)
-const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', status: '', workType: '', tradeType: '' })
+const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', status: '', tradeType: '' })
 
 const STATUS_LABEL_MAP = {
   draft: '草稿',
@@ -425,7 +377,6 @@ function buildAllQuery() {
     pageSize: allQuery.pageSize,
     title: allQuery.title || undefined,
     status: allQuery.status || undefined,
-    workType: allQuery.workType || undefined,
     tradeType: allQuery.tradeType || undefined
   }
 }
@@ -444,28 +395,6 @@ async function loadAllList() {
   }
 }
 
-async function handleAllStatusChange(row) {
-  const targetStatus = row.status
-  const actionText = targetStatus === 'on_shelf' ? '上架' : '下架'
-  try {
-    await changeBookstoreStatus({ workId: row.workId, status: targetStatus })
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    row.status = targetStatus === 'on_shelf' ? 'off_shelf' : 'on_shelf'
-  }
-}
-
-async function handleAllTradeChange(row) {
-  const targetTrade = row.tradeEnabled
-  const actionText = targetTrade === '1' ? '开启交易' : '关闭交易'
-  try {
-    await changeBookstoreTrade({ workId: row.workId, tradeEnabled: targetTrade })
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    row.tradeEnabled = targetTrade === '1' ? '0' : '1'
-  }
-}
-
 function handleAllQuery() {
   allQuery.pageNum = 1
   loadAllList()
@@ -474,7 +403,6 @@ function handleAllQuery() {
 function handleAllReset() {
   allQuery.title = ''
   allQuery.status = ''
-  allQuery.workType = ''
   allQuery.tradeType = ''
   handleAllQuery()
 }
@@ -540,11 +468,11 @@ function onChapterPageChange(pageNum) {
 const bookLoading = ref(false)
 const bookList = ref([])
 const bookTotal = ref(0)
-const bookQuery = reactive({ pageNum: 1, pageSize: 10, title: '', recommendStatus: '', tradeEnabled: '' })
+const bookQuery = reactive({ pageNum: 1, pageSize: 10, title: '', recommendStatus: '' })
 
 const RECOMMEND_TAG_MAP = {
   home_hot: { text: '首页热门', type: 'warning' },
-  category_rec: { text: '分类推荐', type: 'success' },
+  search: { text: '搜索页', type: 'success' },
   none: { text: '无推荐', type: 'info' }
 }
 function isRecommendExpired(expireAt) {
@@ -592,35 +520,7 @@ function handleBookQuery() {
 function handleBookReset() {
   bookQuery.title = ''
   bookQuery.recommendStatus = ''
-  bookQuery.tradeEnabled = ''
   handleBookQuery()
-}
-
-async function handleBookStatusChange(row) {
-  const targetStatus = row.status
-  const actionText = targetStatus === 'on_shelf' ? '上架' : '下架'
-  try {
-    await changeBookstoreStatus({ workId: row.workId, status: targetStatus })
-    // 下架即移出书城，刷新列表使该行从「书城作品」消失
-    if (targetStatus === 'off_shelf') {
-      row.tradeEnabled = '0'
-      loadBookList()
-    }
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    row.status = targetStatus === 'on_shelf' ? 'off_shelf' : 'on_shelf'
-  }
-}
-
-async function handleBookTradeChange(row) {
-  const targetTrade = row.tradeEnabled
-  const actionText = targetTrade === '1' ? '开启交易' : '关闭交易'
-  try {
-    await changeBookstoreTrade({ workId: row.workId, tradeEnabled: targetTrade })
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    row.tradeEnabled = targetTrade === '1' ? '0' : '1'
-  }
 }
 
 const extDialog = reactive({ visible: false })
@@ -632,17 +532,10 @@ const extDialogTitle = computed(() => {
   return '编辑推荐'
 })
 const submitting = ref(false)
-const SCOPE_OPTIONS = ['bookstore', 'category_page', 'search']
-const RECOMMEND_DEFAULT_SCOPE = {
-  home_hot: ['bookstore'],
-  category_rec: ['category_page'],
-  none: []
-}
 const extraExtKeys = ref({})
 const form = reactive({
   workId: null,
   recommendStatus: 'none',
-  originalRecommendStatus: 'none',
   isHomeHot: false,
   isSearch: false,
   recommendWeight: 1,
@@ -652,7 +545,6 @@ const form = reactive({
 
 function resetRecommendFields() {
   form.recommendStatus = 'none'
-  form.originalRecommendStatus = 'none'
   form.isHomeHot = false
   form.isSearch = false
   form.recommendWeight = 1
@@ -667,7 +559,6 @@ function parseExtJsonToForm(extJsonStr) {
   try {
     const obj = JSON.parse(extJsonStr)
     form.recommendStatus = obj.recommendStatus || 'none'
-    form.originalRecommendStatus = form.recommendStatus
     const scope = Array.isArray(obj.showScope) ? obj.showScope : []
     form.isHomeHot = scope.includes('bookstore')
     form.isSearch = scope.includes('search')
@@ -738,7 +629,12 @@ async function handleExtSubmit() {
     })
     ElMessage.success('推荐信息已更新')
     extDialog.visible = false
-    loadBookList()
+    // 根据当前所在Tab刷新对应列表
+    if (activeTab.value === 'bookstore') {
+      loadBookList()
+    } else {
+      loadAllList()
+    }
   } catch {
     // 错误信息已由 request 拦截器统一提示
   } finally {
@@ -772,3 +668,5 @@ onMounted(() => {
   margin-top: 12px;
 }
 </style>
+
+

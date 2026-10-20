@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="排行榜管理" description="按榜单分页签管理快照数据、调整排名、触发重算">
+    <PageHeader title="排行榜管理" description="按榜单分页签管理快照数据、触发重算，排名按实际数据自动排序">
       <template #actions>
         <BlackButton v-permission="['content:ranking:edit']" @click="openRecompute">
           重算{{ currentBoard.label }}
@@ -50,24 +50,11 @@
       @page-change="loadList"
       @size-change="loadList"
     >
-      <el-table-column label="排名" width="140">
-        <template #default="{ row }">
-          <el-input-number
-            v-model="row.rankNo"
-            :min="1"
-            :max="9999"
-            size="small"
-            controls-position="right"
-            style="width: 88px"
-          />
-          <el-button
-            v-permission="['content:ranking:edit']"
-            size="small"
-            link
-            type="primary"
-            :loading="sortingId === row.rankingId"
-            @click="handleSort(row)"
-          >保存</el-button>
+      <el-table-column label="排名" width="80">
+        <template #default="{ $index }">
+          <el-tag size="small" :type="$index < 3 ? 'danger' : 'info'" effect="plain">
+            No.{{ $index + 1 }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="workTitle" label="作品标题" min-width="160" show-overflow-tooltip />
@@ -132,7 +119,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import BlackButton from '@/components/BlackButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { listRanking, changeRankNo, recomputeRanking } from '@/api/content'
+import { listRanking, recomputeRanking } from '@/api/content'
 import { RANKING_TYPE } from '@/constants/contentEnum'
 
 defineOptions({ name: 'ContentRanking' })
@@ -158,8 +145,6 @@ function handleTabChange() {
   queryParams.pageNum = 1
   loadList()
 }
-
-const sortingId = ref(null)
 
 /** GET 入参：空串不下发，让后端走“不过滤”分支 */
 function buildQuery() {
@@ -198,23 +183,6 @@ function handleReset() {
   queryParams.periodStart = ''
   queryParams.periodEnd = ''
   handleQuery()
-}
-
-async function handleSort(row) {
-  if (row.rankNo === null || row.rankNo === undefined) {
-    ElMessage.warning('请输入排名')
-    return
-  }
-  sortingId.value = row.rankingId
-  try {
-    await changeRankNo({ rankingId: row.rankingId, rankNo: row.rankNo })
-    ElMessage.success('排名已更新')
-  } catch {
-    // 失败后重新拉取，回滚界面上的本地改动
-    await loadList()
-  } finally {
-    sortingId.value = null
-  }
 }
 
 const recomputeDialog = reactive({ visible: false })
@@ -263,3 +231,5 @@ onMounted(loadList)
   margin-bottom: 12px;
 }
 </style>
+
+
