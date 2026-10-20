@@ -134,34 +134,346 @@
     </TableCard>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" title="申请详情" size="520px">
-      <div v-loading="detailLoading" class="detail-content">
-        <el-descriptions v-if="currentRecord" :column="1" border>
-          <el-descriptions-item label="申请编号">{{ currentRecord.applyNo }}</el-descriptions-item>
-          <el-descriptions-item label="作品ID">{{ currentRecord.workId }}</el-descriptions-item>
-          <el-descriptions-item label="用户ID">{{ currentRecord.userId }}</el-descriptions-item>
-          <el-descriptions-item label="版权中心">{{ centerLabel(currentRecord.copyrightCenter) }}</el-descriptions-item>
-          <el-descriptions-item label="外部申请号">{{ currentRecord.externalApplyNo || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="申请状态">
-            <el-tag :type="statusType(currentRecord.status)" size="small">
-              {{ statusLabel(currentRecord.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="提交时间">{{ currentRecord.submitTime }}</el-descriptions-item>
-          <el-descriptions-item label="证书编号">{{ currentRecord.certNo || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="发证时间">{{ currentRecord.certTime || '—' }}</el-descriptions-item>
-          <el-descriptions-item v-if="currentRecord.certUrl" label="证书文件">
-            <el-link :href="currentRecord.certUrl" type="primary" target="_blank">查看证书</el-link>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="currentRecord.rejectReason" label="驳回原因">
-            {{ currentRecord.rejectReason }}
-          </el-descriptions-item>
-          <el-descriptions-item label="最后同步时间">{{ currentRecord.lastSyncTime || '—' }}</el-descriptions-item>
-          <el-descriptions-item v-if="currentRecord.remark" label="备注">{{ currentRecord.remark }}</el-descriptions-item>
-        </el-descriptions>
+    <el-drawer 
+      v-model="detailVisible" 
+      :title="`版权申请详情 - ${currentRecord?.applyNo || ''}`"
+      size="65%"
+      destroy-on-close
+    >
+      <div v-loading="detailLoading" style="min-height: 400px; padding: 0 20px 20px">
+        <div v-if="currentRecord && currentRecord.applyId" class="detail-content">
+          
+          <!-- 申请基本信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Document /></el-icon>
+                  申请信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="申请编号">{{ currentRecord.applyNo }}</el-descriptions-item>
+              <el-descriptions-item label="申请状态">
+                <el-tag :type="statusType(currentRecord.status)">
+                  {{ statusLabel(currentRecord.status) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="版权中心" :span="2">
+                {{ currentRecord.centerName || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="外部申请号" :span="2">
+                {{ currentRecord.externalApplyNo || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="申请时间">
+                {{ currentRecord.createTime || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="提交时间">
+                {{ currentRecord.submitTime || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.certNo" label="证书编号" :span="2">
+                {{ currentRecord.certNo }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.certUrl" label="证书文件" :span="2">
+                <el-link type="primary" :href="currentRecord.certUrl" target="_blank">
+                  <el-icon><Document /></el-icon> 查看证书
+                </el-link>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.rejectReason" label="驳回原因" :span="2">
+                <div class="reject-reason">{{ currentRecord.rejectReason }}</div>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.remark" label="备注" :span="2">
+                {{ currentRecord.remark }}
+              </el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+
+          <!-- 申请人信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><User /></el-icon>
+                  申请人信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="用户ID">{{ currentRecord.userId || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="姓名">{{ currentRecord.userName || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="手机号">{{ currentRecord.userPhone || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="邮箱">{{ currentRecord.userEmail || '—' }}</el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+
+          <!-- 作品信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Reading /></el-icon>
+                  作品详细信息
+                </span>
+              </div>
+            </template>
+            <div class="work-display">
+              <div v-if="currentRecord.workCoverUrl" class="work-cover">
+                <el-image
+                  :src="currentRecord.workCoverUrl"
+                  :preview-src-list="[currentRecord.workCoverUrl]"
+                  fit="cover"
+                  class="work-cover-img"
+                  :preview-teleported="true"
+                >
+                  <template #error>
+                    <div class="img-placeholder">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
+              <div v-else class="work-cover">
+                <div class="img-placeholder">
+                  <el-icon><Picture /></el-icon>
+                  <div>暂无封面</div>
+                </div>
+              </div>
+              <div class="work-info-section">
+                <h3 class="work-title-text">{{ currentRecord.workName || '未命名作品' }}</h3>
+                <el-descriptions :column="2" border size="small">
+                  <el-descriptions-item label="作品ID">
+                    {{ currentRecord.workId || '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品类型">
+                    <el-tag size="small" type="primary">{{ workTypeLabel(currentRecord.workType) }}</el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品分类">
+                    {{ currentRecord.workCategory || '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品规模">
+                    <span v-if="currentRecord.workWordCount">{{ currentRecord.workWordCount.toLocaleString() }} 字</span>
+                    <span v-else-if="currentRecord.workDuration">{{ formatDuration(currentRecord.workDuration) }}</span>
+                    <span v-else>—</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="创作完成日期">
+                    {{ currentRecord.workCreationDate ? currentRecord.workCreationDate.split(' ')[0] : '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="首次发表日期">
+                    {{ currentRecord.workPublishDate ? currentRecord.workPublishDate.split(' ')[0] : '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品简介" :span="2">
+                    <div class="work-intro">{{ currentRecord.workSummary || '暂无简介' }}</div>
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+            
+            <!-- 作品内容区域 -->
+            <el-divider content-position="left">
+              <span style="display: flex; align-items: center; gap: 4px;">
+                <el-icon><FolderOpened /></el-icon>
+                作品内容文件
+              </span>
+            </el-divider>
+            <div v-if="currentRecord.workFileUrl" class="work-files-section">
+              <div class="file-item-card" @click="previewFile(currentRecord.workFileUrl)">
+                <div class="file-icon-large">
+                  <el-icon :size="32" color="#409eff">
+                    <component :is="getFileIcon(currentRecord.workFileUrl)" />
+                  </el-icon>
+                </div>
+                <div class="file-info-detail">
+                  <div class="file-name-large">{{ getFileName(currentRecord.workFileUrl) }}</div>
+                  <div class="file-actions-row">
+                    <el-button size="small" type="primary" plain>
+                      <el-icon><View /></el-icon> 在线预览
+                    </el-button>
+                    <el-button size="small" @click.stop="downloadFile(currentRecord.workFileUrl)">
+                      <el-icon><Download /></el-icon> 下载文件
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无作品文件" :image-size="60" />
+          </el-card>
+
+          <!-- 申请材料 -->
+          <el-card shadow="never" class="detail-card materials-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><FolderOpened /></el-icon>
+                  申请材料
+                </span>
+                <span class="material-tips">点击文件可在线预览</span>
+              </div>
+            </template>
+
+            <div v-if="hasAnyMaterials(currentRecord)" class="materials-section">
+              <!-- 原创性证明 -->
+              <div v-if="parseUrls(currentRecord.originalityProofUrls).length > 0" class="material-section">
+                <div class="material-title">原创性证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(url, idx) in parseUrls(currentRecord.originalityProofUrls)"
+                    :key="`originality-${idx}`"
+                    class="file-item"
+                    @click="previewFile(url)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 作者身份证明 -->
+              <div v-if="parseUrls(currentRecord.authorIdentityDocUrls).length > 0" class="material-section">
+                <div class="material-title">作者身份证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(url, idx) in parseUrls(currentRecord.authorIdentityDocUrls)"
+                    :key="`identity-${idx}`"
+                    class="file-item"
+                    @click="previewFile(url)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 创作过程材料 -->
+              <div v-if="parseUrls(currentRecord.creationProcessUrls).length > 0" class="material-section">
+                <div class="material-title">创作过程说明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(url, idx) in parseUrls(currentRecord.creationProcessUrls)"
+                    :key="`process-${idx}`"
+                    class="file-item"
+                    @click="previewFile(url)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 其他证明材料 -->
+              <div v-if="parseUrls(currentRecord.otherProofUrls).length > 0" class="material-section">
+                <div class="material-title">其他辅助证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(url, idx) in parseUrls(currentRecord.otherProofUrls)"
+                    :key="`other-${idx}`"
+                    class="file-item"
+                    @click="previewFile(url)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 兼容旧版本的申请材料 -->
+              <div v-if="currentRecord.attachmentUrl && !currentRecord.originalityProofUrls && !currentRecord.authorIdentityDocUrls && !currentRecord.creationProcessUrls && !currentRecord.otherProofUrls" class="material-section">
+                <div class="material-title">申请材料（旧版本）</div>
+                <div class="material-files">
+                  <div
+                    v-for="(url, idx) in parseUrls(currentRecord.attachmentUrl)"
+                    :key="`attachment-${idx}`"
+                    class="file-item"
+                    @click="previewFile(url)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无申请材料" :image-size="80" />
+          </el-card>
+
+        </div>
       </div>
+
+      <template #footer>
+        <div class="drawer-footer">
+          <el-button @click="detailVisible = false">关闭</el-button>
+          <el-button v-if="currentRecord?.status === 'pending'" type="primary" @click="handleReview(currentRecord)">
+            审核申请
+          </el-button>
+        </div>
+      </template>
     </el-drawer>
 
+    <!-- 文件预览对话框 -->
+    <el-dialog
+      v-model="previewVisible"
+      title="文件预览"
+      width="80%"
+      destroy-on-close
+      top="5vh"
+    >
+      <div class="preview-container">
+        <!-- 图片预览 -->
+        <div v-if="isImageFile(previewUrl)" class="preview-image">
+          <el-image :src="previewUrl" :preview-src-list="[previewUrl]" fit="contain" style="max-width: 100%; max-height: 600px;" />
+        </div>
+        <!-- PDF预览 -->
+        <div v-else-if="isPdfFile(previewUrl)" class="preview-pdf">
+          <iframe :src="previewUrl" width="100%" height="600px" frameborder="0"></iframe>
+        </div>
+        <!-- 其他文件类型提示下载 -->
+        <div v-else class="preview-download">
+          <el-result icon="warning" title="该文件类型暂不支持在线预览">
+            <template #extra>
+              <el-button type="primary" @click="downloadFile(previewUrl)">
+                <el-icon><Download /></el-icon> 下载文件
+              </el-button>
+            </template>
+          </el-result>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 审核对话框 -->
     <!-- 审核对话框 -->
     <el-dialog v-model="reviewDialogVisible" title="审核版权申请" width="500px">
       <el-form :model="reviewForm" label-width="80px">
@@ -347,6 +659,21 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Document, 
+  User, 
+  Reading, 
+  FolderOpened, 
+  Download,
+  Picture,
+  View,
+  ChatLineSquare,
+  Clock,
+  CircleCheck,
+  CircleClose,
+  Warning,
+  QuestionFilled
+} from '@element-plus/icons-vue'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -362,6 +689,7 @@ import {
   syncCopyrightApplicationStatus,
   getAvailableCopyrightCenters
 } from '@/api/copyright'
+import { resolveMediaUrl } from '@/utils/request'
 
 const loading = ref(false)
 const applications = ref([])
@@ -369,6 +697,11 @@ const total = ref(0)
 const emptyText = ref('暂无数据')
 const syncingId = ref(null)
 const batchSyncing = ref(false)
+
+// 文件预览
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewLoading = ref(false)
 const selectedRows = ref([])
 const syncStatusVisible = ref(false)
 const syncStatusLoading = ref(false)
@@ -716,6 +1049,139 @@ const statusType = (status) => {
   return map[status] || 'info'
 }
 
+// 解析URL字符串（支持逗号分隔、JSON字符串数组、JSON对象数组格式）
+const parseUrls = (urlString) => {
+  if (!urlString) return []
+  
+  try {
+    // 尝试解析JSON
+    const parsed = JSON.parse(urlString)
+    if (Array.isArray(parsed)) {
+      // 如果是对象数组（新格式：[{url, filename, fileType}]），提取url字段
+      return parsed.map(item => {
+        if (typeof item === 'object' && item !== null && item.url) {
+          return item.url
+        }
+        // 如果是字符串数组，直接返回
+        return item
+      }).filter(url => url && typeof url === 'string' && url.trim())
+    }
+  } catch (e) {
+    // 不是JSON格式，尝试逗号分隔
+  }
+  
+  // 逗号分隔的字符串
+  return urlString.split(',').map(url => url.trim()).filter(url => url)
+}
+
+// 判断是否有任何申请材料
+const hasAnyMaterials = (record) => {
+  return record.workFileUrl || 
+         record.attachmentUrl ||  // 兼容旧版本的申请材料
+         record.originalityProofUrls || 
+         record.authorIdentityDocUrls || 
+         record.creationProcessUrls || 
+         record.otherProofUrls
+}
+
+// 判断是否为图片文件
+const isImageFile = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop().toLowerCase()
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext)
+}
+
+// 判断是否为PDF文件
+const isPdfFile = (url) => {
+  if (!url) return false
+  return url.toLowerCase().endsWith('.pdf')
+}
+
+// 根据文件类型获取图标
+const getFileIcon = (url) => {
+  if (isImageFile(url)) return Picture
+  if (isPdfFile(url)) return Document
+  return Document
+}
+
+// 获取状态颜色
+const getStatusColor = (status) => {
+  const colorMap = {
+    pending: '#E6A23C',
+    approved: '#409EFF',
+    submitted: '#409EFF',
+    reviewing: '#909399',
+    certificated: '#67C23A',
+    rejected: '#F56C6C'
+  }
+  return colorMap[status] || '#909399'
+}
+
+// 获取状态图标组件
+const getStatusIconComponent = (status) => {
+  const iconMap = {
+    pending: Clock,
+    approved: CircleCheck,
+    submitted: CircleCheck,
+    reviewing: Clock,
+    certificated: CircleCheck,
+    rejected: CircleClose
+  }
+  return iconMap[status] || QuestionFilled
+}
+
+// 作品类型标签
+const workTypeLabel = (type) => {
+  const map = {
+    novel: '小说',
+    script: '剧本',
+    video: '视频',
+    audio: '音频'
+  }
+  return map[type] || type
+}
+
+// 格式化时长
+const formatDuration = (seconds) => {
+  if (!seconds) return '—'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟`
+  }
+  return `${minutes}分钟`
+}
+
+// 从URL获取文件名
+const getFileName = (url) => {
+  if (!url) return '未命名文件'
+  try {
+    const parts = url.split('/')
+    return decodeURIComponent(parts[parts.length - 1])
+  } catch (e) {
+    return '文件'
+  }
+}
+
+// 下载文件
+const downloadFile = (url) => {
+  if (!url) return
+  const fullUrl = resolveMediaUrl(url)
+  window.open(fullUrl, '_blank')
+}
+
+// 预览作品文件
+const previewWorkFile = (url) => {
+  previewFile(url)
+}
+
+// 预览文件
+const previewFile = (url) => {
+  if (!url) return
+  previewUrl.value = resolveMediaUrl(url)
+  previewVisible.value = true
+}
+
 const handleBatchSync = async () => {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择要同步的申请')
@@ -769,7 +1235,443 @@ loadApplications()
   flex-wrap: wrap;
 }
 
+/* 详情页面样式 */
 .detail-content {
-  padding: 0 16px;
+  padding: 20px 0;
+}
+
+.detail-card {
+  margin-bottom: 20px;
+}
+
+.detail-card:last-child {
+  margin-bottom: 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.card-title .el-icon {
+  color: #409eff;
+}
+
+.material-tips {
+  font-size: 13px;
+  color: #909399;
+  margin-left: auto;
+}
+
+/* 作品展示 */
+.work-display {
+  display: flex;
+  gap: 24px;
+}
+
+.work-cover {
+  flex-shrink: 0;
+  width: 160px;
+  height: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.work-cover-img {
+  width: 100%;
+  height: 100%;
+}
+
+.img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  color: #909399;
+  gap: 8px;
+}
+
+.img-placeholder .el-icon {
+  font-size: 48px;
+}
+
+.work-info-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.work-title-text {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 16px 0;
+}
+
+.work-intro {
+  color: #606266;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 申请材料 */
+.materials-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.material-section {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.material-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.material-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 3px solid #409eff;
+}
+
+.material-files {
+  display: grid;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.file-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateX(4px);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: #409eff;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file-name {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.file-action .el-link {
+  font-size: 13px;
+}
+
+.file-action .el-divider {
+  margin: 0;
+  height: 14px;
+}
+
+/* 驳回原因 */
+.reject-reason {
+  color: #f56c6c;
+  line-height: 1.6;
+  padding: 8px;
+  background: #fef0f0;
+  border-radius: 4px;
+}
+
+/* 抽屉底部 */
+.drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #ebeef5;
+}
+
+/* 作品文件卡片 */
+.work-files-section {
+  margin-top: 16px;
+}
+
+.file-item-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fb;
+  border: 2px solid #e4e7ed;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.file-item-card:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.file-icon-large {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.file-info-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name-large {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* 文件预览 */
+.preview-container {
+  min-height: 400px;
+}
+
+.preview-image,
+.preview-pdf {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-download {
+  padding: 60px 0;
+}
+
+.work-date-range {
+  flex-wrap: wrap;
+}
+
+.work-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.work-summary {
+  color: #606266;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.work-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e7ed;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item .label {
+  color: #909399;
+  font-size: 12px;
+}
+
+.detail-item .value {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 申请人信息 */
+.user-item {
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.user-label {
+  color: #909399;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.user-value {
+  color: #303133;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* 申请材料 */
+.materials-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.material-section {
+  margin-bottom: 24px;
+}
+
+.material-section:last-child {
+  margin-bottom: 0;
+}
+
+.material-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 3px solid #409eff;
+}
+
+.material-files {
+  display: grid;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.file-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateX(4px);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: #409eff;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.file-name {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-action .el-link {
+  font-size: 13px;
+}
+
+.file-action .el-divider {
+  margin: 0;
+  height: 14px;
+}
+
+/* 备注信息 */
+.remark-content {
+  color: #606266;
+  line-height: 1.6;
+  padding: 12px;
+  background: #fff9e6;
+  border-left: 4px solid #e6a23c;
+  border-radius: 4px;
+}
+
+/* 文件预览 */
+.preview-image,
+.preview-pdf {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-download {
+  padding: 40px 0;
 }
 </style>
