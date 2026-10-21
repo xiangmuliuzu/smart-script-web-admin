@@ -9,7 +9,7 @@
   >
     <div v-loading="loading" class="preview-container">
       <!-- 图片预览 -->
-      <div v-if="isImage" class="image-preview">
+      <div v-if="isImage && !error" class="image-preview">
         <el-image
           :src="materialUrl"
           fit="contain"
@@ -26,24 +26,31 @@
       </div>
 
       <!-- 文本预览 -->
-      <div v-else-if="isText" class="text-preview">
+      <div v-else-if="isText && !error" class="text-preview">
         <el-scrollbar height="70vh">
           <pre>{{ textContent }}</pre>
         </el-scrollbar>
       </div>
 
-      <!-- PDF 和文档预览 -->
-      <div v-else-if="isDocument" class="document-preview">
+      <!-- PDF：同源直链 iframe（不依赖 Google Docs，服务器/国内网络可用） -->
+      <div v-else-if="isPdf && !error" class="document-preview">
         <iframe
-          :src="documentPreviewUrl"
+          :src="materialUrl"
           frameborder="0"
           style="width: 100%; height: 70vh;"
           @load="loading = false"
         />
       </div>
 
+      <!-- Office 等：提示下载 -->
+      <div v-else-if="isOffice && !error" class="unsupported-preview">
+        <el-icon size="48"><Document /></el-icon>
+        <p>该 Office 文档请下载后查看</p>
+        <el-button type="primary" @click="downloadFile">下载文件</el-button>
+      </div>
+
       <!-- 不支持的格式 -->
-      <div v-else class="unsupported-preview">
+      <div v-else-if="!error" class="unsupported-preview">
         <el-icon size="48"><Document /></el-icon>
         <p>该文件格式不支持在线预览</p>
         <el-button type="primary" @click="downloadFile">下载文件</el-button>
@@ -98,43 +105,38 @@ const error = ref('')
 
 const title = computed(() => props.materialName || '材料预览')
 
-// 判断文件类型
-const fileExtension = computed(() => {
-  if (!props.materialUrl) return ''
-  const url = props.materialUrl.toLowerCase()
-  const match = url.match(/\.([^.?#]+)(\?|#|$)/)
+/** 从文件名或 URL 提取扩展名（去掉 query/hash） */
+function extractExt(value) {
+  if (!value) return ''
+  const clean = String(value).split('?')[0].split('#')[0].toLowerCase()
+  const match = clean.match(/\.([a-z0-9]+)$/)
   return match ? match[1] : ''
+}
+
+const fileExtension = computed(() => {
+  return extractExt(props.materialName) || extractExt(props.materialUrl)
 })
 
-const isImage = computed(() => {
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
-  return imageExts.includes(fileExtension.value)
-})
+const isImage = computed(() =>
+  ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(fileExtension.value)
+)
 
-const isText = computed(() => {
-  const textExts = ['txt', 'log', 'md', 'json', 'xml', 'csv']
-  return textExts.includes(fileExtension.value)
-})
+const isText = computed(() =>
+  ['txt', 'log', 'md', 'json', 'xml', 'csv'].includes(fileExtension.value)
+)
 
-const isDocument = computed(() => {
-  const docExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
-  return docExts.includes(fileExtension.value)
-})
+const isPdf = computed(() => fileExtension.value === 'pdf')
 
-// PDF 和文档使用 Google Docs Viewer 预览
-const documentPreviewUrl = computed(() => {
-  if (!isDocument.value) return ''
-  // 使用 Google Docs Viewer
-  return `https://docs.google.com/viewer?url=${encodeURIComponent(props.materialUrl)}&embedded=true`
-})
+const isOffice = computed(() =>
+  ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(fileExtension.value)
+)
 
-// 加载文本内容
 const loadTextContent = async () => {
   if (!isText.value || !props.materialUrl) return
-  
+
   loading.value = true
   error.value = ''
-  
+
   try {
     const response = await axios.get(props.materialUrl, {
       responseType: 'text',
@@ -149,14 +151,12 @@ const loadTextContent = async () => {
   }
 }
 
-// 下载文件
 const downloadFile = () => {
   if (!props.materialUrl) {
     ElMessage.warning('文件地址无效')
     return
   }
-  
-  // 创建一个隐藏的 a 标签来触发下载
+
   const link = document.createElement('a')
   link.href = props.materialUrl
   link.download = props.materialName || 'material'
@@ -166,29 +166,26 @@ const downloadFile = () => {
   document.body.removeChild(link)
 }
 
-// 重试加载
 const retryLoad = () => {
   error.value = ''
   if (isText.value) {
     loadTextContent()
-  } else if (isDocument.value) {
+  } else if (isPdf.value) {
     loading.value = true
   }
 }
 
-// 关闭对话框
 const handleClose = () => {
   textContent.value = ''
   error.value = ''
   loading.value = false
 }
 
-// 监听 URL 变化
 watch(() => props.materialUrl, (newUrl) => {
   if (newUrl && visible.value) {
     if (isText.value) {
       loadTextContent()
-    } else if (isDocument.value) {
+    } else if (isPdf.value) {
       loading.value = true
     }
   }
@@ -198,7 +195,7 @@ watch(visible, (newVal) => {
   if (newVal && props.materialUrl) {
     if (isText.value) {
       loadTextContent()
-    } else if (isDocument.value) {
+    } else if (isPdf.value) {
       loading.value = true
     }
   }

@@ -223,7 +223,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import { getCopyrightSealList, getCopyrightSealDetail, getCopyrightSealLogs, reviewCopyrightSeal, updateCopyrightSealStatus, resolveAbnormalCopyrightSeal } from '@/api/copyright'
-import { resolveAssetUrl } from '@/utils/url'
+import { resolveMediaUrl } from '@/utils/request'
 
 
 defineOptions({ name: 'CopyrightSealReview' })
@@ -268,14 +268,17 @@ const materialLinks = computed(() => {
   return values.map((item, index) => {
     const rawUrl = typeof item === 'string' ? item : item?.url
     if (!rawUrl) return null
-    const url = resolveAssetUrl(rawUrl)
-    return { url, name: typeof item === 'object' && item?.name ? item.name : `审核材料 ${index + 1}` }
+    const url = resolveMediaUrl(rawUrl)
+    const name = typeof item === 'object' && (item?.name || item?.filename)
+      ? (item.name || item.filename)
+      : `审核材料 ${index + 1}`
+    return { url, name }
   }).filter(Boolean)
 })
 
 function safeUrl(value) {
   if (typeof value !== 'string') return ''
-  return resolveAssetUrl(value)
+  return resolveMediaUrl(value)
 }
 
 function reviewLabel(status) {

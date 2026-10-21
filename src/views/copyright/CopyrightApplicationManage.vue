@@ -220,8 +220,8 @@
             <div class="work-display">
               <div v-if="currentRecord.workCoverUrl" class="work-cover">
                 <el-image
-                  :src="currentRecord.workCoverUrl"
-                  :preview-src-list="[currentRecord.workCoverUrl]"
+                  :src="resolveMediaUrl(currentRecord.workCoverUrl)"
+                  :preview-src-list="[resolveMediaUrl(currentRecord.workCoverUrl)]"
                   fit="cover"
                   class="work-cover-img"
                   :preview-teleported="true"
@@ -313,22 +313,22 @@
 
             <div v-if="hasAnyMaterials(currentRecord)" class="materials-section">
               <!-- 原创性证明 -->
-              <div v-if="parseUrls(currentRecord.originalityProofUrls).length > 0" class="material-section">
+              <div v-if="parseMaterials(currentRecord.originalityProofUrls).length > 0" class="material-section">
                 <div class="material-title">原创性证明材料</div>
                 <div class="material-files">
                   <div
-                    v-for="(url, idx) in parseUrls(currentRecord.originalityProofUrls)"
+                    v-for="(file, idx) in parseMaterials(currentRecord.originalityProofUrls)"
                     :key="`originality-${idx}`"
                     class="file-item"
-                    @click="previewFile(url)"
+                    @click="previewFile(file.url, file.filename)"
                   >
                     <el-icon class="file-icon" :size="24"><Document /></el-icon>
                     <div class="file-info">
-                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <span class="file-name">{{ file.filename }}</span>
                       <div class="file-action">
                         <el-link type="primary" :underline="false">预览</el-link>
                         <el-divider direction="vertical" />
-                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
                       </div>
                     </div>
                   </div>
@@ -336,22 +336,22 @@
               </div>
 
               <!-- 作者身份证明 -->
-              <div v-if="parseUrls(currentRecord.authorIdentityDocUrls).length > 0" class="material-section">
+              <div v-if="parseMaterials(currentRecord.authorIdentityDocUrls).length > 0" class="material-section">
                 <div class="material-title">作者身份证明材料</div>
                 <div class="material-files">
                   <div
-                    v-for="(url, idx) in parseUrls(currentRecord.authorIdentityDocUrls)"
+                    v-for="(file, idx) in parseMaterials(currentRecord.authorIdentityDocUrls)"
                     :key="`identity-${idx}`"
                     class="file-item"
-                    @click="previewFile(url)"
+                    @click="previewFile(file.url, file.filename)"
                   >
                     <el-icon class="file-icon" :size="24"><Document /></el-icon>
                     <div class="file-info">
-                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <span class="file-name">{{ file.filename }}</span>
                       <div class="file-action">
                         <el-link type="primary" :underline="false">预览</el-link>
                         <el-divider direction="vertical" />
-                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
                       </div>
                     </div>
                   </div>
@@ -359,22 +359,22 @@
               </div>
 
               <!-- 创作过程材料 -->
-              <div v-if="parseUrls(currentRecord.creationProcessUrls).length > 0" class="material-section">
+              <div v-if="parseMaterials(currentRecord.creationProcessUrls).length > 0" class="material-section">
                 <div class="material-title">创作过程说明材料</div>
                 <div class="material-files">
                   <div
-                    v-for="(url, idx) in parseUrls(currentRecord.creationProcessUrls)"
+                    v-for="(file, idx) in parseMaterials(currentRecord.creationProcessUrls)"
                     :key="`process-${idx}`"
                     class="file-item"
-                    @click="previewFile(url)"
+                    @click="previewFile(file.url, file.filename)"
                   >
                     <el-icon class="file-icon" :size="24"><Document /></el-icon>
                     <div class="file-info">
-                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <span class="file-name">{{ file.filename }}</span>
                       <div class="file-action">
                         <el-link type="primary" :underline="false">预览</el-link>
                         <el-divider direction="vertical" />
-                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
                       </div>
                     </div>
                   </div>
@@ -382,22 +382,22 @@
               </div>
 
               <!-- 其他证明材料 -->
-              <div v-if="parseUrls(currentRecord.otherProofUrls).length > 0" class="material-section">
+              <div v-if="parseMaterials(currentRecord.otherProofUrls).length > 0" class="material-section">
                 <div class="material-title">其他辅助证明材料</div>
                 <div class="material-files">
                   <div
-                    v-for="(url, idx) in parseUrls(currentRecord.otherProofUrls)"
+                    v-for="(file, idx) in parseMaterials(currentRecord.otherProofUrls)"
                     :key="`other-${idx}`"
                     class="file-item"
-                    @click="previewFile(url)"
+                    @click="previewFile(file.url, file.filename)"
                   >
                     <el-icon class="file-icon" :size="24"><Document /></el-icon>
                     <div class="file-info">
-                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <span class="file-name">{{ file.filename }}</span>
                       <div class="file-action">
                         <el-link type="primary" :underline="false">预览</el-link>
                         <el-divider direction="vertical" />
-                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
                       </div>
                     </div>
                   </div>
@@ -409,18 +409,18 @@
                 <div class="material-title">申请材料（旧版本）</div>
                 <div class="material-files">
                   <div
-                    v-for="(url, idx) in parseUrls(currentRecord.attachmentUrl)"
+                    v-for="(file, idx) in parseMaterials(currentRecord.attachmentUrl)"
                     :key="`attachment-${idx}`"
                     class="file-item"
-                    @click="previewFile(url)"
+                    @click="previewFile(file.url, file.filename)"
                   >
                     <el-icon class="file-icon" :size="24"><Document /></el-icon>
                     <div class="file-info">
-                      <span class="file-name">{{ getFileName(url) }}</span>
+                      <span class="file-name">{{ file.filename }}</span>
                       <div class="file-action">
                         <el-link type="primary" :underline="false">预览</el-link>
                         <el-divider direction="vertical" />
-                        <el-link type="primary" :underline="false" @click.stop="downloadFile(url)">下载</el-link>
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
                       </div>
                     </div>
                   </div>
@@ -443,35 +443,12 @@
       </template>
     </el-drawer>
 
-    <!-- 文件预览对话框 -->
-    <el-dialog
+    <!-- 文件预览对话框（与印章审核共用，支持图片 / txt / PDF） -->
+    <MaterialPreviewDialog
       v-model="previewVisible"
-      title="文件预览"
-      width="80%"
-      destroy-on-close
-      top="5vh"
-    >
-      <div class="preview-container">
-        <!-- 图片预览 -->
-        <div v-if="isImageFile(previewUrl)" class="preview-image">
-          <el-image :src="previewUrl" :preview-src-list="[previewUrl]" fit="contain" style="max-width: 100%; max-height: 600px;" />
-        </div>
-        <!-- PDF预览 -->
-        <div v-else-if="isPdfFile(previewUrl)" class="preview-pdf">
-          <iframe :src="previewUrl" width="100%" height="600px" frameborder="0"></iframe>
-        </div>
-        <!-- 其他文件类型提示下载 -->
-        <div v-else class="preview-download">
-          <el-result icon="warning" title="该文件类型暂不支持在线预览">
-            <template #extra>
-              <el-button type="primary" @click="downloadFile(previewUrl)">
-                <el-icon><Download /></el-icon> 下载文件
-              </el-button>
-            </template>
-          </el-result>
-        </div>
-      </div>
-    </el-dialog>
+      :material-url="previewUrl"
+      :material-name="previewName"
+    />
 
     <!-- 审核对话框 -->
     <!-- 审核对话框 -->
@@ -678,6 +655,7 @@ import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import {
   getCopyrightApplicationList,
   getCopyrightApplicationDetail,
@@ -701,7 +679,7 @@ const batchSyncing = ref(false)
 // 文件预览
 const previewVisible = ref(false)
 const previewUrl = ref('')
-const previewLoading = ref(false)
+const previewName = ref('')
 const selectedRows = ref([])
 const syncStatusVisible = ref(false)
 const syncStatusLoading = ref(false)
@@ -1050,52 +1028,64 @@ const statusType = (status) => {
 }
 
 // 解析URL字符串（支持逗号分隔、JSON字符串数组、JSON对象数组格式）
-const parseUrls = (urlString) => {
+/** 解析材料字段为 { url, filename }[]，兼容 JSON 对象数组 / 字符串数组 / 逗号分隔 */
+const parseMaterials = (urlString) => {
   if (!urlString) return []
-  
+
+  const toItem = (url, filename) => {
+    const trimmed = String(url || '').trim()
+    if (!trimmed) return null
+    const name = (filename && String(filename).trim()) || getFileName(trimmed)
+    return { url: trimmed, filename: name }
+  }
+
   try {
-    // 尝试解析JSON
     const parsed = JSON.parse(urlString)
     if (Array.isArray(parsed)) {
-      // 如果是对象数组（新格式：[{url, filename, fileType}]），提取url字段
-      return parsed.map(item => {
+      return parsed.map((item) => {
         if (typeof item === 'object' && item !== null && item.url) {
-          return item.url
+          return toItem(item.url, item.filename || item.name)
         }
-        // 如果是字符串数组，直接返回
-        return item
-      }).filter(url => url && typeof url === 'string' && url.trim())
+        if (typeof item === 'string') {
+          return toItem(item)
+        }
+        return null
+      }).filter(Boolean)
     }
   } catch (e) {
-    // 不是JSON格式，尝试逗号分隔
+    // 不是 JSON，按逗号分隔
   }
-  
-  // 逗号分隔的字符串
-  return urlString.split(',').map(url => url.trim()).filter(url => url)
+
+  return String(urlString)
+    .split(',')
+    .map((url) => toItem(url))
+    .filter(Boolean)
 }
 
 // 判断是否有任何申请材料
 const hasAnyMaterials = (record) => {
-  return record.workFileUrl || 
-         record.attachmentUrl ||  // 兼容旧版本的申请材料
-         record.originalityProofUrls || 
-         record.authorIdentityDocUrls || 
-         record.creationProcessUrls || 
+  return record.workFileUrl ||
+         record.attachmentUrl ||
+         record.originalityProofUrls ||
+         record.authorIdentityDocUrls ||
+         record.creationProcessUrls ||
          record.otherProofUrls
+}
+
+const extractFileExt = (value) => {
+  if (!value) return ''
+  const clean = String(value).split('?')[0].split('#')[0].toLowerCase()
+  const match = clean.match(/\.([a-z0-9]+)$/)
+  return match ? match[1] : ''
 }
 
 // 判断是否为图片文件
 const isImageFile = (url) => {
-  if (!url) return false
-  const ext = url.split('.').pop().toLowerCase()
-  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext)
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extractFileExt(url))
 }
 
 // 判断是否为PDF文件
-const isPdfFile = (url) => {
-  if (!url) return false
-  return url.toLowerCase().endsWith('.pdf')
-}
+const isPdfFile = (url) => extractFileExt(url) === 'pdf'
 
 // 根据文件类型获取图标
 const getFileIcon = (url) => {
@@ -1175,10 +1165,11 @@ const previewWorkFile = (url) => {
   previewFile(url)
 }
 
-// 预览文件
-const previewFile = (url) => {
+// 预览文件（须经 resolveMediaUrl，服务器环境走 /prod-api/profile/...）
+const previewFile = (url, filename = '') => {
   if (!url) return
   previewUrl.value = resolveMediaUrl(url)
+  previewName.value = filename || getFileName(url)
   previewVisible.value = true
 }
 
