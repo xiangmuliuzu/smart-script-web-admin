@@ -304,3 +304,13 @@ export function syncDrama(data) { return adminV1Request({ url: `${ADMIN_PREFIX}/
 // ---------------- 外部视频-播放数据（并入视频内容管理详情） ----------------
 export function getDramaStats(workId) { return adminV1Request({ url: `${ADMIN_PREFIX}/dramaStats/${workId}`, method: 'get' }) }
 export function listDramaHistory(query) { return adminV1Request({ url: `${ADMIN_PREFIX}/dramaStats/history`, method: 'get', params: query }) }
+/** 实时排行榜（admin端接口，五榜：view/favorite/sale/rating/new；返回 { list, updatedAt }） */
+export const rankingApi = {
+  list: (params) => {
+    return adminV1Request({ 
+      url: `/api/v1/admin/content/ranking/realtime`,
+      method: 'get',
+      params
+    })
+  }
+}

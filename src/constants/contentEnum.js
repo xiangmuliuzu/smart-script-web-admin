@@ -12,9 +12,10 @@
  *   App 端只按 parentId 取分类、不按类型筛选（见 content_providers.dart），故取值不影响 App。
  * - DRAMA_SOURCE_TYPE / DRAMA_AUTH_STATUS / DRAMA_SHELF_STATUS / BANNER_POSITION：
  *   取云端库 sys_external_drama / sys_banner 对应列实测值。
- * - RANKING_TYPE：取 App 端榜单四类（lib/features/bookstore/data/bookstore_models.dart），
- *   与云端 sys_ranking_snapshot.ranking_type 改名对齐（存量 view_rank/favorite_rank 由
- *   迁移脚本 B_20261009_007__rename_ranking_type.sql 收敛为 view/favorite）。
+ * - RANKING_TYPE：榜单五类（App 接口 2.7.7 与后端 AppBookstoreServiceImpl 白名单一致），
+ *   方案 A「时间窗口 + 分级」，type 与主指标强绑定：
+ *   view 近 7 天阅读量 / favorite 近 7 天收藏数 / sale 近 7 天已支付订单数 /
+ *   rating 贝叶斯加权评分 / new 近 30 天上架按阅读量。
  */
 
 /** 分类类型（sys_category.category_type）：分类即题材频道，不分风格/受众（男女频不做） */
@@ -55,14 +56,14 @@ export const BANNER_POSITION = [
   { value: 'home_middle', label: '首页中部' }
 ]
 
-/** 榜单类型（sys_ranking_snapshot.ranking_type）：与 App 端四榜对齐，指标随类型固定 */
+/** 榜单类型（type 与主指标强绑定，方案 A：时间窗口 + 分级） */
 export const RANKING_TYPE = [
-  { value: 'view', label: '热门榜', metricLabel: '阅读量' },
-  { value: 'favorite', label: '收藏榜', metricLabel: '收藏量' },
-  { value: 'sale', label: '交易热度榜', metricLabel: '交易量' },
-  { value: 'rating', label: '评分榜', metricLabel: '评分' }
+  { value: 'view', label: '热门榜', metricLabel: '近7天阅读' },
+  { value: 'favorite', label: '收藏榜', metricLabel: '近7天收藏' },
+  { value: 'sale', label: '交易热度榜', metricLabel: '近7天订单' },
+  { value: 'rating', label: '评分榜', metricLabel: '综合评分' },
+  { value: 'new', label: '新书榜', metricLabel: '阅读量' }
 ]
-
 /** 取中文名，找不到回退原值 */
 export function contentEnumLabel(list, value) {
   const item = (list || []).find((i) => i.value === value)
