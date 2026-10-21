@@ -1,70 +1,44 @@
 /**
  * URL 工具函数
+ *
+ * 注意：管理端静态资源（/profile/**）必须走 API 前缀（/dev-api 或 /prod-api），
+ * 由 Vite / Caddy 转发到后端。不要拼成站点根路径 /profile 或 localhost:8080，
+ * 否则本地 Vite 的 /profile 代理能碰巧成功，服务器部署后会拿到 SPA 的 index.html。
  */
 
+const BASE_API = import.meta.env.VITE_APP_ADMIN_BASE_API || import.meta.env.VITE_APP_BASE_API || ''
+const MEDIA_PATH_PREFIX = '/profile/'
+
 /**
- * 解析资源 URL
- * 将后端返回的相对路径转换为完整的可访问 URL
- * 
- * @param {string} raw - 原始 URL（可能是相对路径或完整 URL）
- * @returns {string} 完整的 URL
- * 
- * @example
- * resolveAssetUrl('/profile/upload/2024/12/01/image.jpg')
- * // => 'http://localhost:8080/profile/upload/2024/12/01/image.jpg'
- * 
- * resolveAssetUrl('https://cdn.example.com/image.jpg')
- * // => 'https://cdn.example.com/image.jpg' (原样返回)
+ * 解析资源 URL（与 request.js 的 resolveMediaUrl 行为一致）。
+ *
+ * @param {string} raw - 原始 URL（相对路径或完整 URL）
+ * @returns {string} 当前环境可访问的地址
  */
 export function resolveAssetUrl(raw) {
   if (!raw || typeof raw !== 'string') {
     return ''
   }
-
-  const trimmed = raw.trim()
-  
-  // 已经是完整的 HTTP/HTTPS URL，直接返回
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed
+  let url = raw.trim()
+  const mediaIndex = url.indexOf(MEDIA_PATH_PREFIX)
+  if (mediaIndex > 0) {
+    url = url.substring(mediaIndex)
   }
-
-  // 相对路径（以 / 开头），拼接后端地址
-  if (trimmed.startsWith('/')) {
-    // 获取后端基础地址
-    const baseUrl = getBackendBaseUrl()
-    return `${baseUrl}${trimmed}`
+  if (url.startsWith('/') && !url.startsWith('//')) {
+    return `${BASE_API}${url}`
   }
-
-  // 其他情况原样返回
-  return trimmed
-}
-
-/**
- * 获取后端基础地址（不包含 /api 路径）
- * 
- * @returns {string} 后端服务器地址
- */
-function getBackendBaseUrl() {
-  // 开发环境
-  if (import.meta.env.DEV) {
-    // Vite 代理配置中的目标地址
-    return 'http://localhost:8080'
-  }
-  
-  // 生产环境：假设前后端同域名部署
-  // 如果前后端分离部署，需要配置环境变量 VITE_API_BASE_URL
-  return import.meta.env.VITE_API_BASE_URL || window.location.origin
+  return url
 }
 
 /**
  * 批量解析资源 URL
- * 
+ *
  * @param {string[]} urls - URL 数组
- * @returns {string[]} 解析后的 URL 数组
+ * @returns {string[]} 解析后的 URL
  */
 export function resolveAssetUrls(urls) {
   if (!Array.isArray(urls)) {
     return []
   }
-  return urls.map(url => resolveAssetUrl(url))
+  return urls.map((url) => resolveAssetUrl(url))
 }
