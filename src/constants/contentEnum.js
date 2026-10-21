@@ -15,7 +15,7 @@
  * - RANKING_TYPE：榜单五类（App 接口 2.7.7 与后端 AppBookstoreServiceImpl 白名单一致），
  *   方案 A「时间窗口 + 分级」，type 与主指标强绑定：
  *   view 近 7 天阅读量 / favorite 近 7 天收藏数 / sale 近 7 天已支付订单数 /
- *   rating 贝叶斯加权评分 / new 近 30 天上架按阅读量。
+ *   rating 平均评分 / new 近 30 天上架按阅读量。
  */
 
 /** 分类类型（sys_category.category_type）：分类即题材频道，不分风格/受众（男女频不做） */
