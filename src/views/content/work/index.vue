@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <PageContainer>
     <PageHeader title="作品管理" description="管理全部作品及其章节、书城展示作品与推荐；书城作品仅列出被推荐到首页热门或搜索页的作品" />
 
@@ -11,6 +11,15 @@
               v-model="allQuery.title"
               placeholder="作品标题"
               style="width: 180px"
+              clearable
+              @keyup.enter="handleAllQuery"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-input
+              v-model="allQuery.authorName"
+              placeholder="作者昵称"
+              style="width: 160px"
               clearable
               @keyup.enter="handleAllQuery"
             />
@@ -346,7 +355,7 @@ const activeTab = ref('all')
 const allLoading = ref(false)
 const allList = ref([])
 const allTotal = ref(0)
-const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', status: '', tradeType: '' })
+const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', authorName: '', status: '', tradeType: '' })
 
 const STATUS_LABEL_MAP = {
   draft: '草稿',
@@ -377,6 +386,7 @@ function buildAllQuery() {
     pageSize: allQuery.pageSize,
     title: allQuery.title || undefined,
     status: allQuery.status || undefined,
+    authorName: allQuery.authorName || undefined,
     tradeType: allQuery.tradeType || undefined
   }
 }
@@ -403,6 +413,7 @@ function handleAllQuery() {
 function handleAllReset() {
   allQuery.title = ''
   allQuery.status = ''
+  allQuery.authorName = ''
   allQuery.tradeType = ''
   handleAllQuery()
 }

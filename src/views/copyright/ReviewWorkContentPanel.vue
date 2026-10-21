@@ -7,15 +7,6 @@
         <div class="section-label">简介</div>
         <div class="section-body">{{ work.summary || '暂无' }}</div>
       </div>
-      <div class="section" v-if="work.coreSetting">
-        <div class="section-label">核心设定</div>
-        <div class="section-body">{{ work.coreSetting }}</div>
-      </div>
-      <div class="section" v-if="work.characterSetting">
-        <div class="section-label">角色设定</div>
-        <div class="section-body">{{ work.characterSetting }}</div>
-      </div>
-
       <el-divider content-position="left">章节正文</el-divider>
       <div v-if="chapters.length === 0" class="content-tip">暂无章节内容</div>
       <div
