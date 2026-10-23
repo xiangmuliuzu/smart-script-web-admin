@@ -2,31 +2,6 @@ import request, { adminV1Request } from '@/utils/request'
 
 const PRODUCT_PREFIX = '/api/v1/admin'
 
-/** 版权审核产品业务 API */
-
-export function getReviewList(params) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/review/list`,
-    method: 'get',
-    params
-  })
-}
-
-export function getReviewDetail(id) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/review/${id}`,
-    method: 'get'
-  })
-}
-
-export function submitReviewResult(id, data) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/review/${id}/result`,
-    method: 'post',
-    data
-  })
-}
-
 export function getCopyrightAssets(params) {
   const { pageNo, ...filters } = params || {}
   return adminV1Request({
@@ -107,14 +82,6 @@ export function updateCopyrightSealStatus(sealId, status) {
   })
 }
 
-export function getAiReviewRules(params) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/review-rules`,
-    method: 'get',
-    params
-  })
-}
-
 // 提现审核API
 export function getWithdrawList(params) {
   const { pageNo, ...filters } = params || {}
@@ -183,13 +150,6 @@ export function getContractList(params) {
 export function getAvailableContractOrders() {
   return adminV1Request({
     url: `${PRODUCT_PREFIX}/copyright/contract/available-orders`,
-    method: 'get'
-  })
-}
-
-export function getContractDetail(contractId) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/contract/${contractId}`,
     method: 'get'
   })
 }
@@ -366,29 +326,6 @@ export function getCopyrightApplicationDetail(applyId) {
   })
 }
 
-export function addCopyrightApplication(data) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/content/copyright/application`,
-    method: 'post',
-    data
-  })
-}
-
-export function updateCopyrightApplication(data) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/content/copyright/application`,
-    method: 'put',
-    data
-  })
-}
-
-export function deleteCopyrightApplication(applyIds) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/content/copyright/application/${applyIds}`,
-    method: 'delete'
-  })
-}
-
 export function syncCopyrightApplication(applyId) {
   return adminV1Request({
     url: `${PRODUCT_PREFIX}/content/copyright/application/queryStatus/${applyId}`,
@@ -416,15 +353,6 @@ export function batchSubmitCopyrightApplicationToCenter(applyIds) {
     url: `${PRODUCT_PREFIX}/content/copyright/application/batch/submit`,
     method: 'post',
     data: applyIds
-  })
-}
-
-export function exportCopyrightApplication(params) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/content/copyright/application/export`,
-    method: 'post',
-    params,
-    responseType: 'blob'
   })
 }
 

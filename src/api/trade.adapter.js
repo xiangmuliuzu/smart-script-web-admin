@@ -44,12 +44,6 @@ function mapRows(res, fn) {
   return res
 }
 
-/* ==================== 交易作品（2.25）==================== */
-/** SysWork 字段与 TradeWorks.vue 已对齐（workId/title/authorName/tradeType/price/...），此处仅规范化透传 */
-export function adaptTradeWorks(res) {
-  return mapRows(res, (w) => ({ ...w }))
-}
-
 /* ==================== 授权订单（2.28 / 2.29）==================== */
 /** SysOrder → AuthOrders.vue 列表：buyerName→buyer, sellerName→creator, totalAmount→amount/amountText, licenseType→authorizationTypeLabel */
 export function adaptOrders(res) {
@@ -71,11 +65,6 @@ function adaptStatusItem(log) {
     operator: log.operator || log.operatorName || log.operatorRole || '',
     remark: log.remark || ''
   }
-}
-
-/** 订单状态流转日志（独立端点 GET /trade/orders/{id}/status-log）→ { rows, total } */
-export function adaptOrderStatusLog(res) {
-  return mapRows(res, adaptStatusItem)
 }
 
 /**
@@ -102,54 +91,6 @@ export function adaptOrderDetail(detail, statusRows) {
       : { nickname: detail.sellerName ?? detail.creator ?? '' },
     statusHistory: history.map(adaptStatusItem)
   }
-}
-
-/* ==================== 合作方（2.35）==================== */
-/** SysPartner 字段与 Partners.vue 已对齐（partnerNo/partnerName/partnerType/contactPerson/...），规范化透传 */
-export function adaptPartners(res) {
-  return mapRows(res, (p) => ({ ...p }))
-}
-
-/* ==================== 商务跟进（2.38）==================== */
-/** SysBusinessFollow → FollowUp.vue：followTime→followUpAt, followType→method, nextFollowDate→nextFollowUpAt, followId→followUpId */
-export function adaptFollowUps(res) {
-  return mapRows(res, (f) => ({
-    ...f,
-    followUpId: f.followUpId ?? f.followId,
-    followUpAt: f.followUpAt ?? f.followTime,
-    method: f.method ?? f.followType,
-    nextFollowUpAt: f.nextFollowUpAt ?? f.nextFollowDate
-  }))
-}
-
-/**
- * FollowUp.vue 表单 → 新增商务跟进请求体（请求方向反向映射，修复 BIZ_FOLLOW_001）。
- * 页面字段 method/followUpAt/nextFollowUpAt 与后端 domain 的 followType/followTime/nextFollowDate 不一致，
- * 而 sys_business_follow.follow_type/follow_time 均 NOT NULL，直接透传会因字段名不匹配落 null 触发 SQL 异常。
- * 日期已由 el-date-picker 的 value-format 输出为 'YYYY-MM-DD HH:mm:ss'，与后端 @JsonFormat 一致，无需再转换。
- */
-export function toFollowPayload(form = {}) {
-  return {
-    ...form,
-    followType: form.followType ?? form.method,
-    followTime: form.followTime ?? form.followUpAt,
-    nextFollowDate: form.nextFollowDate ?? form.nextFollowUpAt
-  }
-}
-
-/* ==================== 合作记录（分工 15 线上合作意向 / 16 线下谈判）==================== */
-/**
- * SysOfflineCooperation → FollowUp.vue 合作记录只读视图。
- * 后端返回扁平原始字段（source/status/expectedAmount/nextFollowAt/negotiationPlace/contactPerson/contactValue/workTitle/partnerName），
- * 此处仅补中文 label 与金额文本，其余透传。
- */
-export function adaptCooperations(res) {
-  return mapRows(res, (c) => ({
-    ...c,
-    sourceLabel: c.sourceLabel || enumLabel('cooperationSource', c.source),
-    statusLabel: c.statusLabel || enumLabel('cooperationStatus', c.status),
-    expectedAmountText: c.expectedAmountText || formatMoney(c.expectedAmount)
-  }))
 }
 
 /* ==================== 询盘（缺口接口）==================== */

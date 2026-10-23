@@ -56,16 +56,6 @@ export function markSessionRead(sessionId, throughMessageId) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/read`, method: 'put', params: { throughMessageId } })
 }
 
-/** 可分配的管理员候选列表（管理域账号且挂有有效角色），返回 [{ userId, userName, nickName, avatar }] */
-export function listAdmins() {
-  return request({ url: `${PREFIX}/admins`, method: 'get' })
-}
-
-/** 分配处理管理员 */
-export function assignAdmin(sessionId, adminId) {
-  return request({ url: `${PREFIX}/sessions/${sessionId}/assign`, method: 'put', params: { adminId } })
-}
-
 /** 变更会话状态：action = 'close' | 'reopen' */
 export function changeStatus(sessionId, action) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/status`, method: 'put', params: { action } })

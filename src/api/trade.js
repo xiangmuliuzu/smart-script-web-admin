@@ -1,18 +1,13 @@
 import { adminV1Request as request } from '@/utils/request'
 import {
   isTradeMock,
-  mockTradeWorks, mockCreateTradeWork, mockUpdateTradeWork,
-  mockOrders, mockOrderDetail, mockOrderStatusLog,
-  mockPartners, mockCreatePartner, mockUpdatePartner,
-  mockDemandTags, mockCreateDemandTag, mockUpdateDemandTag, mockDeleteDemandTag,
-  mockFollowUps, mockCreateFollowUp,
+  mockOrders, mockOrderDetail,
   mockInquiries, mockInquiryDetail,
   mockQuotes,
   mockDemands, mockDemandSubmissions
 } from '@/api/trade.mock'
 import {
-  adaptTradeWorks, adaptOrders, adaptOrderDetail, adaptOrderStatusLog,
-  adaptPartners, adaptFollowUps, toFollowPayload, adaptCooperations, adaptInquiries, adaptInquiryDetail, adaptQuotes,
+  adaptOrders, adaptOrderDetail, adaptInquiries, adaptInquiryDetail, adaptQuotes,
   adaptDemands, adaptDemandSubmissions
 } from '@/api/trade.adapter'
 
@@ -42,26 +37,6 @@ function withPageNum(params) {
   return params
 }
 
-/* ==================== 交易作品（2.25 / 2.26 / 2.27）==================== */
-
-/** 2.25 交易作品列表 GET /trade/works */
-export function getTradeWorks(params) {
-  if (isTradeMock()) return Promise.resolve(mockTradeWorks(params))
-  return request({ url: `${PREFIX}/trade/works`, method: 'get', params: withPageNum(params) }).then(adaptTradeWorks)
-}
-
-/** 2.26 上架新作品到交易大厅 POST /trade/works（作品须已审核通过） */
-export function createTradeWork(data) {
-  if (isTradeMock()) return Promise.resolve(mockCreateTradeWork(data))
-  return request({ url: `${PREFIX}/trade/works`, method: 'post', data })
-}
-
-/** 2.27 编辑交易设置 PUT /trade/works/{tradeWorkId} */
-export function updateTradeWork(tradeWorkId, data) {
-  if (isTradeMock()) return Promise.resolve(mockUpdateTradeWork(tradeWorkId, data))
-  return request({ url: `${PREFIX}/trade/works/${tradeWorkId}`, method: 'put', data })
-}
-
 /* ==================== 授权订单（2.28 / 2.29）==================== */
 
 /** 2.28 授权订单列表 GET /trade/orders */
@@ -82,95 +57,6 @@ export function getOrderDetail(orderId) {
   ]).then(([detail, log]) => adaptOrderDetail(detail, log))
 }
 
-/** ⚠️ 订单状态流转日志（文档缺口，路径待后端确认）GET /trade/orders/{orderId}/status-log */
-export function getOrderStatusLog(orderId) {
-  if (isTradeMock()) return Promise.resolve(mockOrderStatusLog(orderId))
-  return request({ url: `${PREFIX}/trade/orders/${orderId}/status-log`, method: 'get' }).then(adaptOrderStatusLog)
-}
-
-/* ==================== 合作方 / 需求标签 / 商务跟进（2.35-2.38）==================== */
-
-/** 2.35 合作方列表 GET /trade/partners */
-export function getPartnerList(params) {
-  if (isTradeMock()) return Promise.resolve(mockPartners(params))
-  return request({ url: `${PREFIX}/trade/partners`, method: 'get', params: withPageNum(params) }).then(adaptPartners)
-}
-
-/** 2.36 新增合作方 POST /trade/partners */
-export function createPartner(data) {
-  if (isTradeMock()) return Promise.resolve(mockCreatePartner(data))
-  return request({ url: `${PREFIX}/trade/partners`, method: 'post', data })
-}
-
-/** 编辑合作方 PUT /trade/partners/{partnerId}（修复：编辑态此前误走新增导致重复插入） */
-export function updatePartner(partnerId, data) {
-  if (isTradeMock()) return Promise.resolve(mockUpdatePartner(partnerId, data))
-  return request({ url: `${PREFIX}/trade/partners/${partnerId}`, method: 'put', data })
-}
-
-/** 2.37 需求标签列表 GET /trade/partners/tags */
-export function getDemandTags(params) {
-  if (isTradeMock()) return Promise.resolve(mockDemandTags(params))
-  return request({ url: `${PREFIX}/trade/partners/tags`, method: 'get', params: withPageNum(params) })
-}
-
-/** 2.37 新增需求标签 POST /trade/partners/tags */
-export function createDemandTag(data) {
-  if (isTradeMock()) return Promise.resolve(mockCreateDemandTag(data))
-  return request({ url: `${PREFIX}/trade/partners/tags`, method: 'post', data })
-}
-
-/** ⚠️ 编辑需求标签（文档 2.37 仅定义 GET/POST，PUT 为前端预留桩，路径待后端确认） */
-export function updateDemandTag(tagId, data) {
-  if (isTradeMock()) return Promise.resolve(mockUpdateDemandTag(tagId, data))
-  return request({ url: `${PREFIX}/trade/partners/tags/${tagId}`, method: 'put', data })
-}
-
-/** ⚠️ 删除需求标签（文档 2.37 仅定义 GET/POST，DELETE 为前端预留桩，路径待后端确认） */
-export function deleteDemandTag(tagId) {
-  if (isTradeMock()) return Promise.resolve(mockDeleteDemandTag(tagId))
-  return request({ url: `${PREFIX}/trade/partners/tags/${tagId}`, method: 'delete' })
-}
-
-/** 2.38 商务跟进记录列表 GET /trade/partners/follow-ups */
-export function getFollowUps(params) {
-  if (isTradeMock()) return Promise.resolve(mockFollowUps(params))
-  return request({ url: `${PREFIX}/trade/partners/follow-ups`, method: 'get', params: withPageNum(params) }).then(adaptFollowUps)
-}
-
-/** 2.38 新增商务跟进记录 POST /trade/partners/follow-ups */
-export function createFollowUp(data) {
-  if (isTradeMock()) return Promise.resolve(mockCreateFollowUp(data))
-  // 请求方向反向映射（method→followType、followUpAt→followTime、nextFollowUpAt→nextFollowDate），修复 BIZ_FOLLOW_001
-  return request({ url: `${PREFIX}/trade/partners/follow-ups`, method: 'post', data: toFollowPayload(data) })
-}
-
-/* ==================== 合作记录（分工 15 线上合作意向 / 16 线下谈判）==================== */
-
-/** 合作记录列表 GET /trade/cooperation/list（source=online 线上合作记录 / offline 线下谈判记录） */
-export function getCooperations(params) {
-  if (isTradeMock()) return Promise.resolve({ rows: [], total: 0 })
-  return request({ url: `${PREFIX}/trade/cooperation/list`, method: 'get', params: withPageNum(params) }).then(adaptCooperations)
-}
-
-/** 合作记录详情 GET /trade/cooperation/{id} */
-export function getCooperationDetail(id) {
-  if (isTradeMock()) return Promise.resolve({})
-  return request({ url: `${PREFIX}/trade/cooperation/${id}`, method: 'get' })
-}
-
-/** 新增合作记录 POST /trade/cooperation（APP 线下谈判录入复用；PC 商务跟进页只读不发起） */
-export function createCooperation(data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/cooperation`, method: 'post', data })
-}
-
-/** 更新合作记录 PUT /trade/cooperation/{id} */
-export function updateCooperation(id, data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/cooperation/${id}`, method: 'put', data })
-}
-
 /* ==================== ⚠️ 询盘（文档缺口 3.2，前端预留桩，路径待后端确认）==================== */
 
 /** 询盘列表 GET /trade/inquiry/list */
@@ -188,66 +74,12 @@ export function getInquiryDetail(id) {
 // 2026-09-29 用户决策：取消「询盘转订单」功能，订单一律在接受报价时生成；
 // 后端 POST /trade/inquiry/convert-order/{id} 仅为兼容文档保留（仅 deal 可调），前端不再封装。
 
-/** 发起询盘 POST /trade/inquiry（分工条目 9，PRD APP-TRADE-02） */
-export function createInquiry(data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/inquiry`, method: 'post', data })
-}
-
-/** 接受询盘 PUT /trade/inquiry/{id}/accept（仅 pending 可接受） */
-export function acceptInquiry(id) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/inquiry/${id}/accept`, method: 'put' })
-}
-
-/** 拒绝询盘 PUT /trade/inquiry/{id}/reject（仅 pending 可拒绝） */
-export function rejectInquiry(id) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/inquiry/${id}/reject`, method: 'put' })
-}
-
-/** 关闭询盘 PUT /trade/inquiry/{id}/close（pending/accepted/quoted/rejected 可关闭） */
-export function closeInquiry(id) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/inquiry/${id}/close`, method: 'put' })
-}
-
 /* ==================== ⚠️ 报价/议价（文档缺口，路径待后端确认）==================== */
 
 /** 报价/议价记录列表 GET /trade/quote/list */
 export function getQuoteList(params) {
   if (isTradeMock()) return Promise.resolve(mockQuotes(params))
   return request({ url: `${PREFIX}/trade/quote/list`, method: 'get', params: withPageNum(params) }).then(adaptQuotes)
-}
-
-/** 接受报价 PUT /trade/quote/{quoteId}/accept */
-export function acceptQuote(quoteId) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/quote/${quoteId}/accept`, method: 'put' })
-}
-
-/** 拒绝报价 PUT /trade/quote/{quoteId}/reject */
-export function rejectQuote(quoteId) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/quote/${quoteId}/reject`, method: 'put' })
-}
-
-/** 提交报价 POST /trade/quote（分工条目 17，卖方报价） */
-export function createQuote(data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/quote`, method: 'post', data })
-}
-
-/** 修改报价 PUT /trade/quote/{quoteId}（分工条目 18，仅 pending 可改） */
-export function modifyQuote(quoteId, data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/quote/${quoteId}`, method: 'put', data })
-}
-
-/** 买方议价 POST /trade/quote/counter-offer（分工条目 19，新增 buyer 报价行保留历史） */
-export function counterOffer(data) {
-  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/quote/counter-offer`, method: 'post', data })
 }
 
 /* ==================== ⚠️ 征集项目（文档缺口，对应 sys_demand / sys_demand_submission）==================== */

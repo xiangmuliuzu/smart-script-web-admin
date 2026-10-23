@@ -18,13 +18,6 @@ export function listCategory(query) {
   })
 }
 
-/** 分类详情 */
-export function getCategory(categoryId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category/${categoryId}`,
-    method: 'get'
-  })
-}
-
 /** 新增分类 */
 export function addCategory(data) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/category`,
@@ -49,14 +42,6 @@ export function changeCategoryStatus(data) {
   })
 }
 
-/** 调整分类排序（单一职责：仅改 sort） */
-export function changeCategorySort(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category/changeSort`,
-    method: 'put',
-    data
-  })
-}
-
 /** 删除分类（单个；被作品引用时后端拒绝） */
 export function delCategory(categoryId) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/category/${categoryId}`,
@@ -71,13 +56,6 @@ export function listTag(query) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/tag/list`,
     method: 'get',
     params: query
-  })
-}
-
-/** 标签详情 */
-export function getTag(tagId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/tag/${tagId}`,
-    method: 'get'
   })
 }
 
@@ -172,34 +150,11 @@ export function updateBookstoreExt(data) {
 
 // ---------------- 排行榜管理 ----------------
 
-/** 排行榜分页列表（rankingType/periodStart/periodEnd/status 过滤） */
-export function listRanking(query) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/ranking/list`,
-    method: 'get',
-    params: query
-  })
-}
-
-/** 排行榜条目详情 */
-export function getRanking(rankingId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/ranking/${rankingId}`,
-    method: 'get'
-  })
-}
-
 /** 调整榜单排名（单一职责：仅改 rankNo） */
 export function changeRankNo(data) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/ranking/changeRankNo`,
     method: 'put',
     data
-  })
-}
-
-/** 重算榜单（指标由榜单类型唯一确定：view/favorite/sale/rating；返回 newSnapshotCount/oldRemovedCount） */
-export function recomputeRanking(params) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/ranking/recompute`,
-    method: 'post',
-    params
   })
 }
 
@@ -277,8 +232,6 @@ export function uploadFile(file) {
     data: formData
   })
 }
-
-// ---------------- 作品上传资料 ----------------
 
 // ---------------- 外部视频-渠道管理 ----------------
 export function listDramaChannel(query) { return adminV1Request({ url: `${ADMIN_PREFIX}/dramaChannel/list`, method: 'get', params: query }) }
