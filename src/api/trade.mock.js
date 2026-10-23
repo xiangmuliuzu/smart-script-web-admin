@@ -28,35 +28,6 @@ function paginate(list, params = {}, filterFn) {
   return { rows: filtered.slice(start, start + pageSize), total: filtered.length }
 }
 
-function nowText() {
-  return '2026-09-14 11:20:00'
-}
-
-/* ==================== 2.25 交易作品 ==================== */
-const tradeWorks = [
-  { tradeWorkId: 1, workNo: '#T001', title: '《都市迷途》', authorizationType: 'exclusive', authorizationTypeLabel: '独家授权', price: 5000000, priceText: '¥50,000', viewCount: 1234, favoriteCount: 89, topped: true, sortWeight: 100, listingStatus: 'listed', listingStatusLabel: '已上架' },
-  { tradeWorkId: 2, workNo: '#T002', title: '《暗夜追踪》', authorizationType: 'non_exclusive', authorizationTypeLabel: '非独家授权', price: 2500000, priceText: '¥25,000', viewCount: 856, favoriteCount: 42, topped: false, sortWeight: 80, listingStatus: 'listed', listingStatusLabel: '已上架' },
-  { tradeWorkId: 3, workNo: '#T003', title: '《长安旧事》', authorizationType: 'adaptation', authorizationTypeLabel: '改编授权', price: 8000000, priceText: '¥80,000', viewCount: 2043, favoriteCount: 156, topped: false, sortWeight: 60, listingStatus: 'listed', listingStatusLabel: '已上架' },
-  { tradeWorkId: 4, workNo: '#T004', title: '《孤岛来信》', authorizationType: 'non_exclusive', authorizationTypeLabel: '非独家授权', price: 1800000, priceText: '¥18,000', viewCount: 432, favoriteCount: 23, topped: false, sortWeight: 40, listingStatus: 'offline', listingStatusLabel: '已下架' }
-]
-
-export function mockTradeWorks(params = {}) {
-  return paginate(tradeWorks, params, (row, p) => {
-    if (p.authorizationType && row.authorizationType !== p.authorizationType) return false
-    if (p.listingStatus && row.listingStatus !== p.listingStatus) return false
-    if (p.keyword && !row.title.includes(p.keyword)) return false
-    return true
-  })
-}
-
-export function mockCreateTradeWork(data = {}) {
-  return { code: 200, data: { tradeWorkId: Date.now(), workId: data.workId, listingStatus: 'listed', createdAt: nowText() } }
-}
-
-export function mockUpdateTradeWork(tradeWorkId) {
-  return { code: 200, data: { tradeWorkId, updatedAt: nowText() } }
-}
-
 /* ==================== 2.28 / 2.29 授权订单 ==================== */
 // 订单状态采用 PRD 9.3 枚举（见 constants/tradeEnum.js ORDER_STATUS）
 const orders = [
@@ -106,100 +77,9 @@ export function mockOrderDetail(orderId) {
   }
 }
 
-/* ==================== 2.35 / 2.36 合作方 ==================== */
-const partners = [
-  { partnerId: 1, companyName: '影视公司A', partnerType: 'investor', partnerTypeLabel: '投资方', cooperationCount: 12, tags: ['电影', '电视剧'], certStatus: 'approved' },
-  { partnerId: 2, companyName: '制作公司B', partnerType: 'studio', partnerTypeLabel: '制作机构', cooperationCount: 8, tags: ['短剧', '网剧'], certStatus: 'approved' },
-  { partnerId: 3, companyName: '平台C', partnerType: 'platform', partnerTypeLabel: '发行平台', cooperationCount: 5, tags: ['电影', '短剧'], certStatus: 'approved' }
-]
-
-export function mockPartners(params = {}) {
-  return paginate(partners, params, (row, p) => {
-    if (p.partnerType && row.partnerType !== p.partnerType) return false
-    if (p.keyword && !row.companyName.includes(p.keyword)) return false
-    return true
-  })
-}
-
-export function mockCreatePartner(data = {}) {
-  return { code: 200, data: { partnerId: Date.now(), companyName: data.companyName, createdAt: nowText() } }
-}
-
-export function mockUpdatePartner(partnerId, data = {}) {
-  const p = partners.find((x) => x.partnerId === Number(partnerId))
-  if (p) Object.assign(p, data, { partnerId: Number(partnerId) })
-  return { code: 200, data: { partnerId: Number(partnerId), updatedAt: nowText() } }
-}
-
 /* ==================== 2.37 需求标签 ==================== */
-const demandTags = [
-  { tagId: 1, tagName: '电影剧本', usedCount: 12 },
-  { tagId: 2, tagName: '电视剧', usedCount: 9 },
-  { tagId: 3, tagName: '短剧', usedCount: 15 },
-  { tagId: 4, tagName: '悬疑题材', usedCount: 7 },
-  { tagId: 5, tagName: '都市题材', usedCount: 11 },
-  { tagId: 6, tagName: '古装题材', usedCount: 6 },
-  { tagId: 7, tagName: '科幻题材', usedCount: 4 },
-  { tagId: 8, tagName: '喜剧题材', usedCount: 8 }
-]
-
-export function mockDemandTags(params = {}) {
-  // 走 paginate：内部 slice 恒返回新数组，避免原地增删改后引用未变导致表格不重渲染，同时支持分页
-  return paginate(demandTags, params, (row, p) => {
-    if (p.keyword && !row.tagName.includes(p.keyword)) return false
-    return true
-  })
-}
-
-export function mockCreateDemandTag(data = {}) {
-  const tagId = Date.now()
-  demandTags.push({ tagId, tagName: data.tagName || '未命名标签', usedCount: 0 })
-  return { code: 200, data: { tagId, tagName: data.tagName } }
-}
 
 // ⚠️ 编辑/删除标签：文档 2.37 仅定义 GET/POST，PUT/DELETE 为前端预留桩，路径待后端确认
-export function mockUpdateDemandTag(tagId, data = {}) {
-  const tag = demandTags.find((t) => t.tagId === Number(tagId))
-  if (tag && data.tagName != null) tag.tagName = data.tagName
-  return { code: 200, data: { tagId: Number(tagId), tagName: data.tagName } }
-}
-
-export function mockDeleteDemandTag(tagId) {
-  const idx = demandTags.findIndex((t) => t.tagId === Number(tagId))
-  if (idx > -1) demandTags.splice(idx, 1)
-  return { code: 200, data: { tagId: Number(tagId) } }
-}
-
-/* ==================== 2.38 商务跟进记录 ==================== */
-const followUps = [
-  { followUpId: 1, partnerName: '影视公司A', followUpAt: '2026-09-07', method: 'phone', methodLabel: '电话', content: '沟通新项目合作意向', nextFollowUpAt: '2026-09-14', status: 'ongoing', statusLabel: '进行中' },
-  { followUpId: 2, partnerName: '制作公司B', followUpAt: '2026-09-05', method: 'email', methodLabel: '邮件', content: '发送合同模板', nextFollowUpAt: '2026-09-12', status: 'pending', statusLabel: '待跟进' },
-  { followUpId: 3, partnerName: '平台C', followUpAt: '2026-09-03', method: 'meeting', methodLabel: '面谈', content: '确认第二季度合作需求', nextFollowUpAt: '', status: 'completed', statusLabel: '已完成' }
-]
-
-export function mockFollowUps(params = {}) {
-  return paginate(followUps, params, (row, p) => {
-    if (p.status && row.status !== p.status) return false
-    if (p.partnerId && Number(row.partnerId) !== Number(p.partnerId)) return false
-    return true
-  })
-}
-
-export function mockCreateFollowUp(data = {}) {
-  const followUpId = Date.now()
-  const partner = partners.find((p) => p.partnerId === Number(data.partnerId))
-  followUps.unshift({
-    followUpId,
-    partnerId: data.partnerId,
-    partnerName: partner ? partner.companyName : '未知合作方',
-    followUpAt: data.followUpAt || '',
-    method: data.method || '',
-    content: data.content || '',
-    nextFollowUpAt: data.nextFollowUpAt || '',
-    status: data.status || ''
-  })
-  return { code: 200, data: { followUpId, createdAt: nowText() } }
-}
 
 /* ==================== ⚠️ 3.2 缺口接口（待后端确认）==================== */
 
@@ -246,10 +126,6 @@ export function mockQuotes(params = {}) {
 }
 
 // 订单状态流转日志（sys_order_status_log）：待后端确认
-export function mockOrderStatusLog(orderId) {
-  const detail = mockOrderDetail(orderId)
-  return { rows: detail.statusHistory || [], total: (detail.statusHistory || []).length }
-}
 
 // 征集项目（sys_demand）：待后端确认
 const demands = [

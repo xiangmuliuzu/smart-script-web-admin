@@ -21,20 +21,7 @@ export function getAppUser(userId) {
   return request({ url: `${PREFIX}/app-users/${userId}`, method: 'get' })
 }
 
-/**
- * 可授予 App 用户的角色清单。
- * 权威来源为 sys_role.app_grantable，前端不做任何本地过滤或兜底。
- */
-export function listGrantableRoles() {
-  return request({ url: `${PREFIX}/app-users/grantable-roles`, method: 'get' })
-}
-
 /** 启用/停用 App 用户。status: "0" 正常，"1" 停用。reason 必填。 */
 export function changeAppUserStatus(userId, data) {
   return request({ url: `${PREFIX}/app-users/${userId}/status`, method: 'put', data })
-}
-
-/** 替换 App 用户角色授权。data: { roleIds: number[], reason: string } */
-export function grantAppUserRoles(userId, data) {
-  return request({ url: `${PREFIX}/app-users/${userId}/roles`, method: 'put', data })
 }
