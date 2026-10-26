@@ -205,6 +205,19 @@
         <el-descriptions-item label="类型">{{ getTypeText(currentDetail.workType) }}</el-descriptions-item>
         <el-descriptions-item label="题材">{{ currentDetail.genreName }}</el-descriptions-item>
         <el-descriptions-item label="AI评分">{{ currentDetail.aiScore != null ? currentDetail.aiScore + '分' : '-' }}</el-descriptions-item>
+        <el-descriptions-item label="AI风险等级">
+          <el-tag :type="getRiskLevelType(aiResultOf(currentDetail).level)" size="small">
+            {{ getRiskLevelText(aiResultOf(currentDetail).level) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="AI驳回原因" v-if="currentDetail.status === 'rejected'">
+          <template v-if="aiKeywordsOf(currentDetail).length">
+            <el-tag v-for="kw in aiKeywordsOf(currentDetail)" :key="kw" type="danger" size="small" style="margin-right: 4px">
+              {{ kw }}
+            </el-tag>
+          </template>
+          <span v-else>AI 评分 {{ currentDetail.aiScore }} 分，低于规则阈值自动驳回</span>
+        </el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentDetail.createTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentDetail.status)" size="small">
@@ -346,6 +359,33 @@ const getStatusText = (status) => {
     rejected: '已驳回'
   }
   return textMap[status] || status
+}
+
+// 解析 AI 审核结果（aiResult 为 JSON 字符串：{score, level, keywords, prompt}）
+const parseAiResult = (row) => {
+  try {
+    if (!row || !row.aiResult) return { score: null, level: '', keywords: [] }
+    const obj = typeof row.aiResult === 'string' ? JSON.parse(row.aiResult) : row.aiResult
+    return {
+      score: obj.score != null ? obj.score : null,
+      level: obj.level || '',
+      keywords: Array.isArray(obj.keywords) ? obj.keywords : []
+    }
+  } catch (e) {
+    return { score: null, level: '', keywords: [] }
+  }
+}
+const aiResultOf = (row) => parseAiResult(row)
+const aiKeywordsOf = (row) => parseAiResult(row).keywords
+
+// 获取AI风险等级样式与文案
+const getRiskLevelType = (level) => {
+  const typeMap = { low: 'success', medium: 'warning', high: 'danger' }
+  return typeMap[level] || 'info'
+}
+const getRiskLevelText = (level) => {
+  const textMap = { low: '低风险', medium: '中风险', high: '高风险' }
+  return textMap[level] || level || '-'
 }
 
 // 获取操作类型
