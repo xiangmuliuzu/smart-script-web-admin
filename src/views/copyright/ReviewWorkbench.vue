@@ -251,6 +251,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useContactUser } from '@/composables/useContactUser'
 import { sendMessage } from '@/api/adminChat'
+import { buildReviewNotice } from '@/utils/reviewNotice'
 import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
 
 // A3 联系用户（任务 25）：复用公共 composable 创建会话并跳转聊天详情
@@ -262,32 +263,9 @@ const { handleContactUser } = useContactUser({
   extractBusinessName: (row) => row.workTitle || row.workName || row.name,
   emptyMessage: '该作品暂未关联用户，无法发起沟通',
   sendFirstMessage: async (sessionId, row) => {
-    const parts = []
-    parts.push('【作品审核结果通知】')
-    parts.push('作品：《' + (row.workTitle || '') + '》')
-    const score = row.aiScore != null ? row.aiScore : (aiResultOf(row).score ?? '-')
-    const level = aiResultOf(row).level
-    const levelMap = { low: '低风险', medium: '中风险', high: '高风险' }
-    parts.push('AI 评分：' + score + ' 分' + (level ? '（' + (levelMap[level] || level) + '）' : ''))
-    parts.push('审核状态：' + (getStatusText(row.status) || row.status))
-    const issues = (detailContent.value && detailContent.value.issues) || []
-    if (issues.length) {
-      parts.push('AI 问题定位：')
-      for (const iss of issues) {
-        const title = iss.chapterNo === 0 ? '作品简介' : '第' + iss.chapterNo + '章 ' + (iss.chapterTitle || '')
-        const words = (iss.hits || []).map((h) => h.word).filter(Boolean).join('、')
-        parts.push('- ' + title + '：命中「' + (words || '未标注') + '」')
-      }
-    } else {
-      const kws = aiKeywordsOf(row)
-      if (kws.length) {
-        parts.push('AI 命中问题词：' + kws.join('、'))
-      } else if (row.status === 'rejected') {
-        parts.push('AI 综合评分低于规则阈值，自动驳回')
-      }
-    }
-    parts.push('请根据上述问题修改后重新提交审核。')
-    await sendMessage(sessionId, { content: parts.join('\n') })
+    // 消息对管理员简洁，对用户具体：附 AI 原始驳回原因 + 问题章节命中词及原文片段
+    const content = buildReviewNotice(row, (detailContent.value && detailContent.value.issues) || null, (detailContent.value && detailContent.value.aiInfo) || null)
+    await sendMessage(sessionId, { content })
   }
 })
 
