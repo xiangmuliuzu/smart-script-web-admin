@@ -170,7 +170,12 @@
         <el-descriptions-item label="AI评分">{{ currentReview.aiScore != null ? currentReview.aiScore + '分' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentReview.createTime }}</el-descriptions-item>
       </el-descriptions>
-      <ReviewWorkContentPanel :content="reviewContent" :loading="reviewContentLoading" />
+      <ReviewWorkContentPanel
+        :content="reviewContent"
+        :ai-info="reviewAiInfo"
+        :issues="reviewIssues"
+        :loading="reviewContentLoading"
+      />
       <el-form :model="reviewForm" label-width="80px" style="margin-top: 20px">
         <el-form-item label="审核结果">
           <el-radio-group v-model="reviewForm.action">
@@ -225,7 +230,12 @@
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
-      <ReviewWorkContentPanel :content="detailContent" :loading="detailContentLoading" />
+      <ReviewWorkContentPanel
+        :content="detailContent"
+        :ai-info="detailAiInfo"
+        :issues="detailIssues"
+        :loading="detailContentLoading"
+      />
       <template #footer>
         <!-- A3 联系用户入口（任务 25）：待作品关联真实 userId 后自动启用 -->
         <el-button type="primary" plain :disabled="!currentDetail.userId" @click="handleContactUser(currentDetail)">联系用户</el-button>
@@ -237,18 +247,48 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useContactUser } from '@/composables/useContactUser'
+import { sendMessage } from '@/api/adminChat'
 import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
 
 // A3 联系用户（任务 25）：复用公共 composable 创建会话并跳转聊天详情
+// 顺带把作品审核详情（AI 评分/风险/问题定位）作为首条消息发给用户，便于用户看到驳回原因
 const { handleContactUser } = useContactUser({
   businessType: 'WORK',
   extractUserId: (row) => row.userId,
   extractBusinessId: (row) => row.workId || row.reviewId,
   extractBusinessName: (row) => row.workTitle || row.workName || row.name,
-  emptyMessage: '该作品暂未关联用户，无法发起沟通'
+  emptyMessage: '该作品暂未关联用户，无法发起沟通',
+  sendFirstMessage: async (sessionId, row) => {
+    const parts = []
+    parts.push('【作品审核结果通知】')
+    parts.push('作品：《' + (row.workTitle || '') + '》')
+    const score = row.aiScore != null ? row.aiScore : (aiResultOf(row).score ?? '-')
+    const level = aiResultOf(row).level
+    const levelMap = { low: '低风险', medium: '中风险', high: '高风险' }
+    parts.push('AI 评分：' + score + ' 分' + (level ? '（' + (levelMap[level] || level) + '）' : ''))
+    parts.push('审核状态：' + (getStatusText(row.status) || row.status))
+    const issues = (detailContent.value && detailContent.value.issues) || []
+    if (issues.length) {
+      parts.push('AI 问题定位：')
+      for (const iss of issues) {
+        const title = iss.chapterNo === 0 ? '作品简介' : '第' + iss.chapterNo + '章 ' + (iss.chapterTitle || '')
+        const words = (iss.hits || []).map((h) => h.word).filter(Boolean).join('、')
+        parts.push('- ' + title + '：命中「' + (words || '未标注') + '」')
+      }
+    } else {
+      const kws = aiKeywordsOf(row)
+      if (kws.length) {
+        parts.push('AI 命中问题词：' + kws.join('、'))
+      } else if (row.status === 'rejected') {
+        parts.push('AI 综合评分低于规则阈值，自动驳回')
+      }
+    }
+    parts.push('请根据上述问题修改后重新提交审核。')
+    await sendMessage(sessionId, { content: parts.join('\n') })
+  }
 })
 
 // 筛选表单
@@ -493,6 +533,10 @@ const detailDialogVisible = ref(false)
 const currentDetail = ref({})
 const detailContent = ref(null)
 const detailContentLoading = ref(false)
+const detailAiInfo = computed(() => (detailContent.value && detailContent.value.aiInfo) || null)
+const detailIssues = computed(() => (detailContent.value && detailContent.value.issues) || null)
+const reviewAiInfo = computed(() => (reviewContent.value && reviewContent.value.aiInfo) || null)
+const reviewIssues = computed(() => (reviewContent.value && reviewContent.value.issues) || null)
 
 // 处理详情
 const handleDetail = async (row) => {
