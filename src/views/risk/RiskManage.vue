@@ -69,15 +69,14 @@
             <el-table-column prop="ruleName" label="规则" min-width="160" />
             <el-table-column prop="ruleContent" label="触发条件" width="140" />
             <el-table-column prop="action" label="处理方式" width="140" />
-            <el-table-column label="状态" width="120">
+            <el-table-column label="状态" width="110">
               <template #default="{ row }">
-                <el-tag type="success" size="small">
-                  {{ row.status }}
-                </el-tag>
+                <el-tag :type="row.status === 'enabled' ? 'success' : 'danger'" size="small">{{ row.status === 'enabled' ? '生效' : '停用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100">
+            <el-table-column label="操作" width="170">
               <template #default="{ row }">
+                <el-button size="small" :type="row.status === 'enabled' ? 'warning' : 'success'" @click="handleToggleRule(row)">{{ row.status === 'enabled' ? '停用' : '启用' }}</el-button>
                 <el-button size="small" type="danger" @click="handleDeleteRule(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -426,6 +425,36 @@ const handleDeleteRule = async (row) => {
     }
   } catch (e) {
     ElMessage.error('删除失败，请检查后端服务')
+  }
+}
+
+// 停用/启用风控规则（复用 PUT 更新接口，只改 status）
+const handleToggleRule = async (row) => {
+  const target = row.status === 'enabled' ? 'disabled' : 'enabled'
+  try {
+    await ElMessageBox.confirm(`确认${target === 'enabled' ? '启用' : '停用'}风控规则 "${row.ruleName || row.rule_name}" 吗？`, '状态确认', {
+      confirmButtonText: target === 'enabled' ? '启用' : '停用',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    const res = await adminFetch('/api/v1/admin/review/risk-rule', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ruleId: row.ruleId, status: target })
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success(target === 'enabled' ? '已启用' : '已停用')
+      row.status = target
+    } else {
+      ElMessage.error(data.msg || '操作失败')
+    }
+  } catch (e) {
+    ElMessage.error('操作失败，请检查后端服务')
   }
 }
 
