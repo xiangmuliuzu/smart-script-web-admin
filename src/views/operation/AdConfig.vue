@@ -25,7 +25,9 @@
           <el-table :data="placementList" v-loading="loading" style="width: 100%" @row-click="handleRowClick">
             <el-table-column prop="adName" label="广告位" min-width="140" />
             <el-table-column prop="adPosition" label="位置" width="120" />
-            <el-table-column prop="adType" label="类型" width="110" />
+            <el-table-column label="类型 / 形式" width="110">
+              <template #default="{ row }">{{ row.adPosition === 'splash' && row.adSource === 'self' ? '图片' : row.adType }}</template>
+            </el-table-column>
             <el-table-column prop="adSource" label="广告源" width="120" />
             <el-table-column label="频次/天" width="100" align="center">
               <template #default="{ row }">{{ row.frequencyLimit }}</template>
@@ -130,14 +132,6 @@
             <el-option label="Banner" value="banner" />
           </el-select>
         </el-form-item>
-        <el-form-item label="广告类型" required>
-          <el-select v-model="form.adType" placeholder="请选择类型" style="width: 100%">
-            <el-option label="激励视频" value="rewarded_video" />
-            <el-option label="原生信息流" value="native_feed" />
-            <el-option label="插屏" value="interstitial" />
-            <el-option label="开屏" value="splash_ad" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="广告源" required>
           <el-select v-model="form.adSource" placeholder="请选择广告源" style="width: 100%">
             <el-option label="穿山甲" value="csj" />
@@ -147,6 +141,35 @@
             <el-option label="自建" value="self" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="isSelfSplash" label="素材形式">
+          <span>图片</span>
+        </el-form-item>
+        <el-form-item v-else label="广告类型" required>
+          <el-select v-model="form.adType" placeholder="请选择类型" style="width: 100%">
+            <el-option label="激励视频" value="rewarded_video" />
+            <el-option label="原生信息流" value="native_feed" />
+            <el-option label="插屏" value="interstitial" />
+            <el-option label="开屏" value="splash_ad" />
+          </el-select>
+        </el-form-item>
+        <template v-if="isSelfSplash">
+          <el-form-item label="开屏图片" required>
+            <div class="splash-media">
+              <img v-if="form.imageUrl" :src="resolveMediaUrl(form.imageUrl)" alt="开屏广告预览" class="splash-preview" />
+              <el-upload :show-file-list="false" accept="image/jpeg,image/png,image/webp" :before-upload="beforeSplashUpload" :http-request="uploadSplashImage" :disabled="uploading">
+                <el-button :loading="uploading">{{ form.imageUrl ? '更换图片' : '上传图片' }}</el-button>
+              </el-upload>
+              <span>建议竖版图片，JPG、PNG 或 WebP，最大 5 MB</span>
+            </div>
+          </el-form-item>
+          <el-form-item label="跳转链接">
+            <el-input v-model="form.linkUrl" placeholder="选填，HTTP 或 HTTPS 链接" />
+          </el-form-item>
+          <el-form-item label="展示时长">
+            <el-input-number v-model="form.durationSeconds" :min="1" :max="10" controls-position="right" /> <span>秒，可随时跳过</span>
+          </el-form-item>
+          <el-alert title="自建开屏按排序和生效日期选择，暂不应用人群定向及曝光次数限制。" type="info" :closable="false" />
+        </template>
         <el-form-item label="广告单元ID">
           <el-input v-model="form.adUnitId" placeholder="广告单元 ID" />
         </el-form-item>
@@ -192,12 +215,15 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import adminFetch from '@/utils/adminFetch'
+import { uploadFile } from '@/api/content'
+import { resolveMediaUrl } from '@/utils/request'
 
 const AD_PREFIX = '/api/v1/admin/operation/ad-config'
 
 // 加载状态
 const loading = ref(false)
 const saving = ref(false)
+const uploading = ref(false)
 
 // 查询条件
 const query = reactive({ adName: '', adSource: '', page: 1, pageSize: 10 })
@@ -224,6 +250,9 @@ const defaultForm = () => ({
   adType: '',
   adSource: '',
   adUnitId: '',
+  imageUrl: '',
+  linkUrl: '',
+  durationSeconds: 5,
   frequencyLimit: 1,
   dailyCap: 1000,
   watchLimit: 5,
@@ -233,6 +262,7 @@ const defaultForm = () => ({
   remark: ''
 })
 const form = reactive(defaultForm())
+const isSelfSplash = computed(() => form.adPosition === 'splash' && form.adSource === 'self')
 
 // 解析人群定向 JSON
 const parseAudience = (json) => {
@@ -311,6 +341,28 @@ const handleSaveConfig = async () => {
   }
 }
 
+function beforeSplashUpload(file) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+    ElMessage.error('请选择不超过 5 MB 的 JPG、PNG 或 WebP 图片')
+    return false
+  }
+  return true
+}
+
+async function uploadSplashImage(options) {
+  uploading.value = true
+  try {
+    const result = await uploadFile(options.file)
+    const url = result?.url || result?.data?.url
+    if (!url) throw new Error('上传未返回图片地址')
+    form.imageUrl = url
+    options.onSuccess(result)
+  } catch (error) {
+    ElMessage.error(error.message || '图片上传失败')
+    options.onError(error)
+  } finally { uploading.value = false }
+}
+
 // 新增
 const handleAdd = () => {
   isEdit.value = false
@@ -328,6 +380,9 @@ const handleEdit = (row) => {
     adType: row.adType,
     adSource: row.adSource,
     adUnitId: row.adUnitId,
+    imageUrl: row.imageUrl || '',
+    linkUrl: row.linkUrl || '',
+    durationSeconds: row.durationSeconds ?? 5,
     frequencyLimit: row.frequencyLimit,
     dailyCap: row.dailyCap,
     watchLimit: row.watchLimit,
@@ -341,19 +396,31 @@ const handleEdit = (row) => {
 
 // 提交新增/编辑
 const handleSubmit = async () => {
-  if (!form.adName || !form.adPosition || !form.adType || !form.adSource) {
+  if (!form.adName || !form.adPosition || !form.adSource || (!isSelfSplash.value && !form.adType)) {
     ElMessage.warning('请填写名称、位置、类型和来源')
     return
   }
+  if (isSelfSplash.value && !form.imageUrl) {
+    ElMessage.warning('请上传开屏图片')
+    return
+  }
+  if (form.linkUrl && !/^https?:\/\//i.test(form.linkUrl)) {
+    ElMessage.warning('跳转地址必须是 HTTP 或 HTTPS 链接')
+    return
+  }
+  if (uploading.value) return
   saving.value = true
   try {
     const payload = {
       adId: form.adId,
       adName: form.adName,
       adPosition: form.adPosition,
-      adType: form.adType,
+      adType: isSelfSplash.value ? 'splash_ad' : form.adType,
       adSource: form.adSource,
       adUnitId: form.adUnitId,
+      imageUrl: form.imageUrl,
+      linkUrl: form.linkUrl,
+      durationSeconds: form.durationSeconds,
       frequencyLimit: form.frequencyLimit,
       dailyCap: form.dailyCap,
       watchLimit: form.watchLimit,
@@ -691,4 +758,9 @@ onMounted(() => {
   gap: 8px;
   align-items: center;
 }
+</style>
+
+<style scoped>
+.splash-media { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; color: #8a8a8a; font-size: 12px; }
+.splash-preview { width: 100px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 4px; background: #f4f4f4; }
 </style>
