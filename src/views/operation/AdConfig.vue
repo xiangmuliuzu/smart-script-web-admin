@@ -25,9 +25,6 @@
           <el-table :data="placementList" v-loading="loading" style="width: 100%" @row-click="handleRowClick">
             <el-table-column prop="adName" label="广告位" min-width="140" />
             <el-table-column prop="adPosition" label="位置" width="120" />
-            <el-table-column label="类型 / 形式" width="110">
-              <template #default="{ row }">{{ row.adPosition === 'splash' && row.adSource === 'self' ? '图片' : row.adType }}</template>
-            </el-table-column>
             <el-table-column prop="adSource" label="广告源" width="120" />
             <el-table-column label="频次/天" width="100" align="center">
               <template #default="{ row }">{{ row.frequencyLimit }}</template>
@@ -126,6 +123,7 @@
         <el-form-item label="广告位置" required>
           <el-select v-model="form.adPosition" placeholder="请选择位置" style="width: 100%">
             <el-option label="开屏" value="splash" />
+            <el-option label="插屏" value="interstitial" />
             <el-option label="视频前贴片" value="pre-roll" />
             <el-option label="信息流" value="feed" />
             <el-option label="激励视频" value="rewarded" />
@@ -143,14 +141,6 @@
         </el-form-item>
         <el-form-item v-if="isSelfSplash" label="素材形式">
           <span>图片</span>
-        </el-form-item>
-        <el-form-item v-else label="广告类型" required>
-          <el-select v-model="form.adType" placeholder="请选择类型" style="width: 100%">
-            <el-option label="激励视频" value="rewarded_video" />
-            <el-option label="原生信息流" value="native_feed" />
-            <el-option label="插屏" value="interstitial" />
-            <el-option label="开屏" value="splash_ad" />
-          </el-select>
         </el-form-item>
         <template v-if="isSelfSplash">
           <el-form-item label="开屏图片" required>
@@ -263,6 +253,9 @@ const defaultForm = () => ({
 })
 const form = reactive(defaultForm())
 const isSelfSplash = computed(() => form.adPosition === 'splash' && form.adSource === 'self')
+// 历史类型仍保留；新建或更换位置时根据位置填写兼容值。
+const typeByPosition = { splash: 'splash_ad', interstitial: 'interstitial', 'pre-roll': 'pre_roll', feed: 'native_feed', rewarded: 'rewarded_video', banner: 'banner' }
+let originalPosition = ''
 
 // 解析人群定向 JSON
 const parseAudience = (json) => {
@@ -366,6 +359,7 @@ async function uploadSplashImage(options) {
 // 新增
 const handleAdd = () => {
   isEdit.value = false
+  originalPosition = ''
   Object.assign(form, defaultForm())
   dialogVisible.value = true
 }
@@ -373,6 +367,7 @@ const handleAdd = () => {
 // 编辑
 const handleEdit = (row) => {
   isEdit.value = true
+  originalPosition = row.adPosition
   Object.assign(form, {
     adId: row.adId,
     adName: row.adName,
@@ -396,8 +391,8 @@ const handleEdit = (row) => {
 
 // 提交新增/编辑
 const handleSubmit = async () => {
-  if (!form.adName || !form.adPosition || !form.adSource || (!isSelfSplash.value && !form.adType)) {
-    ElMessage.warning('请填写名称、位置、类型和来源')
+  if (!form.adName || !form.adPosition || !form.adSource) {
+    ElMessage.warning('请填写名称、位置和来源')
     return
   }
   if (isSelfSplash.value && !form.imageUrl) {
@@ -415,7 +410,7 @@ const handleSubmit = async () => {
       adId: form.adId,
       adName: form.adName,
       adPosition: form.adPosition,
-      adType: isSelfSplash.value ? 'splash_ad' : form.adType,
+      adType: isSelfSplash.value ? 'splash_ad' : isEdit.value && form.adPosition === originalPosition && form.adType ? form.adType : typeByPosition[form.adPosition],
       adSource: form.adSource,
       adUnitId: form.adUnitId,
       imageUrl: form.imageUrl,
