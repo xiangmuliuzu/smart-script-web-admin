@@ -114,20 +114,6 @@ export function rejectWithdraw(withdrawId, opinion) {
   })
 }
 
-export function freezeWithdraw(withdrawId) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/withdraw/${withdrawId}/freeze`,
-    method: 'post'
-  })
-}
-
-export function unfreezeWithdraw(withdrawId) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/withdraw/${withdrawId}/unfreeze`,
-    method: 'post'
-  })
-}
-
 export function exportWithdrawRecords(params) {
   return adminV1Request({
     url: `${PRODUCT_PREFIX}/copyright/withdraw/export`,

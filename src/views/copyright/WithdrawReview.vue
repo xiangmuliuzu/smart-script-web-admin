@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="提现审核" description="审核创作者提现申请，支持通过、驳回、冻结和解冻操作。" />
+    <PageHeader title="提现审核" description="超过 1 万元的申请需人工审核（通过/驳回）；1 万元及以下申请自动通过，仅可查看记录。" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
@@ -8,7 +8,6 @@
           <el-option label="待审核" value="pending" />
           <el-option label="已通过" value="approved" />
           <el-option label="已驳回" value="rejected" />
-          <el-option label="已冻结" value="frozen" />
           <el-option label="已打款" value="paid" />
         </el-select>
       </el-form-item>
@@ -60,8 +59,6 @@
             <el-button v-permission="'smartscript:copyright:withdraw:query'" link type="primary" @click="openDetail(row)">查看</el-button>
             <el-button v-if="row.status === 'pending'" v-permission="'smartscript:copyright:withdraw:approve'" type="success" @click="approve(row)">通过</el-button>
             <el-button v-if="row.status === 'pending'" v-permission="'smartscript:copyright:withdraw:reject'" type="danger" @click="openReject(row)">驳回</el-button>
-            <el-button v-if="row.status === 'approved'" v-permission="'smartscript:copyright:withdraw:freeze'" type="warning" @click="freeze(row)">冻结</el-button>
-            <el-button v-if="row.status === 'frozen'" v-permission="'smartscript:copyright:withdraw:unfreeze'" type="primary" @click="unfreeze(row)">解冻</el-button>
           </div>
         </template>
       </el-table-column>
@@ -109,7 +106,7 @@ import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { getWithdrawList, getWithdrawDetail, approveWithdraw, rejectWithdraw, freezeWithdraw, unfreezeWithdraw, exportWithdrawRecords } from '@/api/copyright'
+import { getWithdrawList, getWithdrawDetail, approveWithdraw, rejectWithdraw, exportWithdrawRecords } from '@/api/copyright'
 
 const query = reactive({
   pageNo: 1,
@@ -212,28 +209,6 @@ const confirmReject = async () => {
     ElMessage.error('操作失败')
   } finally {
     submitting.value = false
-  }
-}
-
-const freeze = async (row) => {
-  try {
-    await ElMessageBox.confirm('确认冻结该提现申请？', '提示', { type: 'warning' })
-    await freezeWithdraw(row.withdrawId)
-    ElMessage.success('冻结成功')
-    loadRows()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
-  }
-}
-
-const unfreeze = async (row) => {
-  try {
-    await ElMessageBox.confirm('确认解冻该提现申请？', '提示', { type: 'warning' })
-    await unfreezeWithdraw(row.withdrawId)
-    ElMessage.success('解冻成功')
-    loadRows()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
   }
 }
 
