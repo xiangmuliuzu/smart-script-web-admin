@@ -89,13 +89,16 @@
     <!-- 右侧：品牌视觉面板 -->
     <div class="login-right">
       <div class="visual-bg"></div>
-      <img
-        v-if="!imageFailed"
-        :src="visualImage"
-        class="visual-img"
-        alt="运维人员监控平台运行、审核剧本内容与管理安全的卡通插画"
-        @error="imageFailed = true"
-      />
+      <picture v-if="!imageFailed">
+        <source :srcset="visualImage" type="image/webp" media="(min-width: 992px)" />
+        <img
+          src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+          class="visual-img"
+          width="1254" height="1254" fetchpriority="high" decoding="async"
+          alt="运维人员监控平台运行、审核剧本内容与管理安全的卡通插画"
+          @error="imageFailed = true"
+        />
+      </picture>
       <div class="visual-caption">
         <p class="visual-slogan">让每一个好故事，从这里开始</p>
         <p class="visual-sub">剧云策 · AI 驱动的智能剧本创作平台</p>
@@ -106,7 +109,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import visualImage from '@/assets/images/login-operations-v2.png'
+import visualImage from '@/assets/images/login-operations-v2.webp'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
