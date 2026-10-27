@@ -8,7 +8,12 @@
             <div class="stat-info">
               <div class="stat-title">{{ stat.title }}</div>
               <div class="stat-value">{{ stat.value }}</div>
-              <div v-if="stat.sub" class="stat-sub">{{ stat.sub }}</div>
+              <div v-if="stat.items" class="stat-sub">
+                <span v-for="(it, i) in stat.items" :key="i" class="sub-item">
+                  <span class="sub-label">{{ it.t }}</span>
+                  <span class="sub-value">{{ it.v }}</span>
+                </span>
+              </div>
             </div>
           </div>
         </el-card>
@@ -68,32 +73,41 @@ const renderBizStats = (d) => {
     {
       title: '用户总数',
       value: users.total ?? 0,
-      sub: `创作者 ${users.creators ?? 0} 人`
+      items: [
+        { t: '创作者', v: `${users.creators ?? 0} 人` }
+      ]
     },
     {
       title: '作品总数',
       value: works.total ?? 0,
-      sub: `上架 ${works.onShelf ?? 0} · 下架 ${works.offShelf ?? 0} · 审核中 ${works.reviewing ?? 0}`
+      items: [
+        { t: '上架', v: works.onShelf ?? 0 },
+        { t: '下架', v: works.offShelf ?? 0 },
+        { t: '审核中', v: works.reviewing ?? 0 }
+      ]
     },
     {
       title: '订单数',
       value: orders.total ?? 0,
-      sub: `已完成 ${orders.completed ?? 0} · 未完成 ${orders.unfinished ?? 0}`
+      items: [
+        { t: '已完成', v: orders.completed ?? 0 },
+        { t: '未完成', v: orders.unfinished ?? 0 }
+      ]
     },
     {
       title: '合同数',
-      value: contracts.total ?? 0,
-      sub: '全部合同'
+      value: contracts.total ?? 0
     },
     {
       title: '交易额',
       value: fmtAmount(trade.totalAmount ?? 0),
-      sub: `已完成成交 ${fmtAmount(trade.completedAmount ?? 0)}`
+      items: [
+        { t: '已完成成交', v: fmtAmount(trade.completedAmount ?? 0) }
+      ]
     },
     {
       title: '平台收成',
-      value: fmtAmount(trade.platformFee ?? 0),
-      sub: '平台佣金收入'
+      value: fmtAmount(trade.platformFee ?? 0)
     }
   ]
 }
@@ -189,10 +203,30 @@ onMounted(() => {
 }
 
 .stat-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
   font-size: 12px;
-  color: #909399;
-  margin-top: 8px;
-  line-height: 1.5;
+}
+
+.sub-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #f0f2f5;
+  border-radius: 4px;
+}
+
+.sub-label {
+  color: #606266;
+}
+
+.sub-value {
+  color: #1f2329;
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .stat-value {
