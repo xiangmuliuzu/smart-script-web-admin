@@ -156,22 +156,26 @@
         <el-form-item label="规则类型">
           <el-select v-model="ruleForm.rule_type" placeholder="请选择规则类型" style="width: 100%">
             <el-option label="敏感词检测" value="sensitive" />
-            <el-option label="风险评分" value="risk" />
-            <el-option label="行为检测" value="behavior" />
+            <el-option label="登录频控" value="login" />
+            <el-option label="操作频控" value="operation" />
+            <el-option label="IP频控" value="ip" />
           </el-select>
         </el-form-item>
         <el-form-item label="触发条件">
-          <el-input v-model="ruleForm.trigger_condition" placeholder="请输入触发条件" />
+          <el-input v-model="ruleForm.trigger_condition"
+                    type="textarea" :rows="2"
+                    placeholder="JSON格式；敏感词：{&quot;words&quot;:[&quot;词1&quot;,&quot;词2&quot;]}；频控：{&quot;times&quot;:5,&quot;window&quot;:&quot;1h&quot;}" />
         </el-form-item>
         <el-form-item label="处理方式">
           <el-select v-model="ruleForm.action" placeholder="请选择处理方式" style="width: 100%">
-            <el-option label="自动驳回" value="reject" />
-            <el-option label="人工复核" value="review" />
-            <el-option label="警告" value="warning" />
+            <el-option label="拦截" value="block" />
+            <el-option label="禁止" value="ban" />
+            <el-option label="验证码" value="captcha" />
+            <el-option label="驳回" value="reject" />
           </el-select>
         </el-form-item>
         <el-form-item label="阈值">
-          <el-input v-model="ruleForm.threshold" placeholder="请输入阈值" />
+          <el-input v-model="ruleForm.threshold" placeholder="展示字段；频控阈值请在触发条件 JSON 的 times 中配置" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -450,7 +454,8 @@ const handleSubmitRule = async () => {
         ruleType: ruleForm.value.rule_type,
         ruleContent: ruleForm.value.trigger_condition,
         threshold: ruleForm.value.threshold,
-        action: ruleForm.value.action
+        action: ruleForm.value.action,
+        status: 'enabled'
       })
     })
     ElMessage.success('新增规则成功')
