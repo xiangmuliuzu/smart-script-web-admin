@@ -149,7 +149,7 @@
               <el-upload :show-file-list="false" accept="image/jpeg,image/png,image/webp" :before-upload="beforeSplashUpload" :http-request="uploadSplashImage" :disabled="uploading">
                 <el-button :loading="uploading">{{ form.imageUrl ? '更换图片' : '上传图片' }}</el-button>
               </el-upload>
-              <span>建议竖版图片，JPG、PNG 或 WebP，最大 5 MB</span>
+              <span>建议竖版图片，JPG、PNG 或 WebP，最大 5 MB；上传时自动压缩</span>
             </div>
           </el-form-item>
           <el-form-item label="跳转链接">
@@ -195,7 +195,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" class="black-button" :loading="saving" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" class="black-button" :loading="saving" :disabled="uploading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -207,6 +207,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import adminFetch from '@/utils/adminFetch'
 import { uploadFile } from '@/api/content'
 import { resolveMediaUrl } from '@/utils/request'
+import { optimizeSplashImage } from '@/utils/splash-ad-image'
 
 const AD_PREFIX = '/api/v1/admin/operation/ad-config'
 
@@ -345,7 +346,7 @@ function beforeSplashUpload(file) {
 async function uploadSplashImage(options) {
   uploading.value = true
   try {
-    const result = await uploadFile(options.file)
+    const result = await uploadFile(await optimizeSplashImage(options.file))
     const url = result?.url || result?.data?.url
     if (!url) throw new Error('上传未返回图片地址')
     form.imageUrl = url
@@ -391,6 +392,7 @@ const handleEdit = (row) => {
 
 // 提交新增/编辑
 const handleSubmit = async () => {
+  if (uploading.value) return
   if (!form.adName || !form.adPosition || !form.adSource) {
     ElMessage.warning('请填写名称、位置和来源')
     return
