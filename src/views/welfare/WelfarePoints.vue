@@ -148,6 +148,32 @@
           </el-card>
         </el-tab-pane>
 
+        <!-- 生成字数上限 -->
+        <el-tab-pane label="生成字数上限" name="limit">
+          <el-alert
+            type="warning" :closable="false" show-icon
+            title="单次 AI 调用输出字数上限：超过上限时后端会截断输出并标记「已达上限」，用于控制 AI 成本；设为 0 表示不限。"
+            style="margin-bottom: 16px"
+          />
+          <el-card shadow="never" style="max-width: 560px">
+            <el-form label-width="160px" style="margin-top: 8px">
+              <el-form-item label="AI 写作上限（字）">
+                <el-input-number v-model="limitForm.write" :min="0" :max="100000" :step="100" controls-position="right" />
+              </el-form-item>
+              <el-form-item label="AI 润色上限（字）">
+                <el-input-number v-model="limitForm.polish" :min="0" :max="100000" :step="100" controls-position="right" />
+              </el-form-item>
+              <el-form-item label="AI 大纲上限（字）">
+                <el-input-number v-model="limitForm.outline" :min="0" :max="100000" :step="100" controls-position="right" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" class="black-button" :loading="limitSaving" @click="handleSaveLimit">保存上限</el-button>
+                <span class="rate-hint" style="margin-left: 12px">修改即时生效，App 端与 PC 用户端 AI 生成均按此限制截断</span>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </el-tab-pane>
+
         <!-- 积分账户 -->
         <el-tab-pane label="积分账户" name="account">
           <div class="card-header">
@@ -404,6 +430,11 @@ const adForm = reactive({
 const exchangeRate = ref(10)
 const newRate = ref(10)
 
+// AI 生成字数上限
+const LIMIT_URL = '/api/v1/admin/ai/quota/limit-config'
+const limitForm = reactive({ write: 2000, polish: 2000, outline: 1000 })
+const limitSaving = ref(false)
+
 // 积分账户
 const accQuery = reactive({ nickname: '', page: 1, pageSize: 10 })
 const accTotal = ref(0)
@@ -564,6 +595,47 @@ const fetchExchangeRate = async () => {
   }
 }
 
+const fetchGenLimit = async () => {
+  try {
+    const res = await adminFetch(LIMIT_URL)
+    const data = await res.json()
+    if (data.code === 200 && data.data) {
+      limitForm.write = data.data.write ?? 2000
+      limitForm.polish = data.data.polish ?? 2000
+      limitForm.outline = data.data.outline ?? 1000
+    }
+  } catch (e) {
+    ElMessage.error('获取生成字数上限失败')
+  }
+}
+
+const handleSaveLimit = async () => {
+  if (limitForm.write === null || limitForm.write === undefined
+    || limitForm.polish === null || limitForm.polish === undefined
+    || limitForm.outline === null || limitForm.outline === undefined) {
+    ElMessage.warning('三个上限均需填写，设为 0 表示不限')
+    return
+  }
+  limitSaving.value = true
+  try {
+    const res = await adminFetch(LIMIT_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ write: limitForm.write, polish: limitForm.polish, outline: limitForm.outline })
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success('生成字数上限已保存，即时生效')
+    } else {
+      ElMessage.error(data.msg || '保存失败')
+    }
+  } catch (e) {
+    ElMessage.error('保存失败')
+  } finally {
+    limitSaving.value = false
+  }
+}
+
 const handleUpdateRate = async () => {
   if (!newRate.value || newRate.value < 1) {
     ElMessage.warning('兑换比例必须 >= 1')
@@ -718,6 +790,7 @@ const handleTabChange = (name) => {
   if (name === 'task') fetchTasks()
   else if (name === 'ad') fetchAdTasks()
   else if (name === 'exchange') fetchExchangeRate()
+  else if (name === 'limit') fetchGenLimit()
   else if (name === 'account') fetchAccounts()
   else if (name === 'record') fetchRecords()
 }
