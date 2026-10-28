@@ -3,7 +3,6 @@ import Dashboard from '@/views/dashboard/Dashboard.vue'
 import ModuleScaffold from '@/views/common/ModuleScaffold.vue'
 import ReviewWorkbench from '@/views/copyright/ReviewWorkbench.vue'
 import AiReviewRules from '@/views/copyright/AiReviewRules.vue'
-import CopyrightCenter from '@/views/copyright/CopyrightCenter.vue'
 import CopyrightAssets from '@/views/copyright/CopyrightAssets.vue'
 import CopyrightSealReview from '@/views/copyright/SealReview.vue'
 import WithdrawReview from '@/views/copyright/WithdrawReview.vue'
@@ -59,9 +58,6 @@ export const componentMap = {
   'common/ModuleScaffold': ModuleScaffold,
   'copyright/ReviewWorkbench': ReviewWorkbench,
   'copyright/AiReviewRules': AiReviewRules,
-  'copyright/CopyrightCenter': CopyrightCenter,
-  // 兼容后台历史菜单标识，避免版权中心页面被误判为未知组件。
-  'copyright/center-config': CopyrightCenter,
   'copyright/CopyrightAssets': CopyrightAssets,
   'copyright/SealReview': CopyrightSealReview,
   'copyright/WithdrawReview': WithdrawReview,
