@@ -25,12 +25,6 @@
           <el-option label="已下架" value="off_shelf" />
         </el-select>
       </el-form-item>
-      <el-form-item>
-        <el-select v-model="queryParams.tradeEnabled" placeholder="交易状态" style="width: 140px" clearable>
-          <el-option label="开启交易" :value="1" />
-          <el-option label="关闭交易" :value="0" />
-        </el-select>
-      </el-form-item>
     </FilterBar>
 
     <TableCard
@@ -62,27 +56,6 @@
             inactive-value="off_shelf"
             @change="() => handleStatusChange(row)"
           />
-        </template>
-      </el-table-column>
-      <el-table-column label="交易" width="100">
-        <template #default="{ row }">
-          <!-- 已下架作品不可开启交易：开关禁用，后端亦有前置校验兜底 -->
-          <el-tooltip
-            content="已下架作品不可开启交易，请先上架"
-            :disabled="row.status === 'on_shelf'"
-            placement="top"
-          >
-            <span>
-              <el-switch
-                v-permission="['content:bookstore:edit']"
-                v-model="row.tradeEnabled"
-                active-value="1"
-                inactive-value="0"
-                :disabled="row.status !== 'on_shelf'"
-                @change="() => handleTradeChange(row)"
-              />
-            </span>
-          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column prop="viewCount" label="阅读量" width="90" />
@@ -151,7 +124,6 @@ import {
   listBookstore,
   getBookstore,
   changeBookstoreStatus,
-  changeBookstoreTrade,
   updateBookstoreExt
 } from '@/api/content'
 
@@ -165,8 +137,7 @@ const queryParams = reactive({
   pageSize: 10,
   title: '',
   recommendStatus: '',
-  status: '',
-  tradeEnabled: ''
+  status: ''
 })
 
 const RECOMMEND_TAG_MAP = {
@@ -188,8 +159,7 @@ function buildQuery() {
     pageSize: queryParams.pageSize,
     title: queryParams.title || undefined,
     recommendStatus: queryParams.recommendStatus || undefined,
-    status: queryParams.status || undefined,
-    tradeEnabled: queryParams.tradeEnabled === '' ? undefined : queryParams.tradeEnabled
+    status: queryParams.status || undefined
   }
 }
 
@@ -216,7 +186,6 @@ function handleReset() {
   queryParams.title = ''
   queryParams.recommendStatus = ''
   queryParams.status = ''
-  queryParams.tradeEnabled = ''
   handleQuery()
 }
 
@@ -225,26 +194,10 @@ async function handleStatusChange(row) {
   const actionText = targetStatus === 'on_shelf' ? '上架' : '下架'
   try {
     await changeBookstoreStatus({ workId: row.workId, status: targetStatus })
-    // 后端联动：下架即关闭交易，本地同步回显
-    if (targetStatus === 'off_shelf') {
-      row.tradeEnabled = '0'
-    }
     ElMessage.success(`${actionText}成功`)
   } catch {
     // 失败回滚开关，错误信息已由 request 拦截器统一提示
     row.status = targetStatus === 'on_shelf' ? 'off_shelf' : 'on_shelf'
-  }
-}
-
-async function handleTradeChange(row) {
-  const targetTrade = row.tradeEnabled
-  const actionText = targetTrade === '1' ? '开启交易' : '关闭交易'
-  try {
-    await changeBookstoreTrade({ workId: row.workId, tradeEnabled: targetTrade })
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    // 失败回滚开关，错误信息已由 request 拦截器统一提示
-    row.tradeEnabled = targetTrade === '1' ? '0' : '1'
   }
 }
 
