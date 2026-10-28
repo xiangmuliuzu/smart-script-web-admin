@@ -12,9 +12,9 @@
  *   App 端只按 parentId 取分类、不按类型筛选（见 content_providers.dart），故取值不影响 App。
  * - DRAMA_SOURCE_TYPE / DRAMA_AUTH_STATUS / DRAMA_SHELF_STATUS / BANNER_POSITION：
  *   取云端库 sys_external_drama / sys_banner 对应列实测值。
- * - RANKING_TYPE：榜单五类（App 接口 2.7.7 与后端 AppBookstoreServiceImpl 白名单一致），
+ * - RANKING_TYPE：榜单四类（App 与 PC 一致；交易热度榜因剧本通常只交易一次已下线），
  *   方案 A「时间窗口 + 分级」，type 与主指标强绑定：
- *   view 近 7 天阅读量 / favorite 近 7 天收藏数 / sale 近 7 天已支付订单数 /
+ *   view 近 7 天阅读量 / favorite 近 7 天收藏数 /
  *   rating 平均评分 / new 近 30 天上架按阅读量。
  */
 
@@ -60,7 +60,6 @@ export const BANNER_POSITION = [
 export const RANKING_TYPE = [
   { value: 'view', label: '热门榜', metricLabel: '近7天阅读' },
   { value: 'favorite', label: '收藏榜', metricLabel: '近7天收藏' },
-  { value: 'sale', label: '交易热度榜', metricLabel: '近7天订单' },
   { value: 'rating', label: '评分榜', metricLabel: '综合评分' },
   { value: 'new', label: '新书榜', metricLabel: '阅读量' }
 ]
