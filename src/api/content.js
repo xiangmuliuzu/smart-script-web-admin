@@ -109,7 +109,7 @@ export function listWorkChapters(workId, query) {
 
 // ---------------- 书城作品管理 ----------------
 
-/** 书城作品分页列表（title 模糊，recommendStatus/status/tradeEnabled 精确） */
+/** 书城作品分页列表（title 模糊，recommendStatus/status 精确） */
 export function listBookstore(query) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/bookstore/list`,
     method: 'get',
@@ -127,14 +127,6 @@ export function getBookstore(workId) {
 /** 上架/下架书城作品（单一职责：仅改 status） */
 export function changeBookstoreStatus(data) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/bookstore/changeStatus`,
-    method: 'put',
-    data
-  })
-}
-
-/** 开启/关闭交易（单一职责：仅改 tradeEnabled） */
-export function changeBookstoreTrade(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/bookstore/changeTrade`,
     method: 'put',
     data
   })

@@ -105,12 +105,6 @@
             <el-descriptions-item label="分类">{{ detail.genreName || '—' }}</el-descriptions-item>
             <el-descriptions-item label="价格">{{ detail.price ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="交易类型">{{ contentEnumLabel(TRADE_TYPE, detail.tradeType) }}</el-descriptions-item>
-            <el-descriptions-item label="交易状态">
-              <!-- tradeEnabled 实体为 String（"1"/"0"），"0" 是 truthy，须按字符串判断 -->
-              <el-tag :type="detail.tradeEnabled === '1' ? 'success' : 'info'" size="small">
-                {{ detail.tradeEnabled === '1' ? '已开启' : '未开启' }}
-              </el-tag>
-            </el-descriptions-item>
             <el-descriptions-item label="作品状态">
               <el-tag :type="statusTagType(detail.status)" size="small">
                 {{ statusText(detail.status) }}
