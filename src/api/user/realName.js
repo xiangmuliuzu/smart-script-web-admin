@@ -58,3 +58,7 @@ export async function downloadMaterialContent(accessUrl, fileName) {
   document.body.removeChild(a)
   window.URL.revokeObjectURL(url)
 }
+
+export function decideRealNameApplication(applicationId, data) {
+  return request({ url: `${PREFIX}/real-name-applications/${applicationId}/decision`, method: 'put', data })
+}

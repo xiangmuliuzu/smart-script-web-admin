@@ -1,7 +1,7 @@
 <template>
   <div class="a4-page">
     <el-alert
-      title="认证结果由实名核验接口自动判定，此页面仅供查询。"
+      title="阿里云核验通过后，由运维审核身份证材料。"
       type="info"
       :closable="false"
       show-icon
@@ -12,7 +12,7 @@
         <el-form-item>
           <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 150px" clearable>
             <el-option label="全部状态" value="" />
-            <el-option label="未完成" value="PENDING" />
+            <el-option label="待审核" value="PENDING" />
             <el-option label="已通过" value="APPROVED" />
             <el-option label="未通过" value="REJECTED" />
           </el-select>
@@ -90,6 +90,7 @@
         <el-descriptions-item label="手机号">{{ detail.phoneMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="姓名（掩码）">{{ detail.realNameMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="证件号（掩码）">{{ detail.idNumberMasked || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="身份证材料"><template v-if="detail.materialRefs?.length"><el-button v-for="(token, index) in detail.materialRefs" :key="index" link type="primary" @click="downloadMaterial(token, index)">{{ detail.materialRefs.length === 1 ? '下载历史材料' : index === 0 ? '下载正面' : '下载反面' }}</el-button></template><span v-else>无材料</span></el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ formatTime(detail.submittedAt) }}</el-descriptions-item>
         <el-descriptions-item label="认证时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
@@ -97,6 +98,8 @@
       </el-descriptions>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button v-if="detail?.status === 'PENDING'" v-permission="['user:realname:audit']" type="danger" :loading="saving" @click="decide('REJECT')">驳回</el-button>
+        <el-button v-if="detail?.status === 'PENDING'" v-permission="['user:realname:audit']" type="primary" :loading="saving" @click="decide('APPROVE')">通过</el-button>
       </template>
     </el-dialog>
   </div>
@@ -104,9 +107,10 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listRealNameApplications,
-  getRealNameApplication
+  getRealNameApplication, decideRealNameApplication, redeemMaterialToken, downloadMaterialContent
 } from '@/api/user/realName'
 
 const loading = ref(false)
@@ -119,10 +123,11 @@ const filterForm = reactive({ status: '', keyword: '' })
 const detailVisible = ref(false)
 const detail = ref(null)
 const detailForbidden = ref(false)
+const saving = ref(false)
 
 
 function statusLabel(status) {
-  if (status === 'PENDING') return '未完成'
+  if (status === 'PENDING') return '待审核'
   if (status === 'APPROVED') return '已通过'
   if (status === 'REJECTED') return '未通过'
   return status || '—'
@@ -194,6 +199,33 @@ async function openDetail(row) {
   }
 }
 
+async function downloadMaterial(token, index) {
+  try {
+    const result = await redeemMaterialToken(token)
+    const url = (result?.data || result)?.accessUrl
+    if (!url) throw new Error('材料访问链接不可用')
+    await downloadMaterialContent(url, detail.value.materialRefs.length === 1 ? '历史实名材料' : index === 0 ? '身份证正面.png' : '身份证反面.png')
+    await openDetail(detail.value)
+  } catch (e) { ElMessage.error(e?.message || '材料下载失败，请重试') }
+}
+async function decide(decision) {
+  if (saving.value) return
+  let reason = ''
+  try {
+    if (decision === 'REJECT') {
+      const result = await ElMessageBox.prompt('请填写驳回原因', '驳回申请', { inputValidator: value => value?.trim() && value.trim().length <= 500 || '请填写不超过 500 字的原因' })
+      reason = result.value.trim()
+    } else await ElMessageBox.confirm('确认通过该实名认证申请？', '审核确认', { type: 'warning' })
+  } catch { return }
+  saving.value = true
+  try {
+    await decideRealNameApplication(detail.value.applicationId, { decision, rejectReason: reason || undefined, expectedStatus: 'PENDING' })
+    ElMessage.success('审核已完成')
+    detailVisible.value = false
+    await load()
+  } catch (e) { ElMessage.error(e?.message || '审核失败，请刷新后重试'); await load() }
+  finally { saving.value = false }
+}
 onMounted(load)
 </script>
 
