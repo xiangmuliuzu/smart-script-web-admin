@@ -202,7 +202,7 @@ export function regenerateContractPdf(contractId) {
   })
 }
 
-// 结算管理API
+// 结算管理 API（与 App 同源 sys_income_settle：列表 / 明细 / 处理异议）
 export function getSettlementList(params) {
   const { pageNo, ...filters } = params || {}
   return adminV1Request({
@@ -219,26 +219,12 @@ export function getSettlementDetail(settlementId) {
   })
 }
 
-export function batchCalculateSettlement(data) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/settlement/calculate`,
-    method: 'post',
-    data
-  })
-}
-
+/** 处理作者异议：body.remark 必填；处理后回到 pending，作者再确认。 */
 export function handleSettlementAbnormal(settlementId, data) {
   return adminV1Request({
     url: `${PRODUCT_PREFIX}/copyright/settlement/${settlementId}/handle`,
     method: 'post',
     data
-  })
-}
-
-export function confirmSettlement(settlementId) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/settlement/${settlementId}/settle`,
-    method: 'post'
   })
 }
 

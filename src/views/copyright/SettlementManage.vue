@@ -1,14 +1,13 @@
 <template>
   <PageContainer>
-    <PageHeader title="结算管理" description="管理作者收益分成核算与结算明细，处理结算异常情况。" />
+    <PageHeader title="结算管理" description="与 App 同源结算单：订单完成后自动生成，作者确认入账；管理员仅处理作者异议。" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
         <el-select v-model="query.status" clearable placeholder="全部状态" style="width: 150px">
-          <el-option label="待结算" value="pending" />
-          <el-option label="已结算" value="settled" />
-          <el-option label="结算失败" value="failed" />
-          <el-option label="异常" value="abnormal" />
+          <el-option label="待确认" value="pending" />
+          <el-option label="有异议" value="disputed" />
+          <el-option label="已入账" value="confirmed" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -18,11 +17,12 @@
           range-separator="-"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
           style="width: 240px"
         />
       </el-form-item>
       <el-form-item>
-        <el-input v-model="query.keyword" clearable placeholder="作者名称 / 结算单号" style="width: 230px" @keyup.enter="handleQuery" />
+        <el-input v-model="query.keyword" clearable placeholder="作者 / 结算单号 / 订单号" style="width: 240px" @keyup.enter="handleQuery" />
       </el-form-item>
     </FilterBar>
 
@@ -38,56 +38,49 @@
     >
       <template #actions>
         <el-button v-if="loadFailed" link type="primary" @click="loadRows">重试</el-button>
-        <el-button v-permission="'smartscript:copyright:settlement:calculate'" type="primary" @click="openCalculate">批量核算</el-button>
       </template>
-      <el-table-column prop="settlementNo" label="结算单号" width="180" fixed="left" />
+      <el-table-column prop="settleNo" label="结算单号" width="180" fixed="left" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.settleNo || row.settlementNo || '—' }}</template>
+      </el-table-column>
       <el-table-column label="作者" width="120" show-overflow-tooltip>
         <template #default="{ row }">{{ row.authorName || '—' }}</template>
       </el-table-column>
-      <el-table-column label="订单数" width="90" align="center">
-        <template #default="{ row }">{{ row.orderCount || 0 }}</template>
+      <el-table-column label="订单号" width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.orderNo || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="作品" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.workTitle || '—' }}</template>
       </el-table-column>
       <el-table-column label="总金额" width="110" align="right">
-        <template #default="{ row }">¥{{ row.totalAmount?.toFixed(2) || '0.00' }}</template>
+        <template #default="{ row }">¥{{ money(row.totalAmount) }}</template>
       </el-table-column>
       <el-table-column label="平台分成" width="110" align="right">
-        <template #default="{ row }">¥{{ row.platformAmount?.toFixed(2) || '0.00' }}</template>
+        <template #default="{ row }">¥{{ money(row.platformFee ?? row.platformAmount) }}</template>
       </el-table-column>
       <el-table-column label="作者收益" width="110" align="right">
-        <template #default="{ row }">¥{{ row.authorAmount?.toFixed(2) || '0.00' }}</template>
+        <template #default="{ row }">¥{{ money(row.sellerAmount ?? row.authorAmount) }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="90" align="center">
-        <template #default="{ row }"><el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag></template>
+      <el-table-column label="状态" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+        </template>
       </el-table-column>
-      <el-table-column prop="settlementTime" label="结算时间" width="160" show-overflow-tooltip />
-      <el-table-column label="操作" width="300" fixed="right" align="center">
+      <el-table-column label="创建时间" width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.createdAt || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="确认时间" width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.confirmTime || row.settlementTime || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="220" fixed="right" align="center">
         <template #default="{ row }">
           <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
             <el-button type="primary" size="small" @click="openDetail(row)">查看明细</el-button>
-            <el-button 
-              v-if="row.status === 'pending'" 
-              v-permission="'smartscript:copyright:settlement:handle'" 
-              type="success" 
-              size="small" 
-              @click="handleSettle(row)"
-            >
-              确认结算
-            </el-button>
-            <el-button 
-              v-if="row.status === 'pending'" 
-              v-permission="'smartscript:copyright:settlement:handle'" 
-              type="warning" 
-              size="small" 
-              @click="openMarkAbnormal(row)"
-            >
-              标记异常
-            </el-button>
-            <el-button 
-              v-if="row.status === 'abnormal'" 
-              v-permission="'smartscript:copyright:settlement:handle'" 
-              type="danger" 
-              size="small" 
-              @click="handleAbnormal(row)"
+            <el-button
+              v-if="row.status === 'disputed'"
+              v-permission="'smartscript:copyright:settlement:handle'"
+              type="danger"
+              size="small"
+              @click="openHandle(row)"
             >
               处理异常
             </el-button>
@@ -96,79 +89,65 @@
       </el-table-column>
     </TableCard>
 
-    <el-drawer v-model="detailVisible" title="结算明细" size="70%">
+    <el-drawer v-model="detailVisible" title="结算明细 / 分成核算" size="70%">
       <div v-loading="detailLoading" class="drawer-content">
         <div v-if="detail">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="结算单号">{{ detail.settlementNo }}</el-descriptions-item>
-            <el-descriptions-item label="作者">{{ detail.authorName }}</el-descriptions-item>
-            <el-descriptions-item label="结算周期">{{ detail.periodStart }} 至 {{ detail.periodEnd }}</el-descriptions-item>
-            <el-descriptions-item label="订单数量">{{ detail.orderCount }}</el-descriptions-item>
-            <el-descriptions-item label="总交易额">¥{{ detail.totalAmount?.toFixed(2) }}</el-descriptions-item>
-            <el-descriptions-item label="平台分成比例">{{ detail.platformRatio }}%</el-descriptions-item>
-            <el-descriptions-item label="平台分成">¥{{ detail.platformAmount?.toFixed(2) }}</el-descriptions-item>
-            <el-descriptions-item label="作者收益">¥{{ detail.authorAmount?.toFixed(2) }}</el-descriptions-item>
+            <el-descriptions-item label="结算单号">{{ detail.settleNo || detail.settlementNo }}</el-descriptions-item>
+            <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="订单号">{{ detail.orderNo || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="作品">{{ detail.workTitle || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="总交易额">¥{{ money(detail.totalAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="平台抽成比例">{{ splitPercent(detail) }}</el-descriptions-item>
+            <el-descriptions-item label="平台分成">¥{{ money(detail.platformFee ?? detail.platformAmount) }}</el-descriptions-item>
+            <el-descriptions-item label="作者收益">¥{{ money(detail.sellerAmount ?? detail.authorAmount) }}</el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag :type="statusType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="结算时间">{{ detail.settlementTime || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ detail.createdAt || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="确认时间">{{ detail.confirmTime || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="异议时间">{{ detail.disputeTime || '—' }}</el-descriptions-item>
+            <el-descriptions-item v-if="detail.disputeReason" label="异议/处理说明" :span="2">
+              <pre class="remark-block">{{ detail.disputeReason }}</pre>
+            </el-descriptions-item>
           </el-descriptions>
 
           <div style="margin-top: 24px;">
-            <h3 style="margin-bottom: 12px;">订单明细</h3>
+            <h3 style="margin-bottom: 12px;">分成核算（按订单）</h3>
             <el-table :data="detail.orders || []" border>
-            <el-table-column prop="orderNo" label="订单号" width="160" />
-            <el-table-column prop="workName" label="作品" min-width="150" show-overflow-tooltip />
-            <el-table-column label="订单金额" width="120" align="right">
-              <template #default="{ row }">¥{{ row.amount?.toFixed(2) }}</template>
-            </el-table-column>
-            <el-table-column label="作者收益" width="120" align="right">
-              <template #default="{ row }">¥{{ row.authorIncome?.toFixed(2) }}</template>
-            </el-table-column>
-            <el-table-column prop="orderTime" label="交易时间" width="170" />
-          </el-table>
+              <el-table-column prop="orderNo" label="订单号" width="160" />
+              <el-table-column prop="workName" label="作品" min-width="150" show-overflow-tooltip />
+              <el-table-column label="订单金额" width="120" align="right">
+                <template #default="{ row }">¥{{ money(row.amount) }}</template>
+              </el-table-column>
+              <el-table-column label="平台分成" width="120" align="right">
+                <template #default="{ row }">¥{{ money(row.platformFee) }}</template>
+              </el-table-column>
+              <el-table-column label="作者收益" width="120" align="right">
+                <template #default="{ row }">¥{{ money(row.authorIncome) }}</template>
+              </el-table-column>
+              <el-table-column prop="orderTime" label="创建时间" width="170" />
+            </el-table>
           </div>
         </div>
       </div>
     </el-drawer>
 
-    <el-dialog v-model="calculateVisible" title="批量核算" width="500px">
+    <el-dialog v-model="handleVisible" title="处理异常" width="520px">
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-        <p style="margin: 0 0 8px 0; font-weight: bold;">功能说明：</p>
-        <p style="margin: 0 0 4px 0;">1. 系统将扫描所选周期内所有"已完成"但"未结算"的订单</p>
-        <p style="margin: 0 0 4px 0;">2. 按作者分组统计：订单数量、总金额、平台分成（20%）、作者收益（80%）</p>
-        <p style="margin: 0;">3. 为每位作者自动生成一条结算记录，状态为"待结算"</p>
+        处理后将回到「待确认」，作者需在 App 再次确认入账。请填写处理说明。
       </el-alert>
-      <el-form :model="calculateForm" label-width="100px">
-        <el-form-item label="结算周期">
-          <el-date-picker
-            v-model="calculateForm.dateRange"
-            type="daterange"
-            range-separator="-"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="calculateVisible = false">取消</el-button>
-        <el-button type="primary" :loading="calculateLoading" @click="submitCalculate">开始核算</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="abnormalVisible" title="处理异常" width="500px">
       <el-form label-width="100px">
-        <el-form-item label="异常原因">
-          <el-input v-model="abnormalReason" type="textarea" :rows="3" disabled />
+        <el-form-item label="作者异议">
+          <el-input v-model="disputeReason" type="textarea" :rows="3" disabled />
         </el-form-item>
-        <el-form-item label="处理说明">
-          <el-input v-model="handleRemark" type="textarea" :rows="3" placeholder="请输入处理说明" />
+        <el-form-item label="处理说明" required>
+          <el-input v-model="handleRemark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请输入处理说明，将同步给作者" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="abnormalVisible = false">取消</el-button>
-        <el-button type="primary" :loading="abnormalLoading" @click="submitHandle">确认处理</el-button>
+        <el-button @click="handleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="handleLoading" @click="submitHandle">确认处理</el-button>
       </template>
     </el-dialog>
   </PageContainer>
@@ -176,12 +155,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { getSettlementList, getSettlementDetail, batchCalculateSettlement, handleSettlementAbnormal, confirmSettlement } from '@/api/copyright'
+import { getSettlementList, getSettlementDetail, handleSettlementAbnormal } from '@/api/copyright'
 
 const query = reactive({
   pageNo: 1,
@@ -200,27 +179,29 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref(null)
 
-const calculateVisible = ref(false)
-const calculateLoading = ref(false)
-const calculateForm = reactive({
-  dateRange: null
-})
-
-const abnormalVisible = ref(false)
-const abnormalLoading = ref(false)
-const abnormalReason = ref('')
+const handleVisible = ref(false)
+const handleLoading = ref(false)
+const disputeReason = ref('')
 const handleRemark = ref('')
-const currentSettlementId = ref(null)
+const currentSettleId = ref(null)
 
-const statusType = (status) => {
-  const map = { pending: 'warning', settled: 'success', failed: 'danger', abnormal: 'danger' }
-  return map[status] || 'info'
+const money = value => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00'
 }
 
-const statusLabel = (status) => {
-  const map = { pending: '待结算', settled: '已结算', failed: '结算失败', abnormal: '异常' }
-  return map[status] || status
+const splitPercent = detail => {
+  const rate = Number(detail?.splitRate)
+  if (Number.isFinite(rate)) {
+    const pct = rate <= 1 ? rate * 100 : rate
+    return pct.toFixed(rate < 1 || !Number.isInteger(pct) ? 1 : 0) + '%'
+  }
+  if (detail?.platformRatio != null) return Number(detail.platformRatio) + '%'
+  return '—'
 }
+
+const statusType = status => ({ pending: 'warning', disputed: 'danger', confirmed: 'success' }[status] || 'info')
+const statusLabel = status => ({ pending: '待确认', disputed: '有异议', confirmed: '已入账' }[status] || status)
 
 const handleQuery = () => {
   query.pageNo = 1
@@ -239,12 +220,16 @@ async function loadRows() {
   loading.value = true
   loadFailed.value = false
   try {
-    const params = { ...query }
+    const params = {
+      pageNo: query.pageNo,
+      pageSize: query.pageSize,
+      status: query.status || undefined,
+      keyword: query.keyword || undefined
+    }
     if (query.dateRange && query.dateRange.length === 2) {
       params.startDate = query.dateRange[0]
       params.endDate = query.dateRange[1]
     }
-    delete params.dateRange
     const result = await getSettlementList(params)
     if (result && Array.isArray(result.rows)) {
       rows.value = result.rows
@@ -262,13 +247,12 @@ async function loadRows() {
 }
 
 async function openDetail(row) {
+  const id = row.settleId || row.settlementId
   detailVisible.value = true
   detailLoading.value = true
   try {
-    const result = await getSettlementDetail(row.settlementId)
-    if (!result) {
-      throw new Error('返回数据为空')
-    }
+    const result = await getSettlementDetail(id)
+    if (!result) throw new Error('返回数据为空')
     detail.value = result
   } catch (error) {
     ElMessage.error(error?.message || '加载详情失败')
@@ -278,83 +262,11 @@ async function openDetail(row) {
   }
 }
 
-function openCalculate() {
-  calculateVisible.value = true
-}
-
-async function submitCalculate() {
-  if (!calculateForm.dateRange || calculateForm.dateRange.length !== 2) {
-    ElMessage.warning('请选择结算周期')
-    return
-  }
-  calculateLoading.value = true
-  try {
-    const data = {
-      periodStart: calculateForm.dateRange[0],
-      periodEnd: calculateForm.dateRange[1]
-    }
-    await batchCalculateSettlement(data)
-    ElMessage.success('核算任务已提交，系统正在生成结算单')
-    calculateVisible.value = false
-    calculateForm.dateRange = null
-    loadRows()
-  } catch (error) {
-    ElMessage.error(error?.message || '核算失败')
-  } finally {
-    calculateLoading.value = false
-  }
-}
-
-function handleAbnormal(row) {
-  currentSettlementId.value = row.settlementId
-  abnormalReason.value = row.abnormalReason || '待处理异常'
+function openHandle(row) {
+  currentSettleId.value = row.settleId || row.settlementId
+  disputeReason.value = row.disputeReason || row.abnormalReason || '作者提出异议'
   handleRemark.value = ''
-  abnormalVisible.value = true
-}
-
-async function openMarkAbnormal(row) {
-  try {
-    const { value: reason } = await ElMessageBox.prompt('请输入异常原因', '标记异常', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      inputType: 'textarea',
-      inputPlaceholder: '例如：订单存在退款申请，需要核实后重新计算',
-      inputValidator: (value) => {
-        if (!value || !value.trim()) {
-          return '异常原因不能为空'
-        }
-        return true
-      }
-    })
-    
-    await handleSettlementAbnormal(row.settlementId, { 
-      remark: reason,
-      markAsAbnormal: true 
-    })
-    ElMessage.success('已标记为异常')
-    loadRows()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(error?.message || '操作失败')
-    }
-  }
-}
-
-async function handleSettle(row) {
-  try {
-    await ElMessageBox.confirm(`确认对结算单 ${row.settlementNo} 进行结算打款？`, '确认结算', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    await confirmSettlement(row.settlementId)
-    ElMessage.success('结算确认成功')
-    loadRows()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(error?.message || '操作失败')
-    }
-  }
+  handleVisible.value = true
 }
 
 async function submitHandle() {
@@ -362,16 +274,16 @@ async function submitHandle() {
     ElMessage.warning('请输入处理说明')
     return
   }
-  abnormalLoading.value = true
+  handleLoading.value = true
   try {
-    await handleSettlementAbnormal(currentSettlementId.value, { remark: handleRemark.value })
-    ElMessage.success('处理成功')
-    abnormalVisible.value = false
+    await handleSettlementAbnormal(currentSettleId.value, { remark: handleRemark.value.trim() })
+    ElMessage.success('已处理，结算单回到待确认，请作者在 App 再次确认入账')
+    handleVisible.value = false
     loadRows()
   } catch (error) {
     ElMessage.error(error?.message || '处理失败')
   } finally {
-    abnormalLoading.value = false
+    handleLoading.value = false
   }
 }
 
@@ -380,4 +292,16 @@ onMounted(loadRows)
 
 <style scoped>
 .drawer-content { padding: 0 20px; }
+.remark-block {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
 </style>
+
+
+
+
