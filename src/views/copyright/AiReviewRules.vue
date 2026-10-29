@@ -90,6 +90,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="threshold" label="阈值" width="120" />
+        <el-table-column label="违禁词词库" min-width="150">
+          <template #default="{ row }">
+            <el-tag v-if="getWordCount(row) > 0" type="info" size="small">{{ getWordCount(row) }} 个违禁词</el-tag>
+            <span v-else class="no-words">走AI判断</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="action" label="处理方式" width="120" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -115,7 +121,7 @@
     <el-dialog
       v-model="ruleDialogVisible"
       :title="dialogMode === 'add' ? '新增规则' : '编辑规则'"
-      width="500px"
+      width="560px"
     >
       <el-form :model="currentRule" label-width="80px">
         <el-form-item label="规则名称">
@@ -129,6 +135,14 @@
         </el-form-item>
         <el-form-item label="阈值">
           <el-input v-model="currentRule.threshold" placeholder="例如：≥80分" />
+        </el-form-item>
+        <el-form-item label="违禁词词库">
+          <el-input
+            v-model="currentRule.words"
+            type="textarea"
+            :rows="6"
+            placeholder="每行一个违禁词，或用逗号分隔。命中词库中的词即扣分；留空表示该规则不走词库（如版权查重），交由AI综合判断"
+          />
         </el-form-item>
         <el-form-item label="处理方式">
           <el-select v-model="currentRule.action" placeholder="请选择处理方式" style="width: 100%">
@@ -171,6 +185,7 @@ const currentRule = ref({
   name: '',
   type: '',
   threshold: '',
+  words: '',
   action: '',
   status: 'enabled'
 })
@@ -255,6 +270,24 @@ const getTypeText = (type) => {
   return typeMap[type] || type
 }
 
+// 解析规则的违禁词词库（rule_value JSON {"words":[...]}）
+const parseWords = (ruleValue) => {
+  if (!ruleValue) return []
+  try {
+    const parsed = JSON.parse(ruleValue)
+    if (Array.isArray(parsed.words)) return parsed.words
+  } catch (e) {
+    // 非JSON时按分隔符切
+  }
+  return String(ruleValue).split(/[,，;；|\n]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+// 词库词数
+const getWordCount = (row) => {
+  const words = parseWords(row.ruleValue)
+  return words.length
+}
+
 // 处理重置
 const handleReset = () => {
   filterForm.value = {
@@ -274,6 +307,7 @@ const handleEdit = (row) => {
     name: row.ruleName,
     type: row.ruleType,
     threshold: row.threshold,
+    words: parseWords(row.ruleValue).join('\n'),
     action: row.action,
     status: row.status || 'enabled'
   }
@@ -288,6 +322,7 @@ const handleAdd = () => {
     name: '',
     type: '',
     threshold: '',
+    words: '',
     action: '',
     status: 'enabled'
   }
@@ -297,31 +332,33 @@ const handleAdd = () => {
 // 提交规则
 const handleSubmitRule = async () => {
   try {
+    // 违禁词词库：按换行/逗号/顿号/分号/竖线切分，组装为 {"words":[...]}
+    const words = String(currentRule.value.words || '')
+      .split(/[\n,，;；|]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const ruleValue = JSON.stringify({ words })
+    const payload = {
+      ruleName: currentRule.value.name,
+      ruleType: currentRule.value.type,
+      threshold: currentRule.value.threshold,
+      ruleValue,
+      action: currentRule.value.action,
+      status: currentRule.value.status
+    }
     if (dialogMode.value === 'add') {
       await adminFetch('/api/v1/admin/review/ai-rule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ruleName: currentRule.value.name,
-          ruleType: currentRule.value.type,
-          threshold: currentRule.value.threshold,
-          action: currentRule.value.action,
-          status: currentRule.value.status
-        })
+        body: JSON.stringify(payload)
       })
       ElMessage.success('新增规则成功')
     } else {
+      payload.ruleId = currentRule.value.id
       await adminFetch('/api/v1/admin/review/ai-rule', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ruleId: currentRule.value.id,
-          ruleName: currentRule.value.name,
-          ruleType: currentRule.value.type,
-          threshold: currentRule.value.threshold,
-          action: currentRule.value.action,
-          status: currentRule.value.status
-        })
+        body: JSON.stringify(payload)
       })
       ElMessage.success('更新规则成功')
     }
@@ -621,6 +658,24 @@ const handleDelete = async (row) => {
 
 :deep(.el-input__inner::placeholder) {
   color: #bfbfbf;
+}
+
+/* 无词库规则提示 */
+.no-words {
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+:deep(.el-textarea__inner) {
+  font-size: 12px;
+  color: #262626;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+:deep(.el-textarea__inner::placeholder) {
+  color: #bfbfbf;
+  font-size: 12px;
 }
 </style>
 
