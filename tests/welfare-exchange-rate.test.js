@@ -32,38 +32,38 @@ function mockFetch(handler) {
   return { adminFetch, calls }
 }
 
-test('fetchExchangeRate 读取当前比例并同步输入框', async () => {
-  const { adminFetch } = mockFetch(() => ({ code: 200, data: 5 }))
-  const page = await setup('exchangeRate, newRate, fetchExchangeRate', { adminFetch })
+test('fetchExchangeRate 读取当前 tokenPerPoint 并同步输入框', async () => {
+  const { adminFetch } = mockFetch(() => ({ code: 200, data: 1000 }))
+  const page = await setup('tokenPerPoint, newTokenPerPoint, fetchExchangeRate', { adminFetch })
   await page.fetchExchangeRate()
-  assert.equal(page.exchangeRate.value, 5)
-  assert.equal(page.newRate.value, 5)
+  assert.equal(page.tokenPerPoint.value, 1000)
+  assert.equal(page.newTokenPerPoint.value, 1000)
 })
 
-test('handleUpdateRate 合法比例走 PUT', async () => {
+test('handleUpdateRate 合法配置走 PUT', async () => {
   const { adminFetch, calls } = mockFetch(() => ({ code: 200 }))
-  const page = await setup('exchangeRate, newRate, handleUpdateRate', { adminFetch })
-  page.newRate.value = 8
+  const page = await setup('tokenPerPoint, newTokenPerPoint, handleUpdateRate', { adminFetch })
+  page.newTokenPerPoint.value = 2000
   await page.handleUpdateRate()
   assert.equal(calls[0].method, 'PUT')
-  assert.equal(calls[0].url, '/api/v1/admin/ai/quota/exchange-rate')
-  assert.equal(JSON.parse(calls[0].body).rate, 8)
-  assert.equal(page.exchangeRate.value, 8)
+  assert.equal(calls[0].url, '/api/v1/admin/ai/quota/token-per-point')
+  assert.equal(JSON.parse(calls[0].body).tokenPerPoint, 2000)
+  assert.equal(page.tokenPerPoint.value, 2000)
 })
 
-test('handleUpdateRate 比例小于1时拦截', async () => {
+test('handleUpdateRate 配置小于1时拦截', async () => {
   const { adminFetch, calls } = mockFetch(() => ({ code: 200 }))
-  const page = await setup('newRate, handleUpdateRate', { adminFetch })
-  page.newRate.value = 0
+  const page = await setup('newTokenPerPoint, handleUpdateRate', { adminFetch })
+  page.newTokenPerPoint.value = 0
   await page.handleUpdateRate()
   assert.equal(calls.length, 0)
 })
 
 test('handleUpdateRate 后端返回失败时提示不改当前值', async () => {
-  const { adminFetch } = mockFetch(() => ({ code: 400, msg: '兑换比例必须 >= 1' }))
-  const page = await setup('exchangeRate, newRate, handleUpdateRate', { adminFetch })
-  page.exchangeRate.value = 10
-  page.newRate.value = 0
+  const { adminFetch } = mockFetch(() => ({ code: 400, msg: 'tokenPerPoint 必须为整数' }))
+  const page = await setup('tokenPerPoint, newTokenPerPoint, handleUpdateRate', { adminFetch })
+  page.tokenPerPoint.value = 1000
+  page.newTokenPerPoint.value = 0
   await page.handleUpdateRate()
-  assert.equal(page.exchangeRate.value, 10)
+  assert.equal(page.tokenPerPoint.value, 1000)
 })

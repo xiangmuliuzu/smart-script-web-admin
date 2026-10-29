@@ -124,55 +124,31 @@
           </el-table>
         </el-tab-pane>
 
-        <!-- AI次数兑换配置 -->
-        <el-tab-pane label="AI次数兑换" name="exchange">
+        <!-- AI 创作积分消耗配置（去次数化：1 积分 = N token） -->
+        <el-tab-pane label="AI创作积分消耗" name="exchange">
           <el-alert
             type="info" :closable="false" show-icon
-            title="调整后，App 端福利页与 AI 机会页的兑换提示会实时显示新比例，无需发版。"
+            title="AI 创作按实际消耗的 token 直接从用户积分中扣减（向上取整、最低 1 积分）；此处配置 1 积分可抵扣多少 token，App 端与 PC 用户端即时生效，无需发版。"
             style="margin-bottom: 16px"
           />
           <el-card shadow="never" style="max-width: 560px">
             <div class="rate-current">
-              <span class="rate-label">当前兑换比例</span>
-              <span class="rate-value">{{ exchangeRate }} 积分 = 1 次 AI 机会</span>
+              <span class="rate-label">当前换算</span>
+              <span class="rate-value">1 积分 = {{ tokenPerPoint }} token</span>
             </div>
             <el-form label-width="160px" style="margin-top: 16px">
-              <el-form-item label="新兑换比例">
-                <el-input-number v-model="newRate" :min="1" :max="10000" controls-position="right" />
-                <span class="rate-hint">积分 = 1 次 AI 机会</span>
+              <el-form-item label="1 积分 = N token">
+                <el-input-number v-model="newTokenPerPoint" :min="1" :max="100000" :step="100" controls-position="right" />
+                <span class="rate-hint">token = 1 积分（N 越大用户越省积分）</span>
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" class="black-button" :loading="saving" @click="handleUpdateRate">保存比例</el-button>
+                <el-button type="primary" class="black-button" :loading="saving" @click="handleUpdateRate">保存配置</el-button>
               </el-form-item>
             </el-form>
           </el-card>
         </el-tab-pane>
 
-        <!-- 生成字数上限 -->
-        <el-tab-pane label="生成字数上限" name="limit">
-          <el-alert
-            type="warning" :closable="false" show-icon
-            title="单次 AI 调用输出字数上限：超过上限时后端会截断输出并标记「已达上限」，用于控制 AI 成本；设为 0 表示不限。"
-            style="margin-bottom: 16px"
-          />
-          <el-card shadow="never" style="max-width: 560px">
-            <el-form label-width="160px" style="margin-top: 8px">
-              <el-form-item label="AI 写作上限（字）">
-                <el-input-number v-model="limitForm.write" :min="0" :max="100000" :step="100" controls-position="right" />
-              </el-form-item>
-              <el-form-item label="AI 润色上限（字）">
-                <el-input-number v-model="limitForm.polish" :min="0" :max="100000" :step="100" controls-position="right" />
-              </el-form-item>
-              <el-form-item label="AI 大纲上限（字）">
-                <el-input-number v-model="limitForm.outline" :min="0" :max="100000" :step="100" controls-position="right" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" class="black-button" :loading="limitSaving" @click="handleSaveLimit">保存上限</el-button>
-                <span class="rate-hint" style="margin-left: 12px">修改即时生效，App 端与 PC 用户端 AI 生成均按此限制截断</span>
-              </el-form-item>
-            </el-form>
-          </el-card>
-        </el-tab-pane>
+        <!-- 生成字数上限（去次数化已废除：按 token 扣积分天然控成本，不再限制单次字数） -->
 
         <!-- 积分账户 -->
         <el-tab-pane label="积分账户" name="account">
@@ -396,7 +372,7 @@ import adminFetch from '@/utils/adminFetch'
 const TASK_PREFIX = '/api/v1/admin/welfare/task'
 const AD_PREFIX = '/api/v1/admin/welfare/ad'
 const POINTS_PREFIX = '/api/v1/admin/welfare/points'
-const RATE_URL = '/api/v1/admin/ai/quota/exchange-rate'
+const RATE_URL = '/api/v1/admin/ai/quota/token-per-point'
 
 const activeTab = ref('task')
 const loading = ref(false)
@@ -426,14 +402,9 @@ const adForm = reactive({
   frequencyLimit: 5, rewardPoints: 10, sort: 0, isEnabled: 1, remark: ''
 })
 
-// AI次数兑换比例
-const exchangeRate = ref(10)
-const newRate = ref(10)
-
-// AI 生成字数上限
-const LIMIT_URL = '/api/v1/admin/ai/quota/limit-config'
-const limitForm = reactive({ write: 2000, polish: 2000, outline: 1000 })
-const limitSaving = ref(false)
+// AI 创作积分消耗配置（去次数化：1 积分 = N token，字段 tokenPerPoint）
+const tokenPerPoint = ref(1000)
+const newTokenPerPoint = ref(1000)
 
 // 积分账户
 const accQuery = reactive({ nickname: '', page: 1, pageSize: 10 })
@@ -587,58 +558,17 @@ const fetchExchangeRate = async () => {
     const res = await adminFetch(RATE_URL)
     const data = await res.json()
     if (data.code === 200) {
-      exchangeRate.value = data.data
-      newRate.value = data.data
+      tokenPerPoint.value = data.data
+      newTokenPerPoint.value = data.data
     }
   } catch (e) {
-    ElMessage.error('获取兑换比例失败')
-  }
-}
-
-const fetchGenLimit = async () => {
-  try {
-    const res = await adminFetch(LIMIT_URL)
-    const data = await res.json()
-    if (data.code === 200 && data.data) {
-      limitForm.write = data.data.write ?? 2000
-      limitForm.polish = data.data.polish ?? 2000
-      limitForm.outline = data.data.outline ?? 1000
-    }
-  } catch (e) {
-    ElMessage.error('获取生成字数上限失败')
-  }
-}
-
-const handleSaveLimit = async () => {
-  if (limitForm.write === null || limitForm.write === undefined
-    || limitForm.polish === null || limitForm.polish === undefined
-    || limitForm.outline === null || limitForm.outline === undefined) {
-    ElMessage.warning('三个上限均需填写，设为 0 表示不限')
-    return
-  }
-  limitSaving.value = true
-  try {
-    const res = await adminFetch(LIMIT_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ write: limitForm.write, polish: limitForm.polish, outline: limitForm.outline })
-    })
-    const data = await res.json()
-    if (data.code === 200) {
-      ElMessage.success('生成字数上限已保存，即时生效')
-    } else {
-      ElMessage.error(data.msg || '保存失败')
-    }
-  } catch (e) {
-    ElMessage.error('保存失败')
-  } finally {
-    limitSaving.value = false
+    ElMessage.error('获取积分换算配置失败')
   }
 }
 
 const handleUpdateRate = async () => {
-  if (!newRate.value || newRate.value < 1) {
-    ElMessage.warning('兑换比例必须 >= 1')
+  if (!newTokenPerPoint.value || newTokenPerPoint.value < 1) {
+    ElMessage.warning('1 积分抵扣 token 数必须 >= 1')
     return
   }
   saving.value = true
@@ -646,12 +576,12 @@ const handleUpdateRate = async () => {
     const res = await adminFetch(RATE_URL, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rate: newRate.value })
+      body: JSON.stringify({ tokenPerPoint: newTokenPerPoint.value })
     })
     const data = await res.json()
     if (data.code === 200) {
-      ElMessage.success(`兑换比例已更新为 ${newRate.value} 积分=1次`)
-      exchangeRate.value = newRate.value
+      ElMessage.success(`已更新：1 积分 = ${newTokenPerPoint.value} token`)
+      tokenPerPoint.value = newTokenPerPoint.value
     } else {
       ElMessage.error(data.msg || '更新失败')
     }
@@ -790,7 +720,6 @@ const handleTabChange = (name) => {
   if (name === 'task') fetchTasks()
   else if (name === 'ad') fetchAdTasks()
   else if (name === 'exchange') fetchExchangeRate()
-  else if (name === 'limit') fetchGenLimit()
   else if (name === 'account') fetchAccounts()
   else if (name === 'record') fetchRecords()
 }
