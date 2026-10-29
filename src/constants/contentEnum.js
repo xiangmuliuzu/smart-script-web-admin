@@ -56,12 +56,12 @@ export const BANNER_POSITION = [
   { value: 'home_middle', label: '首页中部' }
 ]
 
-/** 榜单类型（type 与主指标强绑定，方案 A：时间窗口 + 分级） */
+/** 榜单类型（type 与主指标强绑定） */
 export const RANKING_TYPE = [
-  { value: 'view', label: '热门榜', metricLabel: '近7天阅读' },
+  { value: 'view', label: '热门榜', metricLabel: '累计浏览量' },
   { value: 'favorite', label: '收藏榜', metricLabel: '近7天收藏' },
   { value: 'rating', label: '评分榜', metricLabel: '综合评分' },
-  { value: 'new', label: '新书榜', metricLabel: '阅读量' }
+  { value: 'new', label: '新书榜', metricLabel: '上架时间' }
 ]
 /** 取中文名，找不到回退原值 */
 export function contentEnumLabel(list, value) {

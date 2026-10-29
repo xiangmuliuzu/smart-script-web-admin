@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="排行榜管理" :description="`实时榜单（方案 A：时间窗口 + 分级）；榜单更新时间：${updatedAt || '—'}`">
+    <PageHeader title="排行榜管理" :description="`实时榜单；榜单更新时间：${updatedAt || '—'}`">
     </PageHeader>
 
     <el-tabs v-model="activeType" class="board-tabs" @tab-change="handleTabChange">
@@ -23,8 +23,10 @@
       <el-table-column prop="title" label="作品标题" min-width="160" show-overflow-tooltip />
       <el-table-column prop="authorName" label="作者" width="120" show-overflow-tooltip />
       <el-table-column prop="genreName" label="分类" width="100" />
-      <el-table-column :label="currentBoard.metricLabel" width="110">
-        <template #default="{ row }">{{ row.score ?? '—' }}</template>
+      <el-table-column :label="currentBoard.metricLabel" width="160">
+        <template #default="{ row }">
+          {{ activeType === 'new' ? (row.shelfTime || '—') : (row.score ?? '—') }}
+        </template>
       </el-table-column>
       <el-table-column label="更新时间" width="170">
         <template #default>{{ updatedAt || '—' }}</template>
