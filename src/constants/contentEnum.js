@@ -52,8 +52,7 @@ export const DRAMA_SHELF_STATUS = [
 
 /** Banner 展示位置（sys_banner.position） */
 export const BANNER_POSITION = [
-  { value: 'home_top', label: '首页顶部' },
-  { value: 'home_middle', label: '首页中部' }
+  { value: 'home_top', label: '首页顶部' }
 ]
 
 /** 榜单类型（type 与主指标强绑定） */

@@ -17,11 +17,6 @@
         />
       </el-form-item>
       <el-form-item>
-        <el-select v-model="queryParams.position" placeholder="全部展示位置" style="width: 160px" clearable>
-          <el-option v-for="t in BANNER_POSITION" :key="t.value" :label="t.label" :value="t.value" />
-        </el-select>
-      </el-form-item>
-      <el-form-item>
         <el-select v-model="queryParams.status" placeholder="全部状态" style="width: 140px" clearable>
           <el-option label="上架" value="on" />
           <el-option label="下架" value="off" />
