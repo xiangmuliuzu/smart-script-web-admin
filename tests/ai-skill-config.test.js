@@ -42,12 +42,14 @@ test('fetchList 组装分页与筛选参数并写入列表', async () => {
   }))
   const page = await setup('query, list, total, fetchList', { adminFetch })
   page.query.skillName = '悬疑'
+  page.query.skillType = 'storyboard'
   page.query.status = '0'
   await page.fetchList()
   assert.ok(calls[0].url.startsWith(`${BASE}/list?`))
   assert.ok(calls[0].url.includes('pageNum=1'))
   assert.ok(calls[0].url.includes('pageSize=10'))
   assert.ok(calls[0].url.includes('skillName=' + encodeURIComponent('悬疑')))
+  assert.ok(calls[0].url.includes('skillType=storyboard'))
   assert.ok(calls[0].url.includes('status=0'))
   assert.equal(page.list.value.length, 1)
   assert.equal(page.total.value, 2)
@@ -73,11 +75,12 @@ test('handleSave 名称为空被拦截', async () => {
   assert.equal(calls.length, 0)
 })
 
-test('handleSave 新增走 POST 且 FormData 含 skillName 与 file', async () => {
+test('handleSave 新增走 POST 且 FormData 含 skillName/skillType 与 file', async () => {
   const { adminFetch, calls } = mockFetch(() => ({ code: 200 }))
   const page = await setup('editingId, form, dialogVisible, submitting, handleSave, fetchList', { adminFetch })
   page.editingId.value = null
   page.form.skillName = '古风武侠导演'
+  page.form.skillType = 'write'
   page.form.file = { name: 'gufeng.md', size: 100 }
   page.form.status = '0'
   await page.handleSave()
@@ -87,9 +90,23 @@ test('handleSave 新增走 POST 且 FormData 含 skillName 与 file', async () =
   assert.equal(saveCall.url, BASE)
   assert.ok(saveCall.body instanceof FormData)
   assert.equal(saveCall.body.get('skillName'), '古风武侠导演')
+  assert.equal(saveCall.body.get('skillType'), 'write')
   assert.ok(saveCall.body.get('file'))
   assert.equal(saveCall.body.get('status'), '0')
   assert.equal(page.dialogVisible.value, false)
+})
+
+test('handleSave 新增分镜类 skill 时 FormData 携带 storyboard 类型', async () => {
+  const { adminFetch, calls } = mockFetch(() => ({ code: 200 }))
+  const page = await setup('editingId, form, dialogVisible, submitting, handleSave, fetchList', { adminFetch })
+  page.editingId.value = null
+  page.form.skillName = '分镜导演（镜头语言）'
+  page.form.skillType = 'storyboard'
+  page.form.file = { name: 'storyboard.md', size: 100 }
+  page.form.status = '0'
+  await page.handleSave()
+  const saveCall = calls[0]
+  assert.equal(saveCall.body.get('skillType'), 'storyboard')
 })
 
 test('handleSave 编辑走 PUT 且 FormData 含 id（不传文件时保留原内容）', async () => {
@@ -97,6 +114,7 @@ test('handleSave 编辑走 PUT 且 FormData 含 id（不传文件时保留原内
   const page = await setup('editingId, form, dialogVisible, submitting, handleSave, fetchList', { adminFetch })
   page.editingId.value = 7
   page.form.skillName = '古风武侠导演v2'
+  page.form.skillType = 'storyboard'
   page.form.file = null
   page.form.status = '1'
   await page.handleSave()
@@ -104,8 +122,17 @@ test('handleSave 编辑走 PUT 且 FormData 含 id（不传文件时保留原内
   assert.equal(saveCall.method, 'PUT')
   assert.equal(saveCall.body.get('id'), '7')
   assert.equal(saveCall.body.get('skillName'), '古风武侠导演v2')
+  assert.equal(saveCall.body.get('skillType'), 'storyboard')
   assert.equal(saveCall.body.get('file'), null)
   assert.equal(saveCall.body.get('status'), '1')
+})
+
+test('openEdit 回显 skillType（分镜类按 storyboard 回显）', async () => {
+  const { adminFetch, calls } = mockFetch(() => ({ code: 200 }))
+  const page = await setup('editingId, form, dialogVisible, openEdit', { adminFetch })
+  page.openEdit({ id: 9, skillName: '分镜导演（镜头语言）', skillType: 'storyboard', status: '0' })
+  assert.equal(page.form.skillType, 'storyboard')
+  assert.equal(page.editingId.value, 9)
 })
 
 test('toggleStatus 停用时 PUT status=1', async () => {

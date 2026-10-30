@@ -14,6 +14,10 @@
           style="width: 200px"
           @keyup.enter="fetchList"
         />
+        <el-select v-model="query.skillType" placeholder="类型" clearable style="width: 160px">
+          <el-option label="剧本/写作/润色" value="write" />
+          <el-option label="分镜" value="storyboard" />
+        </el-select>
         <el-select v-model="query.status" placeholder="状态" clearable style="width: 130px">
           <el-option label="启用" value="0" />
           <el-option label="停用" value="1" />
@@ -23,6 +27,13 @@
 
       <el-table :data="list" v-loading="loading" style="width: 100%" class="table-margin">
         <el-table-column prop="skillName" label="Skill 名称" min-width="160" />
+        <el-table-column label="类型" width="150">
+          <template #default="{ row }">
+            <el-tag :type="row.skillType === 'storyboard' ? 'warning' : 'primary'" size="small">
+              {{ row.skillType === 'storyboard' ? '分镜' : '剧本/写作/润色' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="fileName" label="文件名" min-width="180" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -64,6 +75,13 @@
       <el-form :model="form" label-width="90px">
         <el-form-item label="Skill 名称" required>
           <el-input v-model="form.skillName" placeholder="如：悬疑烧脑导演" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="Skill 类型" required>
+          <el-select v-model="form.skillType" placeholder="选择用途" style="width: 100%">
+            <el-option label="剧本 / 写作 / 润色" value="write" />
+            <el-option label="分镜" value="storyboard" />
+          </el-select>
+          <div class="file-hint">分镜 skill 与其他三个用途不同：剧本/写作/润色可共用，分镜单独一类（镜头语言/画面拆解）。</div>
         </el-form-item>
         <el-form-item label="Skill 文件" :required="!editingId">
           <div class="file-row">
@@ -110,12 +128,12 @@ const BASE = '/api/v1/admin/content/ai-skill'
 const loading = ref(false)
 const list = ref([])
 const total = ref(0)
-const query = reactive({ skillName: '', status: '', pageNum: 1, pageSize: 10 })
+const query = reactive({ skillName: '', skillType: '', status: '', pageNum: 1, pageSize: 10 })
 
 const dialogVisible = ref(false)
 const editingId = ref(null)
 const submitting = ref(false)
-const form = reactive({ skillName: '', status: '0', file: null, fileName: '' })
+const form = reactive({ skillName: '', skillType: 'write', status: '0', file: null, fileName: '' })
 
 const detailVisible = ref(false)
 const detail = reactive({ skillName: '', fileName: '', fileContent: '' })
@@ -125,6 +143,7 @@ async function fetchList() {
   try {
     const params = new URLSearchParams({ pageNum: query.pageNum, pageSize: query.pageSize })
     if (query.skillName) params.set('skillName', query.skillName)
+    if (query.skillType !== '') params.set('skillType', query.skillType)
     if (query.status !== '') params.set('status', query.status)
     const resp = await adminFetch(`${BASE}/list?${params.toString()}`)
     const json = await resp.json()
@@ -142,6 +161,7 @@ async function fetchList() {
 function openAdd() {
   editingId.value = null
   form.skillName = ''
+  form.skillType = 'write'
   form.status = '0'
   form.file = null
   form.fileName = ''
@@ -151,6 +171,7 @@ function openAdd() {
 function openEdit(row) {
   editingId.value = row.id
   form.skillName = row.skillName
+  form.skillType = row.skillType === 'storyboard' ? 'storyboard' : 'write'
   form.status = row.status
   form.file = null
   form.fileName = ''
@@ -188,6 +209,7 @@ async function handleSave() {
   try {
     const fd = new FormData()
     fd.append('skillName', form.skillName.trim())
+    fd.append('skillType', form.skillType || 'write')
     if (editingId.value) fd.append('id', editingId.value)
     if (form.file) fd.append('file', form.file)
     fd.append('status', form.status)
