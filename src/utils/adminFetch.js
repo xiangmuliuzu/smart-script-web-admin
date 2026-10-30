@@ -5,9 +5,11 @@ import { getToken } from '@/utils/auth'
  * 原生 fetch 不带 token 会被后端认证拒绝，导致页面无数据。
  */
 export default function adminFetch(url, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {})
+  const headers = { ...(options.headers || {}) }
+  const hasBody = options.body != null
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData
+  if (hasBody && !isForm && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
   }
   const token = getToken()
   if (token) {
