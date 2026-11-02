@@ -391,21 +391,22 @@ onMounted(loadList)
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .channel-tabs {
   display: flex;
-  gap: 8px;
+  gap: 2px;
   padding: 4px;
-  background: #f5f6f8;
-  border-radius: 10px;
+  background: #f2f3f5;
+  border-radius: 8px;
 }
 
 .channel-tab {
-  padding: 7px 18px;
+  padding: 6px 20px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: #4e5969;
   font-size: 14px;
@@ -414,24 +415,24 @@ onMounted(loadList)
 }
 
 .channel-tab.active {
-  background: #1f2329;
-  color: #fff;
+  background: #fff;
+  color: #1f2329;
   font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .dim-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   padding: 4px;
-  background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 10px;
+  background: #f2f3f5;
+  border-radius: 8px;
 }
 
 .dim-tab {
-  padding: 6px 16px;
+  padding: 6px 18px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: #4e5969;
   font-size: 13px;
@@ -440,30 +441,32 @@ onMounted(loadList)
 }
 
 .dim-tab.active {
-  background: #254e90;
-  color: #fff;
+  background: #fff;
+  color: #254e90;
   font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .tag-board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   align-items: start;
   min-height: 320px;
 }
 
 .tag-card {
   background: #fff;
-  border: 1px solid #ebeef5;
+  border: 1px solid #f0f1f3;
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 
 .card-head {
@@ -471,7 +474,9 @@ onMounted(loadList)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f5f6f8;
 }
 
 .card-title {
@@ -485,7 +490,7 @@ onMounted(loadList)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1f2329;
 }
@@ -494,26 +499,31 @@ onMounted(loadList)
   flex-shrink: 0;
   font-size: 12px;
   color: #86909c;
+  background: #f2f3f5;
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
 .mini-btn {
   border: none;
-  background: transparent;
+  background: #f2f7ff;
   color: #254e90;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .mini-btn:hover {
-  color: #1f2329;
+  background: #e0eaff;
 }
 
 .chip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
 .chip {
@@ -521,10 +531,11 @@ onMounted(loadList)
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 34px;
-  padding: 0 16px;
+  height: 36px;
+  padding: 0 12px;
   border-radius: 8px;
-  background: #f5f6f8;
+  background: #fafbfc;
+  border: 1px solid #f0f1f3;
   color: #4e5969;
   font-size: 13px;
   cursor: pointer;
@@ -532,13 +543,15 @@ onMounted(loadList)
 }
 
 .chip:hover {
-  background: #eef1f5;
-  color: #1f2329;
+  background: #f0f5ff;
+  border-color: #c6d8ff;
+  color: #254e90;
 }
 
 .chip.off {
   background: #fafafa;
-  color: #a9aeb8;
+  border-color: #f0f1f3;
+  color: #c9cdd4;
 }
 
 .chip-name {
