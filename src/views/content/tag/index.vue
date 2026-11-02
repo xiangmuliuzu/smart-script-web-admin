@@ -306,7 +306,7 @@ function openEdit(row) {
     tagName: row.tagName || '',
     tagType: row.tagType || 'hot',
     groupName: row.groupName || '',
-    channelId: row.channelId === null || row.channelId === undefined ? '' : Number(row.channelId),
+    channelId: row.channelId === 147 ? 147 : 146,
     sort: row.sort ?? null,
     status: row.status || '0',
     remark: row.remark || ''
@@ -329,7 +329,7 @@ async function handleSubmit() {
       tagName: form.tagName.trim(),
       tagType: form.tagType,
       groupName: form.groupName ? form.groupName.trim() : null,
-      channelId: form.channelId === '' || form.channelId === null ? null : Number(form.channelId),
+      channelId: Number(form.channelId),
       sort: form.sort ?? null,
       status: form.status,
       remark: form.remark || ''
