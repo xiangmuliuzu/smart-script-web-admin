@@ -49,7 +49,7 @@
             v-permission="['content:tag:add']"
             type="button"
             class="mini-btn"
-            @click="openCreate({ tagType: activeDim, groupName: card.groupName })"
+            @click="openCreate({ tagType: activeDim })"
           >+ 新增</button>
         </div>
         <div class="chip-grid">
@@ -91,19 +91,6 @@
             </el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="分组" prop="groupName">
-          <el-select
-            v-model="form.groupName"
-            placeholder="不选则归入「未分组」"
-            style="width: 100%"
-            filterable
-            allow-create
-            default-first-option
-            clearable
-          >
-            <el-option v-for="name in formGroupOptions" :key="name" :label="name" :value="name" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="频道" prop="channelId">
           <el-select v-model="form.channelId" style="width: 100%">
             <el-option label="男生" :value="146" />
@@ -141,7 +128,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import BlackButton from '@/components/BlackButton.vue'
-import { TAG_TYPE, TAG_GROUP_SUGGESTIONS } from '@/constants/contentEnum'
+import { TAG_TYPE } from '@/constants/contentEnum'
 import { listTag, addTag, updateTag, delTag } from '@/api/content'
 
 defineOptions({ name: 'ContentTag' })
@@ -195,14 +182,15 @@ const filteredRows = computed(() =>
   })
 )
 
-/** 先按频道分组（男生/女生/通用），再按 group_name 分组 */
+/** 按频道分组，每个频道+维度就是一个卡片，不再按group_name二次分组 */
 const groupCards = computed(() => {
+  const currentDimLabel = TAG_TYPE.find(t => t.value === activeDim.value)?.label || ''
   const map = new Map()
   filteredRows.value
     .slice()
     .sort((a, b) => sortOf(a) - sortOf(b) || a.tagId - b.tagId)
     .forEach((row) => {
-      // 先确定频道分组
+      // 按频道分组
       let channelKey, channelName
       if (row.channelId === 146) {
         channelKey = 'channel_146'
@@ -211,12 +199,10 @@ const groupCards = computed(() => {
         channelKey = 'channel_147'
         channelName = '女生频道'
       }
-      // 再确定分组名
-      const groupName = row.groupName || ''
-      const cardKey = `${channelKey}__${groupName || 'ungrouped'}`
-      const cardName = groupName ? `${channelName} · ${groupName}` : channelName
+      const cardKey = channelKey
+      const cardName = `${channelName} · ${currentDimLabel}`
       if (!map.has(cardKey)) {
-        map.set(cardKey, { key: cardKey, groupName, name: cardName, tags: [] })
+        map.set(cardKey, { key: cardKey, name: cardName, tags: [] })
       }
       map.get(cardKey).tags.push(row)
     })
@@ -226,7 +212,7 @@ const groupCards = computed(() => {
       if (key.startsWith('channel_146')) return 0
       return 1
     }
-    return channelOrder(a.key) - channelOrder(b.key) || a.name.localeCompare(b.name)
+    return channelOrder(a.key) - channelOrder(b.key)
   })
 })
 
@@ -259,7 +245,6 @@ const form = reactive({
   tagId: null,
   tagName: '',
   tagType: 'hot',
-  groupName: '',
   channelId: '',
   sort: null,
   status: '0',
@@ -275,21 +260,11 @@ const rules = {
   channelId: [{ required: true, message: '请选择频道', trigger: 'change' }]
 }
 
-/** 分组选项：当前维度的建议分组 ∪ 已存在分组 */
-const formGroupOptions = computed(() => {
-  const names = new Set(TAG_GROUP_SUGGESTIONS[form.tagType] || [])
-  rows.value.forEach((row) => {
-    if (row.tagType === form.tagType && row.groupName) names.add(row.groupName)
-  })
-  return [...names]
-})
-
 function openCreate(options = {}) {
   Object.assign(form, {
     tagId: null,
     tagName: '',
     tagType: options.tagType || activeDim.value,
-    groupName: options.groupName || '',
     channelId: channelTab.value === '' ? 146 : Number(channelTab.value),
     sort: null,
     status: '0',
@@ -305,7 +280,6 @@ function openEdit(row) {
     tagId: row.tagId,
     tagName: row.tagName || '',
     tagType: row.tagType || 'hot',
-    groupName: row.groupName || '',
     channelId: row.channelId === 147 ? 147 : 146,
     sort: row.sort ?? null,
     status: row.status || '0',
@@ -328,7 +302,6 @@ async function handleSubmit() {
     const payload = {
       tagName: form.tagName.trim(),
       tagType: form.tagType,
-      groupName: form.groupName ? form.groupName.trim() : null,
       channelId: Number(form.channelId),
       sort: form.sort ?? null,
       status: form.status,
