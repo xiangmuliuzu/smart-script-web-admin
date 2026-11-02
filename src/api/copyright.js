@@ -228,28 +228,29 @@ export function handleSettlementAbnormal(settlementId, data) {
   })
 }
 
-// 财务异常API
-export function getFinanceAbnormalList(params) {
-  const { pageNo, type, ...filters } = params || {}
+// 个人收益管理（只读：有账户用户 + sys_bill_record 流水）
+export function getIncomeAccountList(params) {
+  const { pageNo, ...filters } = params || {}
   return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/finance-abnormal/${type}/list`,
+    url: `${PRODUCT_PREFIX}/copyright/income/accounts`,
     method: 'get',
     params: { ...filters, pageNum: pageNo }
   })
 }
 
-export function getFinanceAbnormalDetail(type, recordId) {
+export function getIncomeAccountDetail(userId) {
   return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/finance-abnormal/${type}/${recordId}`,
+    url: `${PRODUCT_PREFIX}/copyright/income/accounts/${userId}`,
     method: 'get'
   })
 }
 
-export function handleFinanceAbnormal(type, recordId, data) {
+export function getIncomeBillList(userId, params) {
+  const { pageNo, ...filters } = params || {}
   return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/finance-abnormal/${type}/${recordId}/handle`,
-    method: 'post',
-    data
+    url: `${PRODUCT_PREFIX}/copyright/income/accounts/${userId}/bills`,
+    method: 'get',
+    params: { ...filters, pageNum: pageNo }
   })
 }
 
