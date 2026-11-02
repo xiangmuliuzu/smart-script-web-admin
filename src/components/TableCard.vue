@@ -13,7 +13,15 @@
       <slot name="toolbar" />
     </div>
 
-    <el-table v-loading="loading" :data="data" style="width: 100%" @selection-change="onSelectionChange">
+    <el-table
+      v-loading="loading"
+      :data="data"
+      :row-key="rowKey"
+      :tree-props="treeProps"
+      :expand-row-keys="expandRowKeys"
+      style="width: 100%"
+      @selection-change="onSelectionChange"
+    >
       <slot />
       <template #empty>
         <el-empty :description="emptyText" :image-size="emptyImage ? 120 : 72" :image="emptyImage || undefined" />
@@ -54,7 +62,10 @@ defineProps({
   pageSizes: { type: Array, default: () => [10, 20, 50] },
   showPagination: { type: Boolean, default: true },
   emptyText: { type: String, default: '暂无数据' },
-  emptyImage: { type: String, default: '' }
+  emptyImage: { type: String, default: '' },
+  rowKey: { type: [String, Function], default: undefined },
+  treeProps: { type: Object, default: undefined },
+  expandRowKeys: { type: Array, default: () => [] }
 })
 const emit = defineEmits(['update:page', 'update:pageSize', 'page-change', 'size-change', 'selection-change'])
 

@@ -1,113 +1,122 @@
 <template>
   <PageContainer>
-    <PageHeader title="标签管理" description="维护作品标签，供作品打标与分类检索使用">
+    <PageHeader title="标签管理" description="维度（角色/情节）→ 分组 → 标签，App 分类页按此展示">
       <template #actions>
-        <BlackButton v-permission="['content:tag:add']" @click="openCreate">新增标签</BlackButton>
+        <BlackButton v-permission="['content:tag:add']" @click="openCreate()">新增标签</BlackButton>
       </template>
     </PageHeader>
 
-    <FilterBar @query="handleQuery" @reset="handleReset">
-      <el-form-item>
-        <el-select
-          v-model="queryParams.tagName"
-          placeholder="全部标签"
-          style="width: 180px"
-          clearable
-          filterable
-        >
-          <el-option v-for="name in nameOptions" :key="name" :label="name" :value="name" />
+    <div class="tag-toolbar">
+      <div class="toolbar-left">
+        <div class="channel-tabs">
+          <button
+            v-for="tab in CHANNEL_TABS"
+            :key="tab.value"
+            type="button"
+            class="channel-tab"
+            :class="{ active: channelTab === tab.value }"
+            @click="channelTab = tab.value"
+          >{{ tab.label }}</button>
+        </div>
+        <div class="dim-tabs">
+          <button
+            v-for="item in TAG_TYPE"
+            :key="item.value"
+            type="button"
+            class="dim-tab"
+            :class="{ active: activeDim === item.value }"
+            @click="selectDim(item.value)"
+          >{{ item.label }}</button>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <el-select v-model="groupFilter" placeholder="全部分组" clearable style="width: 150px">
+          <el-option v-for="name in groupOptions" :key="name" :label="name" :value="name" />
         </el-select>
-      </el-form-item>
-      <el-form-item>
-        <el-select v-model="queryParams.status" placeholder="全部状态" style="width: 140px" clearable>
+        <el-input v-model="keyword" placeholder="搜索标签名称" clearable style="width: 180px" />
+        <el-select v-model="statusFilter" placeholder="全部状态" clearable style="width: 120px">
           <el-option label="正常" value="0" />
           <el-option label="停用" value="1" />
         </el-select>
-      </el-form-item>
-    </FilterBar>
+      </div>
+    </div>
 
-    <TableCard
-      v-model:page="queryParams.pageNum"
-      v-model:pageSize="queryParams.pageSize"
-      :data="list"
-      :loading="loading"
-      :total="total"
-      empty-text="暂无标签数据"
-      @page-change="loadList"
-      @size-change="loadList"
-    >
-      <template #toolbar>
-        <div style="display: flex; justify-content: flex-end;">
-          <el-button
-            v-permission="['content:tag:remove']"
-            type="danger"
-            :disabled="checkedIds.length === 0"
-            @click="handleBatchRemove"
-          >批量删除{{ checkedIds.length ? `（已选 ${checkedIds.length} 项）` : '' }}</el-button>
+    <div v-loading="loading" class="tag-board">
+      <div v-for="card in groupCards" :key="card.key" class="tag-card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-name">{{ card.name }}</span>
+            <span class="card-count">{{ card.tags.length }}</span>
+          </div>
+          <button
+            v-permission="['content:tag:add']"
+            type="button"
+            class="mini-btn"
+            @click="openCreate({ tagType: activeDim, groupName: card.groupName })"
+          >+ 新增</button>
         </div>
-      </template>
-
-      <el-table-column label="选择" width="50">
-        <template #header>
-          <el-checkbox
-            :model-value="allChecked"
-            :indeterminate="indeterminate"
-            @change="toggleAll"
-          />
-        </template>
-        <template #default="{ row }">
-          <el-checkbox v-model="checkedMap[row.tagId]" />
-        </template>
-      </el-table-column>
-      <el-table-column prop="sort" label="位次" width="80" />
-      <el-table-column prop="tagName" label="标签名称" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="useCount" label="使用数量" min-width="120" />
-      <el-table-column label="状态" min-width="120">
-        <template #default="{ row }">
-          <el-switch
-            v-permission="['content:tag:edit']"
-            v-model="row.status"
-            active-value="0"
-            inactive-value="1"
-            @change="() => handleStatusChange(row)"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column label="创建时间" min-width="160">
-        <template #default="{ row }">{{ row.createTime || '—' }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
-        <template #default="{ row }">
-          <el-button
-            v-permission="['content:tag:edit']"
-            size="small"
-            @click="openEdit(row)"
-          >编辑</el-button>
-          <el-button
-            v-permission="['content:tag:remove']"
-            size="small"
-            type="danger"
-            @click="handleRemove(row)"
-          >删除</el-button>
-        </template>
-      </el-table-column>
-    </TableCard>
+        <div class="chip-grid">
+          <div
+            v-for="tag in card.tags"
+            :key="tag.tagId"
+            class="chip"
+            :class="{ off: tag.status === '1' }"
+            @click="openEdit(tag)"
+          >
+            <span class="chip-name">{{ tag.tagName }}</span>
+            <span v-if="tag.useCount > 0" class="chip-count">{{ tag.useCount }}</span>
+            <span
+              v-permission="['content:tag:remove']"
+              class="chip-remove"
+              title="删除"
+              @click.stop="handleDelete(tag)"
+            >×</span>
+          </div>
+        </div>
+      </div>
+      <div v-if="!groupCards.length" class="board-empty">{{ emptyText }}</div>
+    </div>
 
     <el-dialog
       v-model="dialog.visible"
-      :title="dialog.mode === 'create' ? '新增标签' : '编辑标签'"
-      width="480px"
+      :title="dialog.title"
+      width="520px"
       @closed="handleClosed"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="标签名称" prop="tagName">
           <el-input v-model="form.tagName" placeholder="请输入标签名称，不可重复" />
         </el-form-item>
+        <el-form-item label="维度" prop="tagType">
+          <el-radio-group v-model="form.tagType">
+            <el-radio v-for="item in TAG_TYPE" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="分组" prop="groupName">
+          <el-select
+            v-model="form.groupName"
+            placeholder="不选则归入「未分组」"
+            style="width: 100%"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+          >
+            <el-option v-for="name in formGroupOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="频道" prop="channelId">
+          <el-select v-model="form.channelId" style="width: 100%">
+            <el-option label="通用（男女频均展示）" value="" />
+            <el-option label="男生" :value="146" />
+            <el-option label="女生" :value="147" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="位次" prop="sort">
           <el-input-number v-model="form.sort" :min="1" />
-          <div style="font-size: 12px; color: #909399; line-height: 1.5; margin-top: 4px;">
-            数字越小越靠前；留空则追加到末尾；改为已存在位次时，其他标签自动顺延
-          </div>
+          <div class="form-tip">数字越小越靠前；留空则追加到末尾；改为已存在位次时其他标签自动顺延</div>
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-switch
@@ -131,112 +140,182 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import BlackButton from '@/components/BlackButton.vue'
-import FilterBar from '@/components/FilterBar.vue'
-import TableCard from '@/components/TableCard.vue'
+import { TAG_TYPE, TAG_GROUP_SUGGESTIONS } from '@/constants/contentEnum'
 import { listTag, addTag, updateTag, delTag } from '@/api/content'
 
 defineOptions({ name: 'ContentTag' })
 
+const CHANNEL_TABS = [
+  { label: '全部', value: '' },
+  { label: '男生', value: 146 },
+  { label: '女生', value: 147 }
+]
+const UNGROUPED = '未分组'
+
 const loading = ref(false)
-const list = ref([])
-const total = ref(0)
-const queryParams = reactive({
-  pageNum: 1,
-  pageSize: 10,
-  tagName: '',
-  status: ''
-})
+const rows = ref([])
 
-/** 标签名称下拉选项：从已有标签动态加载，供按名称筛选 */
-const nameOptions = ref([])
-async function loadNameOptions() {
-  try {
-    const res = await listTag({ pageNum: 1, pageSize: 200 })
-    nameOptions.value = [...new Set((res?.rows || []).map((r) => r.tagName).filter(Boolean))]
-  } catch {
-    nameOptions.value = []
-  }
+const channelTab = ref('')
+const activeDim = ref('hot')
+const groupFilter = ref('')
+const keyword = ref('')
+const statusFilter = ref('')
+
+/** 标签数量升序取位次，空位次排末尾 */
+function sortOf(row) {
+  return row.sort === null || row.sort === undefined || row.sort === '' ? Number.MAX_SAFE_INTEGER : Number(row.sort)
 }
 
-/** 当前页勾选状态：{ [tagId]: true }，翻页/刷新后清空 */
-const checkedMap = reactive({})
-const checkedIds = computed(() => list.value.filter((row) => checkedMap[row.tagId]).map((row) => row.tagId))
-const allChecked = computed(() => list.value.length > 0 && checkedIds.value.length === list.value.length)
-const indeterminate = computed(() => checkedIds.value.length > 0 && !allChecked.value)
-
-function toggleAll(checked) {
-  list.value.forEach((row) => {
-    checkedMap[row.tagId] = checked
-  })
-}
-
-function clearChecked() {
-  Object.keys(checkedMap).forEach((key) => delete checkedMap[key])
-}
-
-const dialog = reactive({ visible: false, mode: 'create' })
-const submitting = ref(false)
-const formRef = ref()
-const defaultForm = () => ({
-  tagId: null,
-  tagName: '',
-  sort: null,
-  status: '0',
-  remark: ''
-})
-const form = reactive(defaultForm())
-const rules = {
-  tagName: [
-    { required: true, message: '请输入标签名称', trigger: 'blur' },
-    { whitespace: true, message: '标签名称不能为空', trigger: 'blur' }
-  ]
-}
-
-/** GET 入参：空串不下发，让后端走“不过滤”分支 */
-function buildQuery() {
+function normalize(row) {
+  const cid = row.channelId
   return {
-    pageNum: queryParams.pageNum,
-    pageSize: queryParams.pageSize,
-    tagName: queryParams.tagName || undefined,
-    status: queryParams.status || undefined
+    ...row,
+    tagId: Number(row.tagId),
+    channelId: cid === null || cid === undefined || cid === '' ? null : Number(cid),
+    tagType: row.tagType || 'hot',
+    groupName: row.groupName || '',
+    status: String(row.status ?? '0'),
+    useCount: Number(row.useCount || 0)
   }
+}
+
+/** 当前维度的全部标签（用于分组下拉选项） */
+const dimRows = computed(() => rows.value.filter((row) => row.tagType === activeDim.value))
+
+const groupOptions = computed(() => {
+  const names = new Set(TAG_GROUP_SUGGESTIONS[activeDim.value] || [])
+  dimRows.value.forEach((row) => {
+    if (row.groupName) names.add(row.groupName)
+  })
+  return [...names]
+})
+
+const filteredRows = computed(() =>
+  dimRows.value.filter((row) => {
+    // 频道为前端过滤；通用标签（channelId 为空）在男女频下均展示
+    if (channelTab.value && row.channelId !== null && row.channelId !== Number(channelTab.value)) {
+      return false
+    }
+    if (groupFilter.value && row.groupName !== groupFilter.value) return false
+    if (statusFilter.value && row.status !== statusFilter.value) return false
+    const key = keyword.value.trim()
+    if (key && !(row.tagName || '').includes(key)) return false
+    return true
+  })
+)
+
+/** 先按频道分组（男生/女生/通用），再按 group_name 分组 */
+const groupCards = computed(() => {
+  const map = new Map()
+  filteredRows.value
+    .slice()
+    .sort((a, b) => sortOf(a) - sortOf(b) || a.tagId - b.tagId)
+    .forEach((row) => {
+      // 先确定频道分组
+      let channelKey, channelName
+      if (row.channelId === 146) {
+        channelKey = 'channel_146'
+        channelName = '男生频道'
+      } else if (row.channelId === 147) {
+        channelKey = 'channel_147'
+        channelName = '女生频道'
+      } else {
+        channelKey = 'channel_common'
+        channelName = '男女通用'
+      }
+      // 再确定分组名
+      const groupName = row.groupName || ''
+      const cardKey = `${channelKey}__${groupName || 'ungrouped'}`
+      const cardName = groupName ? `${channelName} · ${groupName}` : channelName
+      if (!map.has(cardKey)) {
+        map.set(cardKey, { key: cardKey, groupName, name: cardName, tags: [] })
+      }
+      map.get(cardKey).tags.push(row)
+    })
+  return [...map.values()].sort((a, b) => {
+    // 男生频道排最前，然后女生，然后通用
+    const channelOrder = (key) => {
+      if (key.startsWith('channel_146')) return 0
+      if (key.startsWith('channel_147')) return 1
+      return 2
+    }
+    return channelOrder(a.key) - channelOrder(b.key) || a.name.localeCompare(b.name)
+  })
+})
+
+const emptyText = computed(() => {
+  if (!dimRows.value.length) return '暂无标签，点击新增标签创建'
+  if (groupFilter.value) return `分组「${groupFilter.value}」下暂无标签`
+  return '没有符合条件的标签，试试调整筛选条件'
+})
+
+function selectDim(value) {
+  if (activeDim.value === value) return
+  activeDim.value = value
+  groupFilter.value = ''
 }
 
 async function loadList() {
   loading.value = true
   try {
-    const res = await listTag(buildQuery())
-    list.value = res?.rows || []
-    total.value = Number(res?.total || 0)
-    clearChecked()
+    const res = await listTag({ pageNum: 1, pageSize: 1000 })
+    rows.value = (res?.rows || []).map(normalize)
   } catch {
-    list.value = []
-    total.value = 0
-    clearChecked()
+    rows.value = []
   } finally {
     loading.value = false
   }
 }
 
-function handleQuery() {
-  queryParams.pageNum = 1
-  loadList()
+const dialog = reactive({ visible: false, title: '新增标签', mode: 'create' })
+const submitting = ref(false)
+const formRef = ref()
+const form = reactive({
+  tagId: null,
+  tagName: '',
+  tagType: 'hot',
+  groupName: '',
+  channelId: '',
+  sort: null,
+  status: '0',
+  remark: ''
+})
+
+const rules = {
+  tagName: [
+    { required: true, message: '请输入标签名称', trigger: 'blur' },
+    { whitespace: true, message: '标签名称不能为空', trigger: 'blur' }
+  ],
+  tagType: [{ required: true, message: '请选择维度', trigger: 'change' }]
 }
 
-function handleReset() {
-  queryParams.tagName = ''
-  queryParams.status = ''
-  handleQuery()
-}
+/** 分组选项：当前维度的建议分组 ∪ 已存在分组 */
+const formGroupOptions = computed(() => {
+  const names = new Set(TAG_GROUP_SUGGESTIONS[form.tagType] || [])
+  rows.value.forEach((row) => {
+    if (row.tagType === form.tagType && row.groupName) names.add(row.groupName)
+  })
+  return [...names]
+})
 
-function openCreate() {
-  Object.assign(form, defaultForm())
+function openCreate(options = {}) {
+  Object.assign(form, {
+    tagId: null,
+    tagName: '',
+    tagType: options.tagType || activeDim.value,
+    groupName: options.groupName || '',
+    channelId: channelTab.value === '' ? '' : Number(channelTab.value),
+    sort: null,
+    status: '0',
+    remark: ''
+  })
   dialog.mode = 'create'
+  dialog.title = '新增标签'
   dialog.visible = true
 }
 
@@ -244,11 +323,15 @@ function openEdit(row) {
   Object.assign(form, {
     tagId: row.tagId,
     tagName: row.tagName || '',
+    tagType: row.tagType || 'hot',
+    groupName: row.groupName || '',
+    channelId: row.channelId === null || row.channelId === undefined ? '' : Number(row.channelId),
     sort: row.sort ?? null,
     status: row.status || '0',
     remark: row.remark || ''
   })
   dialog.mode = 'edit'
+  dialog.title = '编辑标签'
   dialog.visible = true
 }
 
@@ -263,7 +346,10 @@ async function handleSubmit() {
     submitting.value = true
     const payload = {
       tagName: form.tagName.trim(),
-      sort: form.sort,
+      tagType: form.tagType,
+      groupName: form.groupName ? form.groupName.trim() : null,
+      channelId: form.channelId === '' || form.channelId === null ? null : Number(form.channelId),
+      sort: form.sort ?? null,
       status: form.status,
       remark: form.remark || ''
     }
@@ -276,8 +362,7 @@ async function handleSubmit() {
         ElMessage.success('编辑成功')
       }
       dialog.visible = false
-      loadNameOptions()
-      loadList()
+      await loadList()
     } catch {
       // 名称重复等错误信息已由 request 拦截器统一提示
     } finally {
@@ -286,30 +371,9 @@ async function handleSubmit() {
   })
 }
 
-async function handleStatusChange(row) {
-  const targetStatus = row.status
-  const actionText = targetStatus === '0' ? '启用' : '停用'
+async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm(`确认${actionText}标签「${row.tagName}」？`, '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    row.status = targetStatus === '0' ? '1' : '0'
-    return
-  }
-  try {
-    await updateTag({ tagId: row.tagId, status: targetStatus })
-    ElMessage.success(`${actionText}成功`)
-  } catch {
-    row.status = targetStatus === '0' ? '1' : '0'
-  }
-}
-
-async function handleRemove(row) {
-  try {
-    await ElMessageBox.confirm(`确认删除标签「${row.tagName}」吗？`, '删除确认', {
+    await ElMessageBox.confirm(`确认删除标签「${row.tagName}」吗？删除后不可恢复。`, '删除确认', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
@@ -320,35 +384,230 @@ async function handleRemove(row) {
   try {
     await delTag(row.tagId)
     ElMessage.success('删除成功')
-    loadList()
+    await loadList()
   } catch {
-    // 错误信息已由 request 拦截器统一提示
+    // 被作品引用等错误信息已由 request 拦截器统一提示
   }
 }
 
-async function handleBatchRemove() {
-  const ids = checkedIds.value
-  if (ids.length === 0) return
-  try {
-    await ElMessageBox.confirm(`确认删除选中的 ${ids.length} 个标签吗？`, '批量删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
-  try {
-    await delTag(ids.join(','))
-    ElMessage.success('删除成功')
-    loadList()
-  } catch {
-    // 错误信息已由 request 拦截器统一提示
-  }
-}
-
-onMounted(() => {
-  loadNameOptions()
-  loadList()
-})
+onMounted(loadList)
 </script>
+
+<style scoped>
+.tag-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.channel-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  background: #f5f6f8;
+  border-radius: 10px;
+}
+
+.channel-tab {
+  padding: 7px 18px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #4e5969;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.channel-tab.active {
+  background: #1f2329;
+  color: #fff;
+  font-weight: 600;
+}
+
+.dim-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+}
+
+.dim-tab {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #4e5969;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dim-tab.active {
+  background: #254e90;
+  color: #fff;
+  font-weight: 600;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+  align-items: start;
+  min-height: 320px;
+}
+
+.tag-card {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.card-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #86909c;
+}
+
+.mini-btn {
+  border: none;
+  background: transparent;
+  color: #254e90;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.mini-btn:hover {
+  color: #1f2329;
+}
+
+.chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: #f5f6f8;
+  color: #4e5969;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip:hover {
+  background: #eef1f5;
+  color: #1f2329;
+}
+
+.chip.off {
+  background: #fafafa;
+  color: #a9aeb8;
+}
+
+.chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-count {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #c98a2d;
+}
+
+.chip-remove {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 5px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #a9aeb8;
+}
+
+.chip:hover .chip-remove {
+  display: block;
+}
+
+.chip:hover .chip-count {
+  display: none;
+}
+
+.chip-remove:hover {
+  color: #d54941;
+}
+
+.board-empty {
+  grid-column: 1 / -1;
+  padding: 80px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #a9aeb8;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+</style>
