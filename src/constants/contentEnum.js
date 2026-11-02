@@ -7,9 +7,9 @@
  * - TRADE_TYPE（交易类型）：与若依字典 trade_license_type 对齐
  *   （exclusive 独家 / non_exclusive 非独家 / adaptation 改编）。
  *   依据 sql/smartscript_full_init.sql：negotiable「可议价」已退役为所有作品共有能力。
- * - CATEGORY_TYPE / TAG_TYPE：分类分三级（频道 → 题材 → 细分，频道见分类接口动态生成）；
- *   标签维度为 role 角色 / plot 情节，主题由分类树承载（受众类标签已下线清理）。
- *   App 端分类页走 /content/categories/nav，不按 category_type 筛选。
+ * - TAG_TYPE：标签墙维度（热门/主题/角色/情节），话题材与分组由 sys_tag 承载；
+ *   作品归属只走 sys_work_tag，作品不再设置分类（频道仅由 sys_category 顶层记录提供）。
+ *   App 端分类页走 /content/categories/nav，按标签维度取数。
  * - DRAMA_SOURCE_TYPE / DRAMA_AUTH_STATUS / DRAMA_SHELF_STATUS / BANNER_POSITION：
  *   取云端库 sys_external_drama / sys_banner 对应列实测值。
  * - RANKING_TYPE：榜单四类（App 与 PC 一致；交易热度榜因剧本通常只交易一次已下线），
@@ -18,15 +18,9 @@
  *   rating 平均评分 / new 近 30 天上架按阅读量。
  */
 
-/** 分类类型（sys_category.category_type）：分类即题材频道，不分风格/受众（男女频不做） */
-export const CATEGORY_TYPE = [
-  { value: 'theme', label: '题材' }
-]
-
-/** 标签维度（sys_tag.tag_type）：hot 热门标签 / main 主分类 / theme 主题 / role 角色 / plot 情节 */
+/** 标签维度（sys_tag.tag_type）：hot 热门标签 / theme 主题 / role 角色 / plot 情节 */
 export const TAG_TYPE = [
   { value: 'hot', label: '热门标签' },
-  { value: 'main', label: '主分类' },
   { value: 'theme', label: '主题' },
   { value: 'role', label: '角色' },
   { value: 'plot', label: '情节' }
@@ -35,7 +29,6 @@ export const TAG_TYPE = [
 /** 标签分组建议（sys_tag.group_name）：各维度下常用的分区块标题 */
 export const TAG_GROUP_SUGGESTIONS = {
   hot: ['热门标签'],
-  main: ['男频题材', '女频题材'],
   theme: ['男频主题', '女频主题', '通用主题'],
   role: ['人物身份', '情感关系'],
   plot: ['逆袭爽感', '穿越重生', '情感关系', '题材设定']

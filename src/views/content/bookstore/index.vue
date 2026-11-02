@@ -34,6 +34,7 @@
       :loading="loading"
       :total="total"
       empty-text="暂无书城作品数据"
+      row-key="workId"
       @page-change="loadList"
       @size-change="loadList"
     >

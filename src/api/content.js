@@ -2,52 +2,11 @@ import request, { adminV1Request } from '@/utils/request'
 
 /**
  * B 模块（内容与作品）PC 后台 API
- * 依据：smartscript-content 模块 SysCategoryController / SysTagController
+ * 依据：smartscript-content 模块 SysTagController（作品只按标签归属，频道由 sys_category 顶层记录提供）
  * 统一前缀 /api/v1/admin/content，鉴权走若依 RBAC（Bearer Token）
  */
 
 const ADMIN_PREFIX = '/api/v1/admin/content'
-
-// ---------------- 剧本分类 ----------------
-
-/** 分类分页列表（categoryName 模糊、categoryType/status 精确） */
-export function listCategory(query) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category/list`,
-    method: 'get',
-    params: query
-  })
-}
-
-/** 新增分类 */
-export function addCategory(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category`,
-    method: 'post',
-    data
-  })
-}
-
-/** 编辑分类 */
-export function updateCategory(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category`,
-    method: 'put',
-    data
-  })
-}
-
-/** 启用/停用分类（单一职责：仅改 status） */
-export function changeCategoryStatus(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category/changeStatus`,
-    method: 'put',
-    data
-  })
-}
-
-/** 删除分类（单个；被作品引用时后端拒绝） */
-export function delCategory(categoryId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/category/${categoryId}`,
-    method: 'delete'
-  })
-}
 
 // ---------------- 标签 ----------------
 
@@ -84,7 +43,7 @@ export function delTag(tagIds) {
 
 // ---------------- 作品管理 ----------------
 
-/** 作品分页列表（title 模糊，authorId/genreId/status/workType/tradeType 精确） */
+/** 作品分页列表（title 模糊，authorId/tagId/status/workType/tradeType 精确） */
 export function listWork(query) {
   return adminV1Request({ url: `${ADMIN_PREFIX}/work/list`,
     method: 'get',

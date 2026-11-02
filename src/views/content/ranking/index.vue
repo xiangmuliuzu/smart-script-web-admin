@@ -12,6 +12,7 @@
       :loading="loading"
       :show-pagination="false"
       empty-text="暂无榜单数据"
+      row-key="workId"
     >
       <el-table-column label="排名" width="80">
         <template #default="{ $index }">
@@ -22,7 +23,6 @@
       </el-table-column>
       <el-table-column prop="title" label="作品标题" min-width="160" show-overflow-tooltip />
       <el-table-column prop="authorName" label="作者" width="120" show-overflow-tooltip />
-      <el-table-column prop="genreName" label="分类" width="100" />
       <el-table-column :label="currentBoard.metricLabel" width="160">
         <template #default="{ row }">
           {{ activeType === 'new' ? (row.shelfTime || '—') : (row.score ?? '—') }}

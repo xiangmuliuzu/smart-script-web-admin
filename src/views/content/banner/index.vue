@@ -31,6 +31,7 @@
       :loading="loading"
       :total="total"
       empty-text="暂无Banner数据"
+      row-key="bannerId"
       @page-change="loadList"
       @size-change="loadList"
     >

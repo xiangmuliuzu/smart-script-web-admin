@@ -38,9 +38,6 @@
       <el-table-column prop="authorName" label="作者" width="130" show-overflow-tooltip>
         <template #default="{ row }">{{ row.authorName || '—' }}</template>
       </el-table-column>
-      <el-table-column prop="genreName" label="题材" width="120" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.genreName || '—' }}</template>
-      </el-table-column>
       <el-table-column prop="workType" label="作品类型" width="130">
         <template #default="{ row }">{{ workTypeLabel(row.workType) }}</template>
       </el-table-column>
@@ -84,7 +81,6 @@
             <el-descriptions-item label="作品编号">{{ detail.workId }}</el-descriptions-item>
             <el-descriptions-item label="作品名称">{{ detail.title || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="题材">{{ detail.genreName || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作品类型">{{ workTypeLabel(detail.workType) }}</el-descriptions-item>
             <el-descriptions-item label="上架状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>

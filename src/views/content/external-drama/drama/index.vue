@@ -55,6 +55,7 @@
       :loading="loading"
       :total="total"
       empty-text="暂无视频数据"
+      row-key="dramaId"
       @page-change="loadList"
       @size-change="loadList"
       @selection-change="handleSelectionChange"

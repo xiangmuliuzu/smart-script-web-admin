@@ -56,12 +56,6 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="filterForm.genre" placeholder="全部题材" style="width: 140px">
-            <el-option label="全部题材" value="" />
-            <el-option v-for="g in genreOptions" :key="g" :label="g" :value="g" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
           <el-date-picker
             v-model="filterForm.startDate"
             type="date"
@@ -100,7 +94,6 @@
             {{ getTypeText(row.workType) }}
           </template>
         </el-table-column>
-        <el-table-column prop="genreName" label="题材" width="100" />
         <el-table-column prop="authorName" label="作者" width="120" />
         <el-table-column prop="createTime" label="提交时间" width="160" />
         <el-table-column label="AI评分" width="100">
@@ -166,7 +159,6 @@
         <el-descriptions-item label="作品名称">{{ currentReview.workTitle }}</el-descriptions-item>
         <el-descriptions-item label="作者">{{ currentReview.authorName }}</el-descriptions-item>
         <el-descriptions-item label="类型">{{ getTypeText(currentReview.workType) }}</el-descriptions-item>
-        <el-descriptions-item label="题材">{{ currentReview.genreName }}</el-descriptions-item>
         <el-descriptions-item label="AI评分">{{ currentReview.aiScore != null ? currentReview.aiScore + '分' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentReview.createTime }}</el-descriptions-item>
       </el-descriptions>
@@ -208,7 +200,6 @@
         <el-descriptions-item label="作品名称">{{ currentDetail.workTitle }}</el-descriptions-item>
         <el-descriptions-item label="作者">{{ currentDetail.authorName }}</el-descriptions-item>
         <el-descriptions-item label="类型">{{ getTypeText(currentDetail.workType) }}</el-descriptions-item>
-        <el-descriptions-item label="题材">{{ currentDetail.genreName }}</el-descriptions-item>
         <el-descriptions-item label="AI评分">{{ currentDetail.aiScore != null ? currentDetail.aiScore + '分' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="AI风险等级">
           <el-tag :type="getRiskLevelType(aiResultOf(currentDetail).level)" size="small">
@@ -273,13 +264,9 @@ const { handleContactUser } = useContactUser({
 const filterForm = ref({
   status: '',
   type: '',
-  genre: '',
   startDate: '',
   endDate: ''
 })
-
-// 题材选项（与 sys_category theme 分类对齐）
-const genreOptions = ['玄幻', '仙侠', '武侠', '都市', '悬疑', '历史', '科幻', '言情', '游戏', '二次元', '军事', '体育']
 
 // 类型映射（sys_work.work_type 枚举）
 const getTypeText = (type) => {
@@ -423,7 +410,6 @@ const buildQuery = () => {
   const q = {}
   if (filterForm.value.status) q.status = filterForm.value.status
   if (filterForm.value.type) q.workType = filterForm.value.type
-  if (filterForm.value.genre) q.genreName = filterForm.value.genre
   if (filterForm.value.startDate) q.beginTime = filterForm.value.startDate
   if (filterForm.value.endDate) q.endTime = filterForm.value.endDate + ' 23:59:59'
   return q

@@ -39,6 +39,11 @@
               <el-option v-for="t in TRADE_TYPE" :key="t.value" :label="t.label" :value="t.value" />
             </el-select>
           </el-form-item>
+          <el-form-item>
+            <el-select v-model="allQuery.tagId" placeholder="全部标签" style="width: 160px" clearable>
+              <el-option v-for="t in tagOptions" :key="t.tagId" :label="t.tagName" :value="t.tagId" />
+            </el-select>
+          </el-form-item>
         </FilterBar>
 
         <TableCard
@@ -48,6 +53,7 @@
           :loading="allLoading"
           :total="allTotal"
           empty-text="暂无作品数据"
+          row-key="workId"
           @page-change="loadAllList"
           @size-change="loadAllList"
         >
@@ -58,7 +64,17 @@
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="280" show-overflow-tooltip />
           <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="genreName" label="分类" min-width="140" show-overflow-tooltip />
+          <el-table-column label="标签" min-width="220">
+            <template #default="{ row }">
+              <span v-if="!row.tags || row.tags.length === 0">—</span>
+              <el-tag
+                v-for="tag in row.tags"
+                :key="tag.tagId"
+                size="small"
+                class="work-tag"
+              >{{ tag.tagName }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="viewCount" label="浏览量" width="100" />
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
@@ -103,7 +119,15 @@
           <el-descriptions v-loading="detailDialog.loading" :column="2" border>
             <el-descriptions-item label="作品标题" :span="2">{{ detail.title || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="分类">{{ detail.genreName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="标签">
+              <span v-if="!detail.tags || detail.tags.length === 0">—</span>
+              <el-tag
+                v-for="tag in detail.tags"
+                :key="tag.tagId"
+                size="small"
+                class="work-tag"
+              >{{ tag.tagName }}</el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="价格">{{ detail.price ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="交易类型">{{ contentEnumLabel(TRADE_TYPE, detail.tradeType) }}</el-descriptions-item>
             <el-descriptions-item label="作品状态">
@@ -194,6 +218,7 @@
           :loading="bookLoading"
           :total="bookTotal"
           empty-text="书城暂无已上架作品"
+          row-key="workId"
           @page-change="loadBookList"
           @size-change="loadBookList"
         >
@@ -210,7 +235,17 @@
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="300" show-overflow-tooltip />
           <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="genreName" label="分类" min-width="140" show-overflow-tooltip />
+          <el-table-column label="标签" min-width="220">
+            <template #default="{ row }">
+              <span v-if="!row.tags || row.tags.length === 0">—</span>
+              <el-tag
+                v-for="tag in row.tags"
+                :key="tag.tagId"
+                size="small"
+                class="work-tag"
+              >{{ tag.tagName }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="推荐状态" width="120">
             <template #default="{ row }">
               <el-tag :type="recommendTagType(row.recommendStatus)" size="small">
@@ -338,7 +373,8 @@ import TableCard from '@/components/TableCard.vue'
 import CoverThumb from './cover-thumb.vue'
 import {
   listWork, getWork, listWorkChapters,
-  listBookstore, getBookstore, updateBookstoreExt
+  listBookstore, getBookstore, updateBookstoreExt,
+  listTag
 } from '@/api/content'
 import { TRADE_TYPE, contentEnumLabel } from '@/constants/contentEnum'
 
@@ -350,7 +386,8 @@ const activeTab = ref('all')
 const allLoading = ref(false)
 const allList = ref([])
 const allTotal = ref(0)
-const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', authorName: '', status: '', tradeType: '' })
+const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', authorName: '', status: '', tradeType: '', tagId: null })
+const tagOptions = ref([])
 
 const STATUS_LABEL_MAP = {
   draft: '草稿',
@@ -382,7 +419,8 @@ function buildAllQuery() {
     title: allQuery.title || undefined,
     status: allQuery.status || undefined,
     authorName: allQuery.authorName || undefined,
-    tradeType: allQuery.tradeType || undefined
+    tradeType: allQuery.tradeType || undefined,
+    tagId: allQuery.tagId || undefined
   }
 }
 
@@ -410,6 +448,7 @@ function handleAllReset() {
   allQuery.status = ''
   allQuery.authorName = ''
   allQuery.tradeType = ''
+  allQuery.tagId = null
   handleAllQuery()
 }
 
@@ -664,7 +703,17 @@ function handleTabChange(name) {
 onMounted(() => {
   allLoaded = true
   loadAllList()
+  loadTagOptions()
 })
+
+async function loadTagOptions() {
+  try {
+    const res = await listTag({ pageNum: 1, pageSize: 1000 })
+    tagOptions.value = res?.rows || []
+  } catch {
+    tagOptions.value = []
+  }
+}
 </script>
 
 <style scoped>
@@ -672,6 +721,10 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+.work-tag {
+  margin-right: 6px;
+  margin-bottom: 2px;
 }
 </style>
 

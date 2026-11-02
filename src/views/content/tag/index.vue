@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="标签管理" description="维度（角色/情节）→ 分组 → 标签，App 分类页按此展示">
+    <PageHeader title="标签管理" description="维度（热门/主题/角色/情节）→ 分组 → 标签，作品归属与 App 标签墙按此展示">
       <template #actions>
         <BlackButton v-permission="['content:tag:add']" @click="openCreate()">新增标签</BlackButton>
       </template>

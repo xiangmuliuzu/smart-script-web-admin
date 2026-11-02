@@ -248,9 +248,6 @@
                   <el-descriptions-item label="作品类型">
                     <el-tag size="small" type="primary">{{ workTypeLabel(currentRecord.workType) }}</el-tag>
                   </el-descriptions-item>
-                  <el-descriptions-item label="作品分类">
-                    {{ currentRecord.workCategory || '—' }}
-                  </el-descriptions-item>
                   <el-descriptions-item label="作品规模">
                     <span v-if="currentRecord.workWordCount">{{ currentRecord.workWordCount.toLocaleString() }} 字</span>
                     <span v-else-if="currentRecord.workDuration">{{ formatDuration(currentRecord.workDuration) }}</span>
