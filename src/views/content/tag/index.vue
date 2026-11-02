@@ -106,7 +106,6 @@
         </el-form-item>
         <el-form-item label="频道" prop="channelId">
           <el-select v-model="form.channelId" style="width: 100%">
-            <el-option label="通用（男女频均展示）" value="" />
             <el-option label="男生" :value="146" />
             <el-option label="女生" :value="147" />
           </el-select>
@@ -185,8 +184,8 @@ const dimRows = computed(() => rows.value.filter((row) => row.tagType === active
 
 const filteredRows = computed(() =>
   dimRows.value.filter((row) => {
-    // 频道为前端过滤；通用标签（channelId 为空）在男女频下均展示
-    if (channelTab.value && row.channelId !== null && row.channelId !== Number(channelTab.value)) {
+    // 频道为前端过滤：只展示对应频道的标签，不允许通用标签
+    if (channelTab.value && row.channelId !== Number(channelTab.value)) {
       return false
     }
     if (statusFilter.value && row.status !== statusFilter.value) return false
@@ -208,12 +207,9 @@ const groupCards = computed(() => {
       if (row.channelId === 146) {
         channelKey = 'channel_146'
         channelName = '男生频道'
-      } else if (row.channelId === 147) {
+      } else {
         channelKey = 'channel_147'
         channelName = '女生频道'
-      } else {
-        channelKey = 'channel_common'
-        channelName = '男女通用'
       }
       // 再确定分组名
       const groupName = row.groupName || ''
@@ -225,11 +221,10 @@ const groupCards = computed(() => {
       map.get(cardKey).tags.push(row)
     })
   return [...map.values()].sort((a, b) => {
-    // 男生频道排最前，然后女生，然后通用
+    // 男生频道排最前，然后女生
     const channelOrder = (key) => {
       if (key.startsWith('channel_146')) return 0
-      if (key.startsWith('channel_147')) return 1
-      return 2
+      return 1
     }
     return channelOrder(a.key) - channelOrder(b.key) || a.name.localeCompare(b.name)
   })
@@ -276,7 +271,8 @@ const rules = {
     { required: true, message: '请输入标签名称', trigger: 'blur' },
     { whitespace: true, message: '标签名称不能为空', trigger: 'blur' }
   ],
-  tagType: [{ required: true, message: '请选择维度', trigger: 'change' }]
+  tagType: [{ required: true, message: '请选择维度', trigger: 'change' }],
+  channelId: [{ required: true, message: '请选择频道', trigger: 'change' }]
 }
 
 /** 分组选项：当前维度的建议分组 ∪ 已存在分组 */
@@ -294,7 +290,7 @@ function openCreate(options = {}) {
     tagName: '',
     tagType: options.tagType || activeDim.value,
     groupName: options.groupName || '',
-    channelId: channelTab.value === '' ? '' : Number(channelTab.value),
+    channelId: channelTab.value === '' ? 146 : Number(channelTab.value),
     sort: null,
     status: '0',
     remark: ''
