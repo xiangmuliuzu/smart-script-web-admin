@@ -30,9 +30,6 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <el-select v-model="groupFilter" placeholder="全部分组" clearable style="width: 150px">
-          <el-option v-for="name in groupOptions" :key="name" :label="name" :value="name" />
-        </el-select>
         <el-input v-model="keyword" placeholder="搜索标签名称" clearable style="width: 180px" />
         <el-select v-model="statusFilter" placeholder="全部状态" clearable style="width: 120px">
           <el-option label="正常" value="0" />
@@ -162,7 +159,6 @@ const rows = ref([])
 
 const channelTab = ref('')
 const activeDim = ref('hot')
-const groupFilter = ref('')
 const keyword = ref('')
 const statusFilter = ref('')
 
@@ -184,16 +180,8 @@ function normalize(row) {
   }
 }
 
-/** 当前维度的全部标签（用于分组下拉选项） */
+/** 当前维度的全部标签 */
 const dimRows = computed(() => rows.value.filter((row) => row.tagType === activeDim.value))
-
-const groupOptions = computed(() => {
-  const names = new Set(TAG_GROUP_SUGGESTIONS[activeDim.value] || [])
-  dimRows.value.forEach((row) => {
-    if (row.groupName) names.add(row.groupName)
-  })
-  return [...names]
-})
 
 const filteredRows = computed(() =>
   dimRows.value.filter((row) => {
@@ -201,7 +189,6 @@ const filteredRows = computed(() =>
     if (channelTab.value && row.channelId !== null && row.channelId !== Number(channelTab.value)) {
       return false
     }
-    if (groupFilter.value && row.groupName !== groupFilter.value) return false
     if (statusFilter.value && row.status !== statusFilter.value) return false
     const key = keyword.value.trim()
     if (key && !(row.tagName || '').includes(key)) return false
@@ -250,14 +237,12 @@ const groupCards = computed(() => {
 
 const emptyText = computed(() => {
   if (!dimRows.value.length) return '暂无标签，点击新增标签创建'
-  if (groupFilter.value) return `分组「${groupFilter.value}」下暂无标签`
   return '没有符合条件的标签，试试调整筛选条件'
 })
 
 function selectDim(value) {
   if (activeDim.value === value) return
   activeDim.value = value
-  groupFilter.value = ''
 }
 
 async function loadList() {
