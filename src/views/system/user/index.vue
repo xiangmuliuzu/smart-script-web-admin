@@ -44,6 +44,9 @@
         </el-table-column>
         <el-table-column prop="nickName" label="昵称" min-width="120" />
         <el-table-column prop="phonenumber" label="手机号" width="130" />
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.email || '—' }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === '0' ? 'success' : 'danger'">{{ row.status === '0' ? '正常' : '停用' }}</el-tag>
