@@ -63,6 +63,9 @@
         <el-table-column prop="phoneMasked" label="手机号" width="130">
           <template #default="{ row }">{{ row.phoneMasked || '—' }}</template>
         </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.email || '—' }}</template>
+        </el-table-column>
         <el-table-column label="实名" width="100">
           <template #default="{ row }">
             <el-tag v-if="row.realNameStatus" :type="realNameTagType(row.realNameStatus)" size="small">
