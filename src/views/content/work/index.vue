@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="作品管理" description="管理全部作品及其章节、书城展示作品与推荐；书城作品仅列出被推荐到首页热门或搜索页的作品" />
+    <PageHeader title="作品管理" description="管理全部作品及其章节、内容推荐与推荐；内容推荐仅列出被推荐到首页热门或搜索页的作品" />
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- ============ 全部作品 ============ -->
@@ -35,6 +35,12 @@
             </el-select>
           </el-form-item>
           <el-form-item>
+            <el-select v-model="allQuery.channelId" placeholder="全部频道" style="width: 120px" clearable>
+              <el-option label="男频" :value="146" />
+              <el-option label="女频" :value="147" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
             <el-select v-model="allQuery.tradeType" placeholder="全部交易类型" style="width: 160px" clearable>
               <el-option v-for="t in TRADE_TYPE" :key="t.value" :label="t.label" :value="t.value" />
             </el-select>
@@ -63,6 +69,13 @@
             </template>
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="280" show-overflow-tooltip />
+          <el-table-column label="频道" width="80">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.channelId === 147 ? 'danger' : 'primary'">
+                {{ row.channelId === 147 ? '女频' : '男频' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
           <el-table-column label="标签" min-width="220">
             <template #default="{ row }">
@@ -191,8 +204,8 @@
         </el-dialog>
       </el-tab-pane>
 
-      <!-- ============ 书城作品（仅已上架，即出现在书城里的作品） ============ -->
-      <el-tab-pane label="书城作品" name="bookstore">
+      <!-- ============ 内容推荐（仅已上架，即出现在书城里的作品） ============ -->
+      <el-tab-pane label="内容推荐" name="bookstore">
         <FilterBar @query="handleBookQuery" @reset="handleBookReset">
           <el-form-item>
             <el-input
@@ -386,7 +399,7 @@ const activeTab = ref('all')
 const allLoading = ref(false)
 const allList = ref([])
 const allTotal = ref(0)
-const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', authorName: '', status: '', tradeType: '', tagId: null })
+const allQuery = reactive({ pageNum: 1, pageSize: 10, title: '', authorName: '', status: '', tradeType: '', tagId: null, channelId: null })
 const tagOptions = ref([])
 
 const STATUS_LABEL_MAP = {
@@ -420,7 +433,8 @@ function buildAllQuery() {
     status: allQuery.status || undefined,
     authorName: allQuery.authorName || undefined,
     tradeType: allQuery.tradeType || undefined,
-    tagId: allQuery.tagId || undefined
+    tagId: allQuery.tagId || undefined,
+    channelId: allQuery.channelId || undefined
   }
 }
 
@@ -449,6 +463,7 @@ function handleAllReset() {
   allQuery.authorName = ''
   allQuery.tradeType = ''
   allQuery.tagId = null
+  allQuery.channelId = null
   handleAllQuery()
 }
 
