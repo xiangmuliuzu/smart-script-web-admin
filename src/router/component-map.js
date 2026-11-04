@@ -8,6 +8,7 @@ import CopyrightSealReview from '@/views/copyright/SealReview.vue'
 import WithdrawReview from '@/views/copyright/WithdrawReview.vue'
 import ContractManage from '@/views/copyright/ContractManage.vue'
 import SettlementManage from '@/views/copyright/SettlementManage.vue'
+import SettlementWithdrawManage from '@/views/copyright/SettlementWithdrawManage.vue'
 import IncomeManage from '@/views/copyright/IncomeManage.vue'
 import CopyrightCertManage from '@/views/copyright/CopyrightCertManage.vue'
 import CopyrightApplicationManage from '@/views/copyright/CopyrightApplicationManage.vue'
@@ -62,6 +63,7 @@ export const componentMap = {
   'copyright/WithdrawReview': WithdrawReview,
   'copyright/ContractManage': ContractManage,
   'copyright/SettlementManage': SettlementManage,
+  'copyright/SettlementWithdrawManage': SettlementWithdrawManage,
   'copyright/IncomeManage': IncomeManage,
   // 兼容未跑菜单迁移的旧 component 标识
   'copyright/FinanceAbnormal': IncomeManage,
