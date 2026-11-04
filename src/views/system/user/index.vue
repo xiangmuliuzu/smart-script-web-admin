@@ -16,11 +16,10 @@
             <el-button type="primary" @click="load">搜索</el-button>
             <el-button v-permission="['system:user:add']" type="success" @click="openForm()">新增</el-button>
             <el-tooltip content="在表格勾选多个账号后批量授予角色" placement="top">
-              <span>
+              <span class="grant-btn-wrap">
                 <el-button
                   v-permission="['system:user:edit']"
                   type="warning"
-                  plain
                   :disabled="selection.length === 0"
                   @click="openGrant"
                 >
@@ -337,6 +336,10 @@ onMounted(load)
 <style scoped>
 .page { padding: 16px; }
 .toolbar { margin-bottom: 8px; }
+/* tooltip 的 span 会隔断 el-button 相邻间距，改用 flex gap 统一按钮间距 */
+.toolbar :deep(.el-form-item__content) { gap: 12px; }
+.toolbar :deep(.el-button + .el-button) { margin-left: 0; }
+.grant-btn-wrap { display: flex; }
 .pager { margin-top: 12px; justify-content: flex-end; display: flex; }
 .grant-users { display: flex; flex-wrap: wrap; gap: 6px; }
 .grant-user-tag { margin: 0; }
