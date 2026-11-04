@@ -63,7 +63,8 @@
                 </span>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                    <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                    <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -77,11 +78,12 @@
         </el-main>
       </el-container>
     </el-container>
+    <ChangePasswordDialog v-model="passwordDialogVisible" @success="handlePasswordChanged" />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
@@ -90,6 +92,7 @@ import { Files, Avatar, Right } from '@element-plus/icons-vue'
 import SidebarMenuItem from '@/components/SidebarMenuItem.vue'
 import AdminAnnouncementInbox from '@/components/messages/AdminAnnouncementInbox.vue'
 import AdminChatInbox from '@/components/messages/AdminChatInbox.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,8 +120,26 @@ function sanitize(nodes) {
 /** 服务端菜单树（permission store），无硬编码生产菜单回退 */
 const menuTree = computed(() => sanitize(permissionStore.sidebarRoutes))
 
+// 修改密码弹窗
+const passwordDialogVisible = ref(false)
+
+/** 改密成功后退出当前会话，强制用新密码重新登录 */
+const handlePasswordChanged = async () => {
+  try {
+    await userStore.logout()
+  } catch (error) {
+    console.error('退出失败:', error)
+  }
+  permissionStore.resetRoutes()
+  router.push('/login')
+}
+
 // 处理下拉菜单命令
 const handleCommand = async (command) => {
+  if (command === 'password') {
+    passwordDialogVisible.value = true
+    return
+  }
   if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确认退出登录？', '提示', {
