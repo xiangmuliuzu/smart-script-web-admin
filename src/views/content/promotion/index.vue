@@ -71,10 +71,6 @@
               :placeholder="activeSlotType === 'banner' ? '搜索 Banner / 作品' : '搜索作品 / 作者'"
               style="width: 200px"
             />
-            <template v-if="activeSlotType === 'banner'">
-              <el-button v-hasPermi="['content:promotion:edit']" size="small" @click="openSortDialog">调整展示顺序</el-button>
-              <el-button v-hasPermi="['content:promotion:add']" size="small" type="primary" @click="openBannerCreate()">＋ 新增 Banner</el-button>
-            </template>
           </div>
         </div>
 
@@ -117,21 +113,15 @@
                   </div>
                 </template>
                 <template v-else>
-                  <div
-                    class="mini-banner mini-banner--missing"
-                    :class="{ clickable: needsMaterial(row) }"
-                    @click="needsMaterial(row) && handleMaterialUpload(row)"
-                  >
+                  <div class="mini-banner mini-banner--missing">
                     {{ needsMaterial(row) ? '待上传' : '空闲' }}
                   </div>
                   <div class="material-main">
-                    <div v-if="needsMaterial(row)" class="work-title link-text" @click="handleMaterialUpload(row)">
-                      待上传素材
-                    </div>
+                    <div v-if="needsMaterial(row)" class="work-title">待上传素材</div>
                     <div v-else-if="row.current" class="work-title">{{ row.current.workTitle || '—' }}</div>
-                    <div v-else class="work-title muted">空闲位次 · 可新增运营 Banner</div>
+                    <div v-else class="work-title muted">空闲位次</div>
                     <div class="sub">
-                      {{ needsMaterial(row) ? '缺少 16:9 Banner 素材' : row.current ? '未绑定 Banner 素材' : '可新增运营 Banner' }}
+                      {{ needsMaterial(row) ? '缺少 16:9 Banner 素材' : row.current ? '未绑定 Banner 素材' : '可接受申请' }}
                     </div>
                   </div>
                 </template>
@@ -214,49 +204,7 @@
 
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
-              <template v-if="activeSlotType === 'banner'">
-                <el-button
-                  v-if="needsMaterial(row) && row.current"
-                  v-hasPermi="['content:promotion:add', 'content:promotion:edit']"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="handleMaterialUpload(row)"
-                >上传素材</el-button>
-                <el-button
-                  v-if="row.banner"
-                  v-hasPermi="['content:promotion:edit']"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openBannerEdit(row)"
-                >编辑</el-button>
-                <el-button
-                  v-if="row.banner"
-                  v-hasPermi="['content:promotion:edit']"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openSortDialog"
-                >排序</el-button>
-                <el-button
-                  v-if="row.banner"
-                  v-hasPermi="['content:promotion:remove']"
-                  link
-                  type="danger"
-                  size="small"
-                  @click="handleBannerDelete(row)"
-                >删除</el-button>
-                <el-button
-                  v-if="!row.banner && (row.state === 'idle' || row.state === 'disabled')"
-                  v-hasPermi="['content:promotion:add']"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openBannerCreate(row)"
-                >新增 Banner</el-button>
-              </template>
-              <template v-else>
+              <div class="op-cell">
                 <el-button
                   v-if="row.current"
                   v-hasPermi="['content:promotion:query']"
@@ -274,14 +222,30 @@
                   @click="handleOffline(row.current)"
                 >下架</el-button>
                 <el-button
-                  v-if="row.state === 'idle'"
+                  v-if="!row.current && row.state === 'idle'"
                   v-hasPermi="['content:promotion:grant']"
                   link
                   type="primary"
                   size="small"
                   @click="openGrant(row)"
                 >免费上架</el-button>
-              </template>
+                <el-button
+                  v-if="row.banner && activeSlotType === 'banner'"
+                  v-hasPermi="['content:promotion:edit']"
+                  link
+                  type="primary"
+                  size="small"
+                  @click="openBannerEdit(row)"
+                >编辑素材</el-button>
+                <el-button
+                  v-if="row.banner && activeSlotType === 'banner' && !row.current"
+                  v-hasPermi="['content:promotion:remove']"
+                  link
+                  type="danger"
+                  size="small"
+                  @click="handleBannerDelete(row)"
+                >删除素材</el-button>
+              </div>
             </template>
           </el-table-column>
 
@@ -320,7 +284,7 @@
       </el-card>
 
       <div class="promo-notice">
-        <span class="mark">i</span>付费申请优先占位；无人购买的位次由算法按热度补位（不收费，付费生效时自动顶替），搜索页不补位、顺延自然结果。轮播图视图已合并原 Banner 管理的全部操作。
+        <span class="mark">i</span>付费申请优先占位；无人购买的位次由算法按热度补位（不收费，付费生效时自动顶替），搜索页不补位、顺延自然结果。轮播位由作者提交素材，审核通过并支付后自动展示。
       </div>
     </template>
 
@@ -438,38 +402,40 @@
             <div v-else-if="row.rejectReason" class="sub">{{ row.rejectReason }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <template v-if="row.status === 'pending'">
+            <div class="op-cell">
+              <template v-if="row.status === 'pending'">
+                <el-button
+                  v-hasPermi="['content:promotion:audit']"
+                  size="small"
+                  type="primary"
+                  @click="handleApprove(row)"
+                >通过</el-button>
+                <el-button
+                  v-hasPermi="['content:promotion:audit']"
+                  link
+                  type="danger"
+                  size="small"
+                  @click="handleReject(row)"
+                >驳回</el-button>
+              </template>
               <el-button
-                v-hasPermi="['content:promotion:audit']"
-                size="small"
+                v-hasPermi="['content:promotion:query']"
+                link
                 type="primary"
-                @click="handleApprove(row)"
-              >通过</el-button>
+                size="small"
+                @click="openAppDetail(row)"
+              >详情</el-button>
               <el-button
+                v-if="canOffline(row)"
                 v-hasPermi="['content:promotion:audit']"
                 link
                 type="danger"
                 size="small"
-                @click="handleReject(row)"
-              >驳回</el-button>
-            </template>
-            <el-button
-              v-hasPermi="['content:promotion:query']"
-              link
-              type="primary"
-              size="small"
-              @click="openAppDetail(row)"
-            >详情</el-button>
-            <el-button
-              v-if="canOffline(row)"
-              v-hasPermi="['content:promotion:audit']"
-              link
-              type="danger"
-              size="small"
-              @click="handleOffline(row)"
-            >下架</el-button>
+                @click="handleOffline(row)"
+              >下架</el-button>
+            </div>
           </template>
         </el-table-column>
       </TableCard>
@@ -606,10 +572,10 @@
       </template>
     </el-dialog>
 
-    <!-- ==================== Banner 新增 / 编辑 / 上传素材 ==================== -->
+    <!-- ==================== Banner 编辑 ==================== -->
     <el-dialog
       v-model="bannerDialog.visible"
-      :title="bannerDialogTitle"
+      title="编辑 Banner 素材"
       width="600px"
       @closed="handleBannerDialogClosed"
     >
@@ -689,26 +655,6 @@
       </template>
     </el-dialog>
 
-    <!-- ==================== Banner 排序 ==================== -->
-    <el-dialog v-model="sortDialog.visible" title="调整展示顺序" width="540px">
-      <el-table :data="sortDialog.rows" size="small" style="width: 100%">
-        <el-table-column prop="title" label="Banner 素材" min-width="220" show-overflow-tooltip />
-        <el-table-column label="位次" width="140">
-          <template #default="{ row }">
-            <el-input-number v-model="row.sortOrder" :min="1" :max="9999" size="small" controls-position="right" />
-          </template>
-        </el-table-column>
-        <template #empty>
-          <el-empty description="暂无可排序的 Banner 素材" :image-size="64" />
-        </template>
-      </el-table>
-      <div class="sort-tip">位次数字越小越靠前；轮播位按位次与坑位序号对应。</div>
-      <template #footer>
-        <el-button @click="sortDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="sortDialog.saving" @click="saveSortDialog">保存</el-button>
-      </template>
-    </el-dialog>
-
     <!-- ==================== 批量设置价格 ==================== -->
     <el-dialog v-model="batchDialog.visible" title="批量设置价格档" width="420px">
       <el-form :model="batchDialog" label-width="90px">
@@ -742,6 +688,17 @@
         <el-descriptions-item label="作者">{{ appDetail.authorName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="资源位">{{ slotTypeName(appDetail.slotType) }}</el-descriptions-item>
         <el-descriptions-item label="位次">{{ appDetail.slotNo ?? '—' }}</el-descriptions-item>
+        <el-descriptions-item v-if="appDetail.slotType === 'banner'" label="轮播素材" :span="2">
+          <el-image
+            v-if="appDetail.materialUrl"
+            :src="resolveMediaUrl(appDetail.materialUrl)"
+            :preview-src-list="[resolveMediaUrl(appDetail.materialUrl)]"
+            preview-teleported
+            fit="cover"
+            class="banner-detail-preview"
+          />
+          <span v-else class="sub">未提交</span>
+        </el-descriptions-item>
         <el-descriptions-item label="投放时段" :span="2">{{ formatSlotRange(appDetail.startTime, appDetail.endTime) }}</el-descriptions-item>
         <el-descriptions-item label="投放天数">{{ appDetail.days ?? '—' }}</el-descriptions-item>
         <el-descriptions-item label="金额">¥{{ formatMoney(appDetail.amount) }}</el-descriptions-item>
@@ -769,11 +726,8 @@ import BlackButton from '@/components/BlackButton.vue'
 import TableCard from '@/components/TableCard.vue'
 import {
   listWork,
-  listBanner,
-  addBanner,
   updateBanner,
   changeBannerStatus,
-  changeBannerSort,
   deleteBanner,
   uploadFile
 } from '@/api/content'
@@ -784,8 +738,7 @@ import {
   auditPromotionApplication,
   offlinePromotionApplication,
   grantPromotion,
-  updatePromotionPrices,
-  bindPromotionBanner
+  updatePromotionPrices
 } from '@/api/content/promotion'
 import { resolveMediaUrl } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
@@ -1423,8 +1376,8 @@ async function submitGrant() {
   }
 }
 
-// ============ Banner 新增 / 编辑 / 上传 ============
-const bannerDialog = reactive({ visible: false, mode: 'create', slotNo: null, applyId: null, submitting: false })
+// ============ Banner 编辑 ============
+const bannerDialog = reactive({ visible: false, slotNo: null, submitting: false })
 const bannerUploading = ref(false)
 const bannerFormRef = ref()
 const bannerForm = reactive({
@@ -1446,12 +1399,6 @@ const bannerRules = {
   imageUrl: [{ required: true, message: '请上传 Banner 素材', trigger: 'change' }]
 }
 
-const bannerDialogTitle = computed(() => {
-  if (bannerDialog.mode === 'edit') return '编辑 Banner 素材'
-  if (bannerDialog.applyId) return '上传 Banner 素材'
-  return '新增 Banner'
-})
-
 function resetBannerForm() {
   Object.assign(bannerForm, {
     bannerId: null,
@@ -1463,21 +1410,6 @@ function resetBannerForm() {
     endTime: '',
     remark: ''
   })
-}
-
-function firstIdleSlotNo() {
-  const slots = slotPages.banner?.slots || []
-  const idle = slots.find((slot) => !slot.banner && (slot.state === 'idle' || slot.state === 'disabled'))
-  return idle?.slotNo || slots[0]?.slotNo || null
-}
-
-async function openBannerCreate(row) {
-  await ensureBannerWorks()
-  resetBannerForm()
-  bannerDialog.mode = 'create'
-  bannerDialog.applyId = null
-  bannerDialog.slotNo = row?.slotNo || firstIdleSlotNo()
-  bannerDialog.visible = true
 }
 
 async function openBannerEdit(row) {
@@ -1493,25 +1425,6 @@ async function openBannerEdit(row) {
     endTime: row.banner.endTime || '',
     remark: row.banner.remark || ''
   })
-  bannerDialog.mode = 'edit'
-  bannerDialog.applyId = null
-  bannerDialog.slotNo = row.slotNo
-  bannerDialog.visible = true
-}
-
-async function handleMaterialUpload(row) {
-  if (!row?.current) return
-  await ensureBannerWorks()
-  resetBannerForm()
-  Object.assign(bannerForm, {
-    title: row.current.workTitle || '',
-    linkId: row.current.workId || null,
-    status: 'on',
-    startTime: row.current.startTime || '',
-    endTime: row.current.endTime || ''
-  })
-  bannerDialog.mode = 'create'
-  bannerDialog.applyId = row.current.applyId
   bannerDialog.slotNo = row.slotNo
   bannerDialog.visible = true
 }
@@ -1569,20 +1482,6 @@ async function handleGrantMaterialUpload(options) {
   }
 }
 
-async function resolveBannerId(slotNo, title) {
-  try {
-    const res = await listBanner({ pageNum: 1, pageSize: 200, position: 'home_top' })
-    const rows = res?.rows || []
-    const sameSlot = rows.filter((item) => Number(item.sortOrder) === Number(slotNo))
-    const sameTitle = sameSlot.filter((item) => (item.title || '') === (title || ''))
-    const picked = (sameTitle.length ? sameTitle : sameSlot)
-      .sort((a, b) => Number(b.bannerId) - Number(a.bannerId))[0]
-    return picked?.bannerId || null
-  } catch {
-    return null
-  }
-}
-
 async function submitBanner() {
   if (!bannerFormRef.value) return
   await bannerFormRef.value.validate(async (valid) => {
@@ -1602,21 +1501,8 @@ async function submitBanner() {
       remark: bannerForm.remark || ''
     }
     try {
-      if (bannerDialog.mode === 'edit') {
-        await updateBanner({ ...payload, bannerId: bannerForm.bannerId })
-        ElMessage.success('Banner 素材已更新')
-      } else {
-        await addBanner(payload)
-        if (bannerDialog.applyId) {
-          const bannerId = await resolveBannerId(bannerDialog.slotNo, payload.title)
-          if (bannerId) {
-            await bindPromotionBanner(bannerDialog.applyId, bannerId)
-          } else {
-            ElMessage.warning('素材已创建，但自动绑定失败，请刷新后重试')
-          }
-        }
-        ElMessage.success('Banner 素材已上传')
-      }
+      await updateBanner({ ...payload, bannerId: bannerForm.bannerId })
+      ElMessage.success('Banner 素材已更新')
       bannerDialog.visible = false
       await loadSlot('banner')
       if (activeTab.value === 'price') initPriceRows()
@@ -1656,47 +1542,6 @@ async function handleBannerDelete(row) {
     if (activeTab.value === 'price') initPriceRows()
   } catch {
     // 错误信息已由 request 拦截器统一提示
-  }
-}
-
-// ============ Banner 排序 ============
-const sortDialog = reactive({ visible: false, saving: false, rows: [] })
-
-function openSortDialog() {
-  const slots = slotPages.banner?.slots || []
-  sortDialog.rows = slots
-    .filter((slot) => slot.banner)
-    .map((slot) => ({
-      bannerId: slot.banner.bannerId,
-      title: slot.banner.title || slot.current?.workTitle || '未命名 Banner',
-      original: slot.banner.sortOrder,
-      sortOrder: slot.banner.sortOrder
-    }))
-  if (!sortDialog.rows.length) {
-    ElMessage.info('暂无可排序的 Banner 素材')
-    return
-  }
-  sortDialog.visible = true
-}
-
-async function saveSortDialog() {
-  const changed = sortDialog.rows.filter((row) => Number(row.sortOrder) !== Number(row.original))
-  if (!changed.length) {
-    sortDialog.visible = false
-    return
-  }
-  sortDialog.saving = true
-  try {
-    for (const row of changed) {
-      await changeBannerSort({ bannerId: row.bannerId, sortOrder: Number(row.sortOrder) })
-    }
-    ElMessage.success('展示顺序已更新')
-    sortDialog.visible = false
-    await loadSlot('banner')
-  } catch {
-    // 错误信息已由 request 拦截器统一提示
-  } finally {
-    sortDialog.saving = false
   }
 }
 
@@ -1966,11 +1811,6 @@ onMounted(async () => {
   font-size: 9px;
   letter-spacing: 0;
 }
-.mini-banner--missing.clickable {
-  cursor: pointer;
-  color: #254e90;
-  border-color: #254e90;
-}
 .work-thumb {
   flex: 0 0 26px;
   width: 26px;
@@ -2239,5 +2079,38 @@ onMounted(async () => {
   color: #8a919c;
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* 操作列：防止按钮互相挤压，并恢复链接按钮的文本样式 */
+.op-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.op-cell :deep(.el-button + .el-button) {
+  margin-left: 0 !important;
+}
+.op-cell :deep(.el-button.is-link) {
+  height: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  font-size: 12px !important;
+}
+.op-cell :deep(.el-button.is-link.el-button--primary) {
+  color: var(--el-color-primary) !important;
+}
+.op-cell :deep(.el-button.is-link.el-button--danger) {
+  color: #f56c6c !important;
+}
+.op-cell :deep(.el-button.is-link.el-button--primary:hover),
+.op-cell :deep(.el-button.is-link.el-button--danger:hover) {
+  opacity: 0.75;
+}
+.banner-detail-preview {
+  width: 240px;
+  height: 135px;
+  border-radius: 4px;
 }
 </style>

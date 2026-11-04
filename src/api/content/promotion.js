@@ -67,12 +67,3 @@ export function updatePromotionPrices(data) {
     data
   })
 }
-
-/** 轮播位绑定素材 */
-export function bindPromotionBanner(applyId, bannerId) {
-  return adminV1Request({
-    url: `${PROMOTION_PREFIX}/applications/${applyId}/banner`,
-    method: 'put',
-    params: { bannerId }
-  })
-}
