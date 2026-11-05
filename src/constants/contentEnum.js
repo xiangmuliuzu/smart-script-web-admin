@@ -14,7 +14,7 @@
  *   取云端库 sys_external_drama / sys_banner 对应列实测值。
  * - RANKING_TYPE：榜单四类（App 与 PC 一致；交易热度榜因剧本通常只交易一次已下线），
  *   方案 A「时间窗口 + 分级」，type 与主指标强绑定：
- *   view 近 7 天阅读量 / favorite 近 7 天收藏数 /
+ *   view 累计浏览量 / favorite 累计收藏量 /
  *   rating 平均评分 / new 近 30 天上架按阅读量。
  */
 
@@ -64,7 +64,7 @@ export const BANNER_POSITION = [
 /** 榜单类型（type 与主指标强绑定） */
 export const RANKING_TYPE = [
   { value: 'view', label: '热门榜', metricLabel: '累计浏览量' },
-  { value: 'favorite', label: '收藏榜', metricLabel: '近7天收藏' },
+  { value: 'favorite', label: '收藏榜', metricLabel: '累计收藏' },
   { value: 'rating', label: '评分榜', metricLabel: '综合评分' },
   { value: 'new', label: '新书榜', metricLabel: '上架时间' }
 ]
