@@ -71,9 +71,9 @@
           <el-table-column prop="title" label="标题" min-width="280" show-overflow-tooltip />
           <el-table-column label="频道" width="80">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.channelId === 147 ? 'danger' : 'primary'">
-                {{ row.channelId === 147 ? '女频' : '男频' }}
-              </el-tag>
+              <el-tag v-if="row.channelId === 146" size="small" type="primary">男频</el-tag>
+              <el-tag v-else-if="row.channelId === 147" size="small" type="danger">女频</el-tag>
+              <el-tag v-else size="small" type="info">未设置</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
@@ -117,6 +117,11 @@
           <el-descriptions v-loading="detailDialog.loading" :column="2" border>
             <el-descriptions-item label="作品标题" :span="2">{{ detail.title || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="频道">
+              <span v-if="detail.channelId === 146">男频</span>
+              <span v-else-if="detail.channelId === 147">女频</span>
+              <span v-else>未设置</span>
+            </el-descriptions-item>
             <el-descriptions-item label="标签">
               <span v-if="!detail.tags || detail.tags.length === 0">—</span>
               <el-tag
