@@ -90,7 +90,7 @@
         <el-descriptions-item label="手机号">{{ detail.phoneMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="姓名（掩码）">{{ detail.realNameMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="证件号（掩码）">{{ detail.idNumberMasked || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="身份证材料"><template v-if="detail.materialRefs?.length"><el-button v-for="(token, index) in detail.materialRefs" :key="index" link type="primary" @click="downloadMaterial(token, index)">{{ detail.materialRefs.length === 1 ? '下载历史材料' : index === 0 ? '下载正面' : '下载反面' }}</el-button></template><span v-else>无材料</span></el-descriptions-item>
+        <el-descriptions-item label="身份证材料"><template v-if="detail.materialRefs?.length"><el-button v-for="(_, index) in detail.materialRefs" :key="index" link type="primary" :disabled="downloading" @click="downloadMaterial(index)">{{ detail.materialRefs.length === 1 ? '下载历史材料' : index === 0 ? '下载正面' : '下载反面' }}</el-button></template><span v-else>无材料</span></el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ formatTime(detail.submittedAt) }}</el-descriptions-item>
         <el-descriptions-item label="认证时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
@@ -124,6 +124,7 @@ const detailVisible = ref(false)
 const detail = ref(null)
 const detailForbidden = ref(false)
 const saving = ref(false)
+const downloading = ref(false)
 
 
 function statusLabel(status) {
@@ -186,27 +187,45 @@ function onPageChange(page) {
   load()
 }
 
+async function fetchDetail(applicationId) {
+  const res = await getRealNameApplication(applicationId)
+  return res?.data || res
+}
+
 async function openDetail(row) {
   detail.value = null
   detailForbidden.value = false
   detailVisible.value = true
   try {
-    const res = await getRealNameApplication(row.applicationId)
-    detail.value = res?.data || res
+    detail.value = await fetchDetail(row.applicationId)
   } catch (e) {
     // 后端仍是最终边界：权限不足时只展示受限提示，不弹出误导性错误
     detailForbidden.value = true
   }
 }
 
-async function downloadMaterial(token, index) {
+async function downloadMaterial(index) {
+  if (downloading.value || !detail.value) return
+  downloading.value = true
   try {
+    // 材料令牌 5 分钟有效且一次性：每次下载前重新拉详情取新令牌。
+    // 否则上次超时/中断后令牌已被消费，再点就会直接返回「资源不存在」。
+    const fresh = await fetchDetail(detail.value.applicationId)
+    detail.value = fresh
+    const token = fresh.materialRefs?.[index]
+    if (!token) throw new Error('材料不可用，请让申请人重新上传')
     const result = await redeemMaterialToken(token)
     const url = (result?.data || result)?.accessUrl
     if (!url) throw new Error('材料访问链接不可用')
-    await downloadMaterialContent(url, detail.value.materialRefs.length === 1 ? '历史实名材料' : index === 0 ? '身份证正面.png' : '身份证反面.png')
-    await openDetail(detail.value)
-  } catch (e) { ElMessage.error(e?.message || '材料下载失败，请重试') }
+    const fileName = fresh.materialRefs.length === 1
+      ? '历史实名材料'
+      : index === 0 ? '身份证正面.png' : '身份证反面.png'
+    await downloadMaterialContent(url, fileName)
+  } catch (e) {
+    ElMessage.error(e?.message || '材料下载失败，请重试')
+  } finally {
+    downloading.value = false
+  }
 }
 async function decide(decision) {
   if (saving.value) return

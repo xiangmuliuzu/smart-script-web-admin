@@ -43,7 +43,9 @@ export async function downloadMaterialContent(accessUrl, fileName) {
     url: accessUrl,
     method: 'get',
     responseType: 'blob',
-    headers: { isToken: true }
+    headers: { isToken: true },
+    // 身份证原图可达数 MB，默认 15 秒在慢网络下会中断；单次下载放宽到 60 秒。
+    timeout: 60000
   })
   const raw = res instanceof Blob ? res : new Blob([res])
   // 强制为不可执行的通用类型，杜绝浏览器按 HTML/SVG 解析
