@@ -1,14 +1,11 @@
 <template>
   <PageContainer>
-    <PageHeader title="征集项目管理" description="买方发布的剧本征集令与投稿作品管理（对应 sys_demand / sys_demand_submission）">
-      <template #actions>
-        <BlackButton @click="handlePublish">发布征集令</BlackButton>
-      </template>
+    <PageHeader title="任务管理" description="买方发布的剧本接单任务管理（对应 sys_demand，抢单制·先到先得），本页面仅支持查看详情">
     </PageHeader>
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
-        <el-select v-model="query.status" placeholder="全部项目状态" style="width: 150px" clearable>
+        <el-select v-model="query.status" placeholder="全部任务状态" style="width: 150px" clearable>
           <el-option
             v-for="opt in demandStatusOptions"
             :key="opt.value"
@@ -20,7 +17,7 @@
       <el-form-item>
         <el-input
           v-model="query.keyword"
-          placeholder="征集标题搜索"
+          placeholder="任务标题搜索"
           style="width: 200px"
           clearable
           @keyup.enter="handleQuery"
@@ -37,8 +34,8 @@
       @page-change="loadList"
       @size-change="loadList"
     >
-      <el-table-column prop="demandNo" label="征集编号" width="120" />
-      <el-table-column prop="title" label="征集标题" min-width="160" />
+      <el-table-column prop="demandNo" label="任务编号" width="120" />
+      <el-table-column prop="title" label="任务标题" min-width="160" />
       <el-table-column prop="client" label="发布方" width="120" />
       <el-table-column label="标签" min-width="140">
         <template #default="{ row }">
@@ -51,64 +48,43 @@
           <span class="price-text">{{ row.budgetText }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="deadline" label="截止日期" width="120" />
-      <el-table-column prop="submissionCount" label="投稿数" width="90" />
-      <el-table-column label="状态" width="100">
+      <el-table-column label="托管" width="110">
         <template #default="{ row }">
+          <el-tag :type="escrowTagType(row.escrowStatus)" size="small">{{ row.escrowStatusLabel || '-' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="完成时限" width="100">
+        <template #default="{ row }">{{ row.durationHours ? row.durationHours + ' 小时' : '-' }}</template>
+      </el-table-column>
+      <el-table-column label="接单人" width="110">
+        <template #default="{ row }">
+          <span v-if="row.acceptedCreatorName || row.acceptedCreatorId">{{ row.acceptedCreatorName || ('#' + row.acceptedCreatorId) }}</span>
+          <span v-else class="text-muted">未接单</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="110">
+        <template #default="{ row }">
+          <el-tag v-if="row.overdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
           <StatusTag type="demand" :status="row.status" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="110" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleViewSubmissions(row)">查看投稿</el-button>
+          <el-button size="small" @click="handleViewDetail(row)">查看详情</el-button>
         </template>
       </el-table-column>
     </TableCard>
 
-    <!-- 发布征集令弹窗 -->
-    <el-dialog v-model="publishVisible" title="发布征集令" width="600px">
-      <el-form ref="publishFormRef" :model="publishForm" :rules="publishRules" label-width="100px">
-        <el-form-item label="征集标题" prop="title">
-          <el-input v-model="publishForm.title" placeholder="请输入征集标题" maxlength="100" show-word-limit />
-        </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-select v-model="publishForm.tags" multiple filterable placeholder="请从标签库中选择" style="width: 100%">
-            <el-option
-              v-for="tag in availableTags"
-              :key="tag.tagId"
-              :label="tag.tagName"
-              :value="tag.tagName"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="预算(元)" prop="budget">
-          <el-input-number v-model="publishForm.budget" :min="0" :precision="2" :step="10000" style="width: 100%" placeholder="设置征集预算" />
-        </el-form-item>
-        <el-form-item label="截止日期" prop="deadline">
-          <el-date-picker v-model="publishForm.deadline" type="date" placeholder="选择截止日期" value-format="YYYY-MM-DD" :disabled-date="disablePastDate" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="联系方式" prop="contactInfo">
-          <el-input v-model="publishForm.contactInfo" placeholder="请输入联系方式" />
-        </el-form-item>
-        <el-form-item label="征集要求">
-          <el-input v-model="publishForm.requirement" type="textarea" :rows="4" maxlength="500" show-word-limit placeholder="请输入征集要求（选填）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="publishVisible = false">取消</el-button>
-        <el-button type="primary" :loading="publishing" @click="handlePublishSubmit">发布</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 征集项目详情 + 投稿作品明细 -->
-    <el-dialog v-model="detailVisible" title="征集项目详情" width="820px">
+    <!-- 任务详情（只读） -->
+    <el-dialog v-model="detailVisible" title="任务详情" width="820px">
       <div v-loading="detailLoading">
         <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="征集编号">{{ detail.demandNo }}</el-descriptions-item>
-          <el-descriptions-item label="项目状态">
+          <el-descriptions-item label="任务编号">{{ detail.demandNo }}</el-descriptions-item>
+          <el-descriptions-item label="任务状态">
+            <el-tag v-if="detail.overdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
             <StatusTag type="demand" :status="detail.status" />
           </el-descriptions-item>
-          <el-descriptions-item label="征集标题">{{ detail.title }}</el-descriptions-item>
+          <el-descriptions-item label="任务标题">{{ detail.title }}</el-descriptions-item>
           <el-descriptions-item label="发布方">{{ detail.client }}</el-descriptions-item>
           <el-descriptions-item label="标签" :span="2">
             <el-tag v-for="t in (detail.tags || detail.genre || '').split(',').filter(Boolean)" :key="t" size="small" style="margin-right:4px">{{ t }}</el-tag>
@@ -117,29 +93,31 @@
           <el-descriptions-item label="预算">
             <span class="price-text">{{ detail.budgetText }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="截止日期">{{ detail.deadline }}</el-descriptions-item>
+          <el-descriptions-item label="托管状态">
+            <el-tag :type="escrowTagType(detail.escrowStatus)" size="small">{{ detail.escrowStatusLabel || '-' }}</el-tag>
+            <span v-if="detail.escrowText" style="margin-left:6px">{{ detail.escrowText }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="押金状态">
+            <el-tag :type="depositTagType(detail.depositStatus)" size="small">{{ detail.depositStatusLabel || '-' }}</el-tag>
+            <span v-if="detail.depositText" style="margin-left:6px">{{ detail.depositText }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="押金缴纳时间">{{ detail.depositPaidAt || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="资金结算时间">{{ detail.depositSettledAt || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="发布日期">{{ detail.deadline }}</el-descriptions-item>
           <el-descriptions-item label="联系方式">{{ detail.contactInfo }}</el-descriptions-item>
-          <el-descriptions-item label="征集要求" :span="2">{{ detail.requirement || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="完成时限">{{ detail.durationHours ? detail.durationHours + ' 小时' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="接单人">{{ detail.acceptedCreatorName || (detail.acceptedCreatorId ? '#' + detail.acceptedCreatorId : '-') }}</el-descriptions-item>
+          <el-descriptions-item label="接单时间">{{ detail.acceptedAt || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="应完成时间">{{ detail.dueAt || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="是否逾期">
+            <el-tag v-if="detail.overdue" type="danger" size="small">已逾期</el-tag>
+            <span v-else>否</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.status === 'failed'" label="失败原因" :span="2">
+            <span style="color:#dc2626">{{ detail.failReason || '到点未通过验收' }}{{ detail.failAt ? '（' + detail.failAt + '）' : '' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="任务要求" :span="2">{{ detail.requirement || '-' }}</el-descriptions-item>
         </el-descriptions>
-
-        <div class="sub-title">投稿作品（{{ submissions.length }}）</div>
-        <el-table :data="submissions" size="small" border>
-          <el-table-column prop="workTitle" label="作品名称" min-width="130" />
-          <el-table-column prop="submitter" label="投稿人" width="100" />
-          <el-table-column label="投稿状态" width="100">
-            <template #default="{ row }">
-              <StatusTag type="submission" :status="row.status" />
-            </template>
-          </el-table-column>
-          <el-table-column prop="submitMessage" label="投稿留言" min-width="120" show-overflow-tooltip />
-          <el-table-column prop="reviewRemark" label="评审备注" min-width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.reviewRemark || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="submittedAt" label="投稿时间" width="150" />
-          <template #empty>
-            <el-empty description="暂无投稿作品" :image-size="60" />
-          </template>
-        </el-table>
       </div>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
@@ -153,18 +131,20 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import BlackButton from '@/components/BlackButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
-import { enumOptions } from '@/constants/tradeEnum'
-import { getDemandList, getDemandSubmissions, createDemand } from '@/api/trade'
-import { listTag } from '@/api/content'
+import { enumOptions, enumTagType } from '@/constants/tradeEnum'
+import { getDemandList } from '@/api/trade'
 
 defineOptions({ name: 'Demand' })
 
-// 征集项目状态为临时枚举（PC 接口缺口，见 constants/tradeEnum.js DEMAND_STATUS，待后端确认）
+// 任务状态枚举（接单制，见 constants/tradeEnum.js DEMAND_STATUS）
 const demandStatusOptions = enumOptions('demand')
+
+// 托管/押金 tag 颜色（入账走沙箱、出账记账，仅展示）
+const escrowTagType = (v) => enumTagType('demandEscrow', v)
+const depositTagType = (v) => enumTagType('demandDeposit', v)
 
 const loading = ref(false)
 const list = ref([])
@@ -174,52 +154,6 @@ const query = ref({ pageNo: 1, pageSize: 10, status: '', keyword: '' })
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref({})
-const submissions = ref([])
-
-const publishVisible = ref(false)
-const publishing = ref(false)
-const publishFormRef = ref()
-const publishForm = ref({ title: '', tags: [], budget: null, deadline: '', contactInfo: '', requirement: '' })
-const availableTags = ref([])
-// COLLECT_002：截止日期不得早于当前日期（与后端 TradeDemandService 一致，按天比较、当天允许）
-function todayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-function disablePastDate(date) {
-  return date.getTime() < new Date(`${todayStr()}T00:00:00`).getTime()
-}
-const validateDeadlineNotPast = (rule, value, callback) => {
-  if (!value) { callback(); return }
-  if (String(value).slice(0, 10) < todayStr()) {
-    callback(new Error('截止日期不能早于当前日期'))
-    return
-  }
-  callback()
-}
-// COLLECT_003：仅纯电话录入（数字/横线/空格）才校验格式，混合文本（姓名+电话、邮箱）不误伤
-const validateContactPhone = (rule, value, callback) => {
-  const contact = value == null ? '' : String(value).trim()
-  if (contact && /^[\d\s-]+$/.test(contact)
-      && !/^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8}|(400|800)-?\d{3}-?\d{4})$/.test(contact)) {
-    callback(new Error('联系电话格式不正确，请输入 11 位手机号或带区号的固定电话'))
-    return
-  }
-  callback()
-}
-const publishRules = {
-  title: [{ required: true, message: '请输入征集标题', trigger: 'blur' }],
-  tags: [{ required: true, type: 'array', min: 1, message: '请至少添加一个标签', trigger: 'change' }],
-  budget: [{ required: true, message: '请输入预算', trigger: 'blur' }],
-  deadline: [
-    { required: true, message: '请选择截止日期', trigger: 'change' },
-    { validator: validateDeadlineNotPast, trigger: 'change' }
-  ],
-  contactInfo: [
-    { required: true, message: '请输入联系方式', trigger: 'blur' },
-    { validator: validateContactPhone, trigger: 'blur' }
-  ]
-}
 
 async function loadList() {
   loading.value = true
@@ -230,7 +164,7 @@ async function loadList() {
   } catch {
     list.value = []
     total.value = 0
-    ElMessage.error('加载征集项目失败')
+    ElMessage.error('加载任务列表失败')
   } finally {
     loading.value = false
   }
@@ -246,68 +180,19 @@ function handleReset() {
   loadList()
 }
 
-async function handleViewSubmissions(row) {
+function handleViewDetail(row) {
+  // 只读详情：直接使用列表行数据（含接单制新字段），不展示发布/投稿操作
   detail.value = { ...row }
-  submissions.value = []
   detailVisible.value = true
-  detailLoading.value = true
-  try {
-    const res = await getDemandSubmissions(row.demandId)
-    submissions.value = res.rows || []
-  } catch {
-    ElMessage.error('加载投稿作品失败')
-  } finally {
-    detailLoading.value = false
-  }
 }
 
-function handlePublish() {
-  publishForm.value = { title: '', tags: [], budget: null, deadline: '', contactInfo: '', requirement: '' }
-  publishVisible.value = true
-}
-
-async function handlePublishSubmit() {
-  if (!publishFormRef.value) return
-  await publishFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    publishing.value = true
-    try {
-      const submitData = { ...publishForm.value, tags: publishForm.value.tags.join(',') }
-      await createDemand(submitData)
-      ElMessage.success('征集令已发布')
-      publishVisible.value = false
-      loadList()
-    } catch (e) {
-      ElMessage.error(e?.response?.data?.msg || '发布失败')
-    } finally {
-      publishing.value = false
-    }
-  })
-}
-
-async function loadTags() {
-  try {
-    const res = await listTag({ pageNo: 1, pageSize: 200, status: 0 })
-    availableTags.value = res.rows || []
-  } catch {
-    availableTags.value = []
-  }
-}
-
-onMounted(() => { loadList(); loadTags() })
+onMounted(() => { loadList() })
 </script>
 
 <style scoped>
 .price-text {
   color: #1f2329;
   font-weight: 600;
-}
-
-.sub-title {
-  margin: 18px 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2329;
 }
 
 .text-muted {

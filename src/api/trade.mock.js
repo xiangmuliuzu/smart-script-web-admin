@@ -127,10 +127,11 @@ export function mockQuotes(params = {}) {
 
 // 订单状态流转日志（sys_order_status_log）：待后端确认
 
-// 征集项目（sys_demand）：待后端确认
+// 任务（sys_demand，接单制）：待后端管理接口实现
 const demands = [
-  { demandId: 1, demandNo: '#DEM-001', title: '悬疑短剧剧本征集', client: '影视公司A', genre: '悬疑', budget: 3000000, budgetText: '¥30,000', deadline: '2026-10-01', requirement: '12集，每集10分钟', contactInfo: '李经理 138****8000', submissionCount: 8, status: 'open', statusLabel: '征集中', createdAt: '2026-09-01 09:00' },
-  { demandId: 2, demandNo: '#DEM-002', title: '都市情感剧征集', client: '平台C', genre: '都市', budget: 5000000, budgetText: '¥50,000', deadline: '2026-09-28', requirement: '24集长剧', contactInfo: '王制片 139****9000', submissionCount: 15, status: 'selected', statusLabel: '已选定', createdAt: '2026-08-20 09:00' }
+  { demandId: 1, demandNo: '#DEM-001', title: '悬疑短剧剧本征集', client: '影视公司A', genre: '悬疑', budget: 3000000, budgetText: '¥30,000', deadline: '2026-10-01', requirement: '12集，每集10分钟', contactInfo: '李经理 138****8000', durationHours: 168, acceptedCreatorId: null, acceptedCreatorName: null, acceptedAt: null, dueAt: null, overdue: 0, submissionCount: 0, status: 'open', statusLabel: '待接单', createdAt: '2026-09-01 09:00' },
+  { demandId: 2, demandNo: '#DEM-002', title: '都市情感剧征集', client: '平台C', genre: '都市', budget: 5000000, budgetText: '¥50,000', deadline: '2026-09-28', requirement: '24集长剧', contactInfo: '王制片 139****9000', durationHours: 72, acceptedCreatorId: 9092, acceptedCreatorName: '张编剧', acceptedAt: '2026-09-20 10:00', dueAt: '2026-09-23 10:00', overdue: 0, submissionCount: 0, status: 'in_progress', statusLabel: '进行中', createdAt: '2026-08-20 09:00' },
+  { demandId: 3, demandNo: '#DEM-003', title: '古装权谋剧本接单', client: '影视公司B', genre: '古装', budget: 8000000, budgetText: '¥80,000', deadline: '2026-09-15', requirement: '30集', contactInfo: '赵制片 137****7000', durationHours: 48, acceptedCreatorId: 9100, acceptedCreatorName: '李作者', acceptedAt: '2026-09-10 08:00', dueAt: '2026-09-12 08:00', overdue: 1, submissionCount: 0, status: 'in_progress', statusLabel: '已逾期', createdAt: '2026-09-05 09:00' }
 ]
 
 export function mockDemands(params = {}) {

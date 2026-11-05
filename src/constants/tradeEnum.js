@@ -105,11 +105,31 @@ export const FOLLOW_METHOD = [
   { value: 'meeting', label: '面谈' }
 ]
 
-/** 征集项目状态（sys_demand）⚠️ 临时，待后端确认 */
+/** 任务状态（sys_demand，接单制） */
 export const DEMAND_STATUS = [
-  { value: 'open', label: '征集中', tagType: 'success' },
-  { value: 'closed', label: '已截止', tagType: 'info' },
-  { value: 'selected', label: '已选定', tagType: 'primary' }
+  { value: 'open', label: '待接单', tagType: 'success' },
+  { value: 'in_progress', label: '进行中', tagType: 'primary' },
+  { value: 'completed', label: '已完成', tagType: 'primary' },
+  { value: 'closed', label: '已关闭', tagType: 'info' },
+  { value: 'selected', label: '已选定', tagType: 'primary' },
+  { value: 'failed', label: '已失败', tagType: 'danger' }
+]
+
+/** 需求任务托管资金状态（入账走支付宝沙箱，出账记账） */
+export const DEMAND_ESCROW_STATUS = [
+  { value: 'none', label: '无托管', tagType: 'info' },
+  { value: 'pending_payment', label: '待付托管', tagType: 'warning' },
+  { value: 'escrowed', label: '已托管', tagType: 'primary' },
+  { value: 'released', label: '已放款', tagType: 'success' },
+  { value: 'refunded_to_publisher', label: '已退回发布者', tagType: 'danger' }
+]
+
+/** 需求任务押金资金状态 */
+export const DEMAND_DEPOSIT_STATUS = [
+  { value: 'none', label: '未缴', tagType: 'info' },
+  { value: 'held', label: '已托管', tagType: 'primary' },
+  { value: 'refunded', label: '已退还', tagType: 'success' },
+  { value: 'forfeited', label: '已没收', tagType: 'danger' }
 ]
 
 /** 投稿状态（sys_demand_submission）⚠️ 临时，待后端确认 */
@@ -166,6 +186,8 @@ export const ENUM_REGISTRY = {
   work: WORK_STATUS,
   followMethod: FOLLOW_METHOD,
   demand: DEMAND_STATUS,
+  demandEscrow: DEMAND_ESCROW_STATUS,
+  demandDeposit: DEMAND_DEPOSIT_STATUS,
   submission: SUBMISSION_STATUS,
   cooperationSource: COOPERATION_SOURCE,
   cooperationStatus: COOPERATION_STATUS

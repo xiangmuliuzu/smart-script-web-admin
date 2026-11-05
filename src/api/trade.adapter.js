@@ -122,13 +122,17 @@ export function adaptQuotes(res) {
 }
 
 /* ==================== 征集项目（缺口接口）==================== */
-/** SysDemand → Demand.vue：clientName→client, tags→tags, budget→budgetText */
+/** SysDemand → Demand.vue：clientName→client, tags→tags, budget→budgetText, escrow/deposit→Text */
 export function adaptDemands(res) {
   return mapRows(res, (d) => ({
     ...d,
     client: d.client ?? d.clientName,
     tags: d.tags || '',
-    budgetText: d.budgetText || formatMoney(d.budget)
+    budgetText: d.budgetText || formatMoney(d.budget),
+    escrowText: d.escrowText || formatMoney(d.escrowAmount),
+    depositText: d.depositText || formatMoney(d.depositAmount),
+    escrowStatusLabel: d.escrowStatusLabel || enumLabel('demandEscrow', d.escrowStatus),
+    depositStatusLabel: d.depositStatusLabel || enumLabel('demandDeposit', d.depositStatus)
   }))
 }
 
