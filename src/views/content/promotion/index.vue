@@ -189,13 +189,6 @@
           <el-table-column label="状态" width="132">
             <template #default="{ row }">
               <div class="state-cell">
-                <el-switch
-                  v-if="activeSlotType === 'banner' && row.banner"
-                  v-hasPermi="['content:promotion:edit']"
-                  :model-value="row.banner.status === 'on'"
-                  size="small"
-                  @change="(val) => handleBannerStatus(row, val)"
-                />
                 <el-tag size="small" :type="slotStateMeta(row.state).type">{{ slotStateMeta(row.state).text }}</el-tag>
                 <span v-if="row.state === 'locked' && row.current" class="sub">{{ lockLabel(row.current) }}</span>
               </div>
@@ -229,22 +222,6 @@
                   size="small"
                   @click="openGrant(row)"
                 >免费上架</el-button>
-                <el-button
-                  v-if="row.banner && activeSlotType === 'banner'"
-                  v-hasPermi="['content:promotion:edit']"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openBannerEdit(row)"
-                >编辑素材</el-button>
-                <el-button
-                  v-if="row.banner && activeSlotType === 'banner' && !row.current"
-                  v-hasPermi="['content:promotion:remove']"
-                  link
-                  type="danger"
-                  size="small"
-                  @click="handleBannerDelete(row)"
-                >删除素材</el-button>
               </div>
             </template>
           </el-table-column>
@@ -572,89 +549,6 @@
       </template>
     </el-dialog>
 
-    <!-- ==================== Banner 编辑 ==================== -->
-    <el-dialog
-      v-model="bannerDialog.visible"
-      title="编辑 Banner 素材"
-      width="600px"
-      @closed="handleBannerDialogClosed"
-    >
-      <el-form ref="bannerFormRef" :model="bannerForm" :rules="bannerRules" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="bannerForm.title" placeholder="请输入 Banner 标题" />
-        </el-form-item>
-        <el-form-item label="Banner 素材" prop="imageUrl">
-          <el-upload
-            class="banner-uploader"
-            :show-file-list="false"
-            :before-upload="beforeBannerImageUpload"
-            :http-request="handleBannerImageUpload"
-            accept="image/*"
-          >
-            <div v-if="bannerForm.imageUrl" class="banner-uploader__preview">
-              <img :src="resolveMediaUrl(bannerForm.imageUrl)" alt="Banner 素材" />
-              <span class="banner-uploader__mask">点击更换</span>
-            </div>
-            <div v-else class="banner-uploader__placeholder" v-loading="bannerUploading">
-              <span>点击上传 Banner 素材</span>
-            </div>
-          </el-upload>
-          <div class="banner-uploader__tip">支持 jpg/png 格式，大小不超过 2MB，建议尺寸 16:9</div>
-        </el-form-item>
-        <el-form-item label="关联作品">
-          <el-select
-            v-model="bannerForm.linkId"
-            filterable
-            clearable
-            placeholder="选择作品（跳转作品详情）"
-            style="width: 100%"
-          >
-            <el-option v-for="w in bannerWorks" :key="w.workId" :label="w.title" :value="w.workId" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="展示位置">
-          <el-input model-value="首页顶部（home_top）" disabled />
-        </el-form-item>
-        <el-form-item label="位次">
-          <el-input :model-value="`第 ${bannerDialog.slotNo || '—'} 位`" disabled />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-switch
-            v-model="bannerForm.status"
-            active-value="on"
-            inactive-value="off"
-            active-text="启用"
-            inactive-text="停用"
-          />
-        </el-form-item>
-        <el-form-item label="开始时间">
-          <el-date-picker
-            v-model="bannerForm.startTime"
-            type="datetime"
-            placeholder="请选择开始时间"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="结束时间">
-          <el-date-picker
-            v-model="bannerForm.endTime"
-            type="datetime"
-            placeholder="请选择结束时间"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="bannerForm.remark" type="textarea" :rows="2" placeholder="选填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="bannerDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="bannerDialog.submitting" @click="submitBanner">确定</el-button>
-      </template>
-    </el-dialog>
-
     <!-- ==================== 批量设置价格 ==================== -->
     <el-dialog v-model="batchDialog.visible" title="批量设置价格档" width="420px">
       <el-form :model="batchDialog" label-width="90px">
@@ -726,9 +620,6 @@ import BlackButton from '@/components/BlackButton.vue'
 import TableCard from '@/components/TableCard.vue'
 import {
   listWork,
-  updateBanner,
-  changeBannerStatus,
-  deleteBanner,
   uploadFile
 } from '@/api/content'
 import {
@@ -1298,18 +1189,7 @@ function applyBatch() {
 }
 
 // ============ 作品下拉 ============
-const bannerWorks = ref([])
 const grantWorks = ref([])
-
-async function ensureBannerWorks() {
-  if (bannerWorks.value.length) return
-  try {
-    const res = await listWork({ pageNum: 1, pageSize: 999 })
-    bannerWorks.value = res?.rows || []
-  } catch {
-    bannerWorks.value = []
-  }
-}
 
 async function ensureGrantWorks() {
   if (grantWorks.value.length) return
@@ -1376,63 +1256,7 @@ async function submitGrant() {
   }
 }
 
-// ============ Banner 编辑 ============
-const bannerDialog = reactive({ visible: false, slotNo: null, submitting: false })
-const bannerUploading = ref(false)
-const bannerFormRef = ref()
-const bannerForm = reactive({
-  bannerId: null,
-  title: '',
-  imageUrl: '',
-  linkId: null,
-  status: 'on',
-  startTime: '',
-  endTime: '',
-  remark: ''
-})
-
-const bannerRules = {
-  title: [
-    { required: true, message: '请输入 Banner 标题', trigger: 'blur' },
-    { whitespace: true, message: '标题不能为空', trigger: 'blur' }
-  ],
-  imageUrl: [{ required: true, message: '请上传 Banner 素材', trigger: 'change' }]
-}
-
-function resetBannerForm() {
-  Object.assign(bannerForm, {
-    bannerId: null,
-    title: '',
-    imageUrl: '',
-    linkId: null,
-    status: 'on',
-    startTime: '',
-    endTime: '',
-    remark: ''
-  })
-}
-
-async function openBannerEdit(row) {
-  await ensureBannerWorks()
-  resetBannerForm()
-  Object.assign(bannerForm, {
-    bannerId: row.banner.bannerId,
-    title: row.banner.title || '',
-    imageUrl: row.banner.imageUrl || '',
-    linkId: row.banner.linkId || null,
-    status: row.banner.status || 'on',
-    startTime: row.banner.startTime || '',
-    endTime: row.banner.endTime || '',
-    remark: row.banner.remark || ''
-  })
-  bannerDialog.slotNo = row.slotNo
-  bannerDialog.visible = true
-}
-
-function handleBannerDialogClosed() {
-  bannerFormRef.value?.clearValidate()
-}
-
+// ============ Banner 素材上传（免费上架） ============
 function beforeBannerImageUpload(file) {
   if (!/^image\//.test(file.type)) {
     ElMessage.error('只能上传图片文件')
@@ -1443,25 +1267,6 @@ function beforeBannerImageUpload(file) {
     return false
   }
   return true
-}
-
-async function handleBannerImageUpload(options) {
-  bannerUploading.value = true
-  try {
-    const res = await uploadFile(options.file)
-    const url = res?.url || res?.data?.url
-    if (!url) {
-      ElMessage.error('上传失败，未返回图片地址')
-      return
-    }
-    bannerForm.imageUrl = url
-    bannerFormRef.value?.clearValidate('imageUrl')
-    ElMessage.success('上传成功')
-  } catch {
-    // 错误信息已由 request 拦截器统一提示
-  } finally {
-    bannerUploading.value = false
-  }
 }
 
 async function handleGrantMaterialUpload(options) {
@@ -1479,69 +1284,6 @@ async function handleGrantMaterialUpload(options) {
     // 错误信息已由 request 拦截器统一提示
   } finally {
     grantUploading.value = false
-  }
-}
-
-async function submitBanner() {
-  if (!bannerFormRef.value) return
-  await bannerFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    bannerDialog.submitting = true
-    const payload = {
-      title: bannerForm.title.trim(),
-      imageUrl: bannerForm.imageUrl.trim(),
-      linkType: bannerForm.linkId ? 'work' : '',
-      linkId: bannerForm.linkId || null,
-      linkUrl: '',
-      position: 'home_top',
-      sortOrder: bannerDialog.slotNo,
-      status: bannerForm.status,
-      startTime: bannerForm.startTime || '',
-      endTime: bannerForm.endTime || '',
-      remark: bannerForm.remark || ''
-    }
-    try {
-      await updateBanner({ ...payload, bannerId: bannerForm.bannerId })
-      ElMessage.success('Banner 素材已更新')
-      bannerDialog.visible = false
-      await loadSlot('banner')
-      if (activeTab.value === 'price') initPriceRows()
-    } catch {
-      // 错误信息已由 request 拦截器统一提示
-    } finally {
-      bannerDialog.submitting = false
-    }
-  })
-}
-
-async function handleBannerStatus(row, checked) {
-  const target = checked ? 'on' : 'off'
-  try {
-    await changeBannerStatus({ bannerId: row.banner.bannerId, status: target })
-    row.banner.status = target
-    ElMessage.success(checked ? '已启用' : '已停用')
-  } catch {
-    // switch 使用单向绑定，失败时保持原状态
-  }
-}
-
-async function handleBannerDelete(row) {
-  try {
-    await ElMessageBox.confirm(`确认删除 Banner「${row.banner.title || '未命名'}」？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
-  try {
-    await deleteBanner(row.banner.bannerId)
-    ElMessage.success('删除成功')
-    await loadSlot('banner')
-    if (activeTab.value === 'price') initPriceRows()
-  } catch {
-    // 错误信息已由 request 拦截器统一提示
   }
 }
 

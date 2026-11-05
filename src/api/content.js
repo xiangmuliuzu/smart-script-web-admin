@@ -109,62 +109,6 @@ export function changeRankNo(data) {
   })
 }
 
-// ---------------- Banner管理 ----------------
-
-/** Banner 分页列表（title 模糊，position/status 精确） */
-export function listBanner(query) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner/list`,
-    method: 'get',
-    params: query
-  })
-}
-
-/** Banner 详情 */
-export function getBanner(bannerId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner/${bannerId}`,
-    method: 'get'
-  })
-}
-
-/** 新增 Banner */
-export function addBanner(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner`,
-    method: 'post',
-    data
-  })
-}
-
-/** 编辑 Banner */
-export function updateBanner(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner`,
-    method: 'put',
-    data
-  })
-}
-
-/** 上架/下架 Banner（单一职责：仅改 status） */
-export function changeBannerStatus(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner/changeStatus`,
-    method: 'put',
-    data
-  })
-}
-
-/** 调整 Banner 排序（单一职责：仅改 sortOrder） */
-export function changeBannerSort(data) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner/changeSort`,
-    method: 'put',
-    data
-  })
-}
-
-/** 删除 Banner（物理删除） */
-export function deleteBanner(bannerId) {
-  return adminV1Request({ url: `${ADMIN_PREFIX}/banner/${bannerId}`,
-    method: 'delete'
-  })
-}
-
 // ---------------- 通用文件上传 ----------------
 
 /**

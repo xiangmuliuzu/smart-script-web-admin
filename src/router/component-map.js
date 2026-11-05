@@ -17,7 +17,6 @@ import ContentTag from '@/views/content/tag/index.vue'
 import ContentWork from '@/views/content/work/index.vue'
 import ContentBookstore from '@/views/content/bookstore/index.vue'
 import ContentRanking from '@/views/content/ranking/index.vue'
-import ContentBanner from '@/views/content/banner/index.vue'
 import ContentPromotion from '@/views/content/promotion/index.vue'
 import ExternalDramaChannel from '@/views/content/external-drama/channel/index.vue'
 import ExternalDramaContent from '@/views/content/external-drama/drama/index.vue'
@@ -75,7 +74,6 @@ export const componentMap = {
   'content/work/index': ContentWork,
   'content/bookstore/index': ContentBookstore,
   'content/ranking/index': ContentRanking,
-  'content/banner/index': ContentBanner,
   'content/promotion/index': ContentPromotion,
   'content/external-drama/channel/index': ExternalDramaChannel,
   'content/external-drama/drama/index': ExternalDramaContent,
