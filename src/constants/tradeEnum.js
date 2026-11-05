@@ -124,10 +124,14 @@ export const DEMAND_ESCROW_STATUS = [
   { value: 'refunded_to_publisher', label: '已退回发布者', tagType: 'danger' }
 ]
 
-/** 需求任务押金资金状态 */
+/**
+ * 需求任务押金资金状态
+ * 押金(deposit)是创作者缴纳的履约保证金，与发布者托管的预算款(escrow)是两笔钱，
+ * held 不能译作「已托管」，否则两条状态行读起来完全分不开（与 APP DemandDepositStatus 同源）。
+ */
 export const DEMAND_DEPOSIT_STATUS = [
   { value: 'none', label: '未缴', tagType: 'info' },
-  { value: 'held', label: '已托管', tagType: 'primary' },
+  { value: 'held', label: '在押', tagType: 'primary' },
   { value: 'refunded', label: '已退还', tagType: 'success' },
   { value: 'forfeited', label: '已没收', tagType: 'danger' }
 ]
