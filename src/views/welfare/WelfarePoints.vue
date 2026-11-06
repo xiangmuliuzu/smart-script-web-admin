@@ -154,12 +154,16 @@
         <el-tab-pane label="积分账户" name="account">
           <div class="card-header">
             <div class="search-bar">
-              <el-input v-model="accQuery.nickname" placeholder="用户昵称" clearable style="width: 180px" @keyup.enter="fetchAccounts" />
+              <el-input v-model="accQuery.phonenumber" placeholder="手机号" clearable style="width: 180px" @keyup.enter="fetchAccounts" />
+              <el-input v-model="accQuery.nickname" placeholder="用户昵称（可选）" clearable style="width: 180px" @keyup.enter="fetchAccounts" />
               <el-button type="primary" class="black-button" @click="fetchAccounts">查询</el-button>
             </div>
           </div>
           <el-table :data="accountList" v-loading="loading" style="width: 100%">
             <el-table-column prop="userId" label="用户ID" width="100" />
+            <el-table-column label="手机号" min-width="130">
+              <template #default="{ row }">{{ row.phonenumber || '-' }}</template>
+            </el-table-column>
             <el-table-column prop="nickname" label="用户昵称" min-width="140" />
             <el-table-column label="积分余额" width="110" align="center">
               <template #default="{ row }">
@@ -178,7 +182,35 @@
             <el-table-column prop="lastUpdateDate" label="最近变动" min-width="160">
               <template #default="{ row }">{{ formatDate(row.lastUpdateDate) }}</template>
             </el-table-column>
+            <el-table-column label="操作" width="120" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="handleEditBalance(row)">修改余额</el-button>
+              </template>
+            </el-table-column>
           </el-table>
+          <el-dialog v-model="balanceDialogVisible" title="修改积分余额" width="440px" append-to-body>
+            <el-form label-width="90px">
+              <el-form-item label="用户">
+                <span>{{ balanceForm.nickname || '-' }}（ID {{ balanceForm.userId }}）</span>
+              </el-form-item>
+              <el-form-item label="手机号">
+                <span>{{ balanceForm.phonenumber || '-' }}</span>
+              </el-form-item>
+              <el-form-item label="当前余额">
+                <span>{{ balanceForm.currentBalance }}</span>
+              </el-form-item>
+              <el-form-item label="新余额">
+                <el-input-number v-model="balanceForm.balance" :min="0" :max="100000000" controls-position="right" style="width: 100%" />
+              </el-form-item>
+              <el-form-item label="备注">
+                <el-input v-model="balanceForm.remark" placeholder="可不填，默认记录调整前后余额" maxlength="100" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="balanceDialogVisible = false">取消</el-button>
+              <el-button type="primary" class="black-button" :loading="saving" @click="submitBalance">确定</el-button>
+            </template>
+          </el-dialog>
           <div class="pagination-row">
             <el-pagination
               v-model:current-page="accQuery.page"
@@ -407,9 +439,13 @@ const tokenPerPoint = ref(1000)
 const newTokenPerPoint = ref(1000)
 
 // 积分账户
-const accQuery = reactive({ nickname: '', page: 1, pageSize: 10 })
+const accQuery = reactive({ phonenumber: '', nickname: '', page: 1, pageSize: 10 })
 const accTotal = ref(0)
 const accountList = ref([])
+const balanceDialogVisible = ref(false)
+const balanceForm = reactive({
+  userId: null, nickname: '', phonenumber: '', currentBalance: 0, balance: 0, remark: ''
+})
 
 // 积分流水
 const recQuery = reactive({ changeType: '', source: '', page: 1, pageSize: 10 })
@@ -596,6 +632,7 @@ const fetchAccounts = async () => {
   loading.value = true
   try {
     let url = `${POINTS_PREFIX}/account/list?page=${accQuery.page}&pageSize=${accQuery.pageSize}`
+    if (accQuery.phonenumber) url += `&phonenumber=${encodeURIComponent(accQuery.phonenumber)}`
     if (accQuery.nickname) url += `&nickname=${encodeURIComponent(accQuery.nickname)}`
     const res = await adminFetch(url)
     const data = await res.json()
@@ -607,6 +644,49 @@ const fetchAccounts = async () => {
     ElMessage.error('获取积分账户失败')
   } finally {
     loading.value = false
+  }
+}
+
+const handleEditBalance = (row) => {
+  Object.assign(balanceForm, {
+    userId: row.userId,
+    nickname: row.nickname || '',
+    phonenumber: row.phonenumber || '',
+    currentBalance: row.balance == null ? 0 : row.balance,
+    balance: row.balance == null ? 0 : row.balance,
+    remark: ''
+  })
+  balanceDialogVisible.value = true
+}
+
+const submitBalance = async () => {
+  if (balanceForm.balance === null || balanceForm.balance === undefined || balanceForm.balance < 0) {
+    ElMessage.warning('积分余额不能为负数')
+    return
+  }
+  saving.value = true
+  try {
+    const res = await adminFetch(`${POINTS_PREFIX}/account/balance`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: balanceForm.userId,
+        balance: balanceForm.balance,
+        remark: balanceForm.remark
+      })
+    })
+    const data = await res.json()
+    if (data.code === 200) {
+      ElMessage.success(`已将余额从 ${balanceForm.currentBalance} 调整为 ${data.data}`)
+      balanceDialogVisible.value = false
+      fetchAccounts()
+    } else {
+      ElMessage.error(data.msg || '修改失败')
+    }
+  } catch (e) {
+    ElMessage.error('修改失败')
+  } finally {
+    saving.value = false
   }
 }
 
