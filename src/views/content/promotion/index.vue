@@ -1,5 +1,5 @@
 <template>
-  <PageContainer>
+  <PageContainer class="promotion-page">
     <PageHeader
       title="作品推广"
       description="轮播图、搜索页推荐、首页热门精选统一管理；作者付费申请，审核通过后付费占坑"
@@ -1335,10 +1335,17 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.promotion-page {
+  min-width: 0;
+  /* 本页内容一律在卡片内部滚动，禁止子元素把主区域撑出横向滚动条 */
+  overflow-x: clip;
+}
+
 /* 资源位切换卡 */
 .resource-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0,1fr) 允许列宽收缩，避免窄屏时卡片最小内容宽度撑出页面横向滚动条 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -1348,14 +1355,22 @@ onMounted(async () => {
   gap: 12px;
   height: 84px;
   padding: 13px 15px;
+  min-width: 0;
   background: #fff;
   border: 1px solid #e9ecf2;
   border-radius: 11px;
   cursor: pointer;
-  transition: all 0.2s;
+  /* 仅过渡颜色/阴影，避免 all 把尺寸属性也纳入动画导致悬浮抖动 */
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 }
 .res-card:hover {
   border-color: #c9d6ea;
+}
+/* 窄屏下资源卡改为纵向堆叠，避免最小内容宽度超出视口 */
+@media (max-width: 1330px) {
+  .resource-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .res-card.active {
   border-color: #254e90;
@@ -1404,11 +1419,13 @@ onMounted(async () => {
   align-items: baseline;
   gap: 8px;
   margin-top: 5px;
+  flex-wrap: wrap;
 }
 .res-num {
   font-size: 15px;
   font-weight: 700;
   color: #254e90;
+  white-space: nowrap;
 }
 .res-num small {
   color: #8a919c;
@@ -1416,7 +1433,9 @@ onMounted(async () => {
   font-weight: 400;
 }
 .res-bar {
-  width: 88px;
+  flex: 1 1 60px;
+  width: auto;
+  min-width: 40px;
   height: 5px;
   border-radius: 3px;
   background: #e6eaf0;
@@ -1430,6 +1449,8 @@ onMounted(async () => {
 .res-rev {
   font-size: 11px;
   color: #8a919c;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .res-rev b {
   color: #d4511f;
@@ -1439,9 +1460,16 @@ onMounted(async () => {
 /* 卡内表格 */
 .promo-table-card {
   border-radius: 11px !important;
+  /* 只过渡阴影/边框，避免全局 el-card 的 transition:all 在悬浮时触发多余重排 */
+  transition: box-shadow 0.3s ease, border-color 0.3s ease !important;
 }
 .promo-table-card :deep(.el-card__body) {
   padding: 0 !important;
+  overflow: hidden;
+}
+.promo-table {
+  width: 100%;
+  max-width: 100%;
 }
 .promo-toolbar {
   display: flex;

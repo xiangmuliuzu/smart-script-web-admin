@@ -487,6 +487,8 @@ const handleCommand = async (command) => {
 .main-content {
   background-color: #f5f6f8;
   overflow-y: auto;
+  /* 预留滚动条槽位，避免内容高度临界时滚动条反复出现/消失引发布局抖动 */
+  scrollbar-gutter: stable;
   padding: 0;
 }
 </style>
