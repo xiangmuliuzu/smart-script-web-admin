@@ -5,7 +5,6 @@
       description="轮播图、搜索页推荐、首页热门精选统一管理；作者付费申请，审核通过后付费占坑"
     >
       <template #actions>
-        <el-button v-hasPermi="['content:promotion:list']" @click="handleExport">导出投放记录</el-button>
         <BlackButton v-hasPermi="['content:promotion:grant']" @click="openGrant()">＋ 免费上推荐</BlackButton>
       </template>
     </PageHeader>
@@ -949,39 +948,6 @@ function canOffline(app) {
   if (!app) return false
   if (!['pending', 'approved', 'paid'].includes(app.status)) return false
   return !['已结束', '已失效', '已取消', '已驳回'].includes(app.statusLabel)
-}
-
-// ============ 导出投放记录 ============
-function csvCell(value) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
-function handleExport() {
-  const rows = slotPages[activeSlotType.value]?.slots || []
-  if (!rows.length) {
-    ElMessage.warning('当前资源位暂无可导出记录')
-    return
-  }
-  const header = ['位次', '资源位', '作品', '作者', '单价(元/天)', '开始时间', '结束时间', '金额', '状态']
-  const body = rows.map((row) => [
-    row.slotNo,
-    slotTypeName(row.slotType),
-    row.current?.workTitle || row.banner?.title || '',
-    row.current?.authorName || '',
-    row.pricePerDay,
-    row.current?.startTime || row.banner?.startTime || '',
-    row.current?.endTime || row.banner?.endTime || '',
-    row.current?.amount ?? '',
-    row.current?.statusLabel || slotStateMeta(row.state).text
-  ])
-  const content = [header, ...body].map((line) => line.map(csvCell).join(',')).join('\r\n')
-  const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `作品推广-${slotTypeName(activeSlotType.value)}-${todayText()}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
 }
 
 // ============ 申请审核 ============
