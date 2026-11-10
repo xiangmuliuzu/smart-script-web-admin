@@ -88,7 +88,7 @@
               </el-select>
               <div class="file-hint">分镜 skill 与其他三个用途不同：剧本/写作/润色可共用，分镜单独一类（镜头语言/画面拆解）。</div>
             </el-form-item>
-            <el-form-item label="Skill 文件" :required="!editingId">
+            <el-form-item label="Skill 内容" :required="!editingId">
               <div class="file-row">
                 <el-upload
                   :auto-upload="false"
@@ -96,11 +96,33 @@
                   accept=".md,.txt,.skill"
                   :on-change="handleFileChange"
                 >
-                  <el-button>选择文件</el-button>
+                  <el-button>选择单文件</el-button>
                 </el-upload>
-                <span class="file-name">{{ form.fileName || (editingId ? '不修改则保留原文件' : '未选择') }}</span>
+                <el-button @click="pickFolder">选择整个文件夹</el-button>
+                <input
+                  ref="folderInput"
+                  type="file"
+                  webkitdirectory
+                  multiple
+                  class="hidden-input"
+                  @change="handleFolderChange"
+                />
               </div>
-              <div class="file-hint">直接上传 skill 文件（md/txt），内容将作为 AI 导演指令生效；文件不超过 200KB。</div>
+              <div class="file-hint">
+                支持整个 skill 文件夹（SKILL.md + references/ 等），按原目录结构整体保存、整体注入，无需合并成一个文件；
+                单个文件 ≤300KB、整包 ≤2MB。
+              </div>
+              <div v-if="form.files.length" class="folder-preview">
+                <div class="folder-title">
+                  已选文件夹：{{ form.folderName }}（{{ form.files.length }} 个文件）
+                </div>
+                <div class="folder-list">
+                  <span v-for="f in form.files" :key="f.path" class="folder-item">{{ f.path }}</span>
+                </div>
+              </div>
+              <div v-else class="file-row">
+                <span class="file-name">{{ form.fileName || (editingId ? '不修改则保留原内容' : '未选择') }}</span>
+              </div>
             </el-form-item>
             <el-form-item label="状态">
               <el-switch v-model="form.status" :active-value="'0'" :inactive-value="'1'" active-text="启用" inactive-text="停用" />
@@ -113,12 +135,27 @@
         </el-dialog>
 
         <!-- 预览对话框 -->
-        <el-dialog v-model="detailVisible" title="Skill 内容预览" width="680px">
+        <el-dialog v-model="detailVisible" title="Skill 内容预览" width="760px">
           <div class="detail-meta">
             <span><b>{{ detail.skillName }}</b></span>
             <span class="detail-file">{{ detail.fileName }}</span>
+            <span v-if="detailFiles.length" class="detail-file">共 {{ detailFiles.length }} 个文件</span>
           </div>
-          <pre class="detail-content">{{ detail.fileContent || '（空）' }}</pre>
+          <div v-if="detailFiles.length">
+            <div class="folder-list">
+              <span v-for="f in detailFiles" :key="f.path" class="folder-item">{{ f.path }}</span>
+            </div>
+            <el-collapse v-model="detailActive">
+              <el-collapse-item v-for="(f, i) in detailFiles" :key="f.path" :name="String(i)">
+                <template #title>
+                  <span class="detail-file-title">{{ f.path }}</span>
+                  <span class="detail-file-size">{{ f.content.length }} 字符</span>
+                </template>
+                <pre class="detail-content">{{ f.content }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+          <pre v-else class="detail-content">{{ detail.fileContent || '（空）' }}</pre>
         </el-dialog>
       </el-tab-pane>
 
@@ -249,10 +286,18 @@ const query = reactive({ skillName: '', skillType: '', status: '', pageNum: 1, p
 const dialogVisible = ref(false)
 const editingId = ref(null)
 const submitting = ref(false)
-const form = reactive({ skillName: '', skillType: 'write', status: '0', file: null, fileName: '' })
+const form = reactive({ skillName: '', skillType: 'write', status: '0', file: null, fileName: '', files: [], folderName: '' })
+const folderInput = ref(null)
+
+/** 文件夹上传约束（与后端 BUNDLE_* 常量一致） */
+const BUNDLE_FILE_MAX_BYTES = 300 * 1024
+const BUNDLE_TOTAL_MAX_BYTES = 2 * 1024 * 1024
+const BUNDLE_MAX_FILES = 200
+const TEXT_SUFFIXES = ['.md', '.markdown', '.txt', '.skill', '.json', '.yaml', '.yml', '.csv']
 
 const detailVisible = ref(false)
-const detail = reactive({ skillName: '', fileName: '', fileContent: '' })
+const detail = reactive({ skillName: '', fileName: '', fileContent: '', fileTree: '' })
+const detailActive = ref(['0'])
 
 async function fetchList() {
   loading.value = true
@@ -274,6 +319,24 @@ async function fetchList() {
   }
 }
 
+/** 预览用：把 file_tree（@@@FILE:路径@@@ 分段）解析成文件列表 */
+const detailFiles = computed(() => parseFileTree(detail.fileTree))
+
+function parseFileTree(tree) {
+  if (!tree) return []
+  const files = []
+  let current = null
+  tree.split('\n').forEach((line) => {
+    if (line.startsWith('@@@FILE:') && line.endsWith('@@@') && line.length > 11) {
+      current = { path: line.slice(8, -3), content: '' }
+      files.push(current)
+    } else if (current) {
+      current.content = current.content === '' ? line : `${current.content}\n${line}`
+    }
+  })
+  return files
+}
+
 function openAdd() {
   editingId.value = null
   form.skillName = ''
@@ -281,6 +344,8 @@ function openAdd() {
   form.status = '0'
   form.file = null
   form.fileName = ''
+  form.files = []
+  form.folderName = ''
   dialogVisible.value = true
 }
 
@@ -291,6 +356,8 @@ function openEdit(row) {
   form.status = row.status
   form.file = null
   form.fileName = ''
+  form.files = []
+  form.folderName = ''
   dialogVisible.value = true
 }
 
@@ -308,8 +375,59 @@ function handleFileChange(file) {
     // 重建为纯文本 File，随 FormData 上传（后端按 UTF-8 文本读取）
     form.file = new File([reader.result], raw.name, { type: 'text/plain' })
     form.fileName = raw.name
+    form.files = []
+    form.folderName = ''
   }
   reader.readAsText(raw, 'utf-8')
+}
+
+/** 打开系统目录选择（webkitdirectory，按相对路径批量上传） */
+function pickFolder() {
+  folderInput.value?.click()
+}
+
+function handleFolderChange(event) {
+  const picked = Array.from(event.target.files || [])
+  // 清空以便重复选择同一文件夹时仍触发 change
+  event.target.value = ''
+  if (!picked.length) return
+  const items = []
+  const rootNames = new Set()
+  let total = 0
+  let skipped = 0
+  for (const f of picked) {
+    const path = (f.webkitRelativePath || f.name).replace(/\\/g, '/')
+    const lower = path.toLowerCase()
+    if (!TEXT_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
+      skipped++
+      continue
+    }
+    if (f.size > BUNDLE_FILE_MAX_BYTES) {
+      ElMessage.error(`文件「${path}」超过 300KB，请精简后再上传`)
+      return
+    }
+    total += f.size
+    if (total > BUNDLE_TOTAL_MAX_BYTES) {
+      ElMessage.error('文件夹总大小超过 2MB，请精简后再上传')
+      return
+    }
+    if (items.length >= BUNDLE_MAX_FILES) {
+      ElMessage.error(`文件数超过上限 ${BUNDLE_MAX_FILES} 个`)
+      return
+    }
+    items.push({ path, file: f })
+    const root = path.includes('/') ? path.split('/')[0] : ''
+    if (root) rootNames.add(root)
+  }
+  if (!items.length) {
+    ElMessage.error('该文件夹内没有可用的文本 skill 文件（md/markdown/txt/skill/json/yaml/yml/csv）')
+    return
+  }
+  form.files = items
+  form.folderName = rootNames.size === 1 ? [...rootNames][0] : 'skill 包'
+  form.file = null
+  form.fileName = ''
+  if (skipped > 0) ElMessage.info(`已忽略 ${skipped} 个非文本文件`)
 }
 
 async function handleSave() {
@@ -317,8 +435,8 @@ async function handleSave() {
     ElMessage.error('请填写 Skill 名称')
     return
   }
-  if (!editingId.value && !form.file) {
-    ElMessage.error('请选择 Skill 文件')
+  if (!editingId.value && !form.file && form.files.length === 0) {
+    ElMessage.error('请选择 skill 文件，或选择整个 skill 文件夹')
     return
   }
   submitting.value = true
@@ -327,7 +445,15 @@ async function handleSave() {
     fd.append('skillName', form.skillName.trim())
     fd.append('skillType', form.skillType || 'write')
     if (editingId.value) fd.append('id', editingId.value)
-    if (form.file) fd.append('file', form.file)
+    if (form.files.length) {
+      // 整目录上传：files 与 paths 一一对应，后端按原目录结构落库
+      form.files.forEach((item) => {
+        fd.append('files', item.file)
+        fd.append('paths', item.path)
+      })
+    } else if (form.file) {
+      fd.append('file', form.file)
+    }
     fd.append('status', form.status)
     const resp = await adminFetch(SKILL_BASE, {
       method: editingId.value ? 'PUT' : 'POST',
@@ -378,6 +504,8 @@ async function openDetail(row) {
   detail.skillName = json.data.skillName
   detail.fileName = json.data.fileName
   detail.fileContent = json.data.fileContent
+  detail.fileTree = json.data.fileTree || ''
+  detailActive.value = ['0']
   detailVisible.value = true
 }
 
@@ -589,6 +717,16 @@ onMounted(() => {
 .file-hint { color: #909399; font-size: 12px; line-height: 1.5; margin-top: 6px; }
 .detail-meta { margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
 .detail-file { color: #909399; font-size: 13px; }
+.hidden-input { display: none; }
+.folder-preview { width: 100%; margin-top: 8px; }
+.folder-title { color: #303133; font-size: 13px; margin-bottom: 6px; }
+.folder-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.folder-item {
+  padding: 2px 8px; background: #f2f3f5; border-radius: 4px;
+  color: #606266; font-size: 12px; font-family: Consolas, monospace; word-break: break-all;
+}
+.detail-file-title { color: #303133; font-size: 13px; }
+.detail-file-size { color: #a8abb2; font-size: 12px; margin-left: 8px; }
 .detail-content {
   margin: 0; padding: 12px; max-height: 420px; overflow: auto;
   background: #f5f7fa; border-radius: 6px; white-space: pre-wrap;
