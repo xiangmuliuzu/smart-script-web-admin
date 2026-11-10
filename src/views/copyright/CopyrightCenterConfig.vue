@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="版权中心配置" description="管理对接的版权登记中心配置信息" />
+    <PageHeader title="版权中心配置" description="管理版权登记中心对接参数与登记费价目；申请付费后自动提交第三方，本页仅作监控与失败补推" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
@@ -40,6 +40,9 @@
       <el-table-column prop="centerName" label="中心名称" min-width="180" />
       <el-table-column prop="apiUrl" label="API地址" min-width="200" show-overflow-tooltip />
       <el-table-column prop="appId" label="应用ID" width="150" />
+      <el-table-column label="计费方式" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ feeSummary(row.configJson) }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-switch
@@ -86,7 +89,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="600px"
+      width="640px"
       @close="handleDialogClose"
     >
       <el-form
@@ -119,6 +122,31 @@
             <el-radio value="disabled">停用</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-form-item label="计费类型" prop="feeType">
+          <el-radio-group v-model="formData.feeType">
+            <el-radio value="national_word">国版按字数</el-radio>
+            <el-radio value="local_flat">地方一口价</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="formData.feeType === 'local_flat'">
+          <el-form-item label="一口价(元)" prop="flatFee">
+            <el-input-number v-model="formData.flatFee" :min="0" :precision="2" :step="10" />
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="≤100字">
+            <el-input-number v-model="formData.tier1" :min="0" :precision="2" :step="10" />
+          </el-form-item>
+          <el-form-item label="101～5000字">
+            <el-input-number v-model="formData.tier2" :min="0" :precision="2" :step="10" />
+          </el-form-item>
+          <el-form-item label="5001～1万字">
+            <el-input-number v-model="formData.tier3" :min="0" :precision="2" :step="10" />
+          </el-form-item>
+          <el-form-item label="＞1万字">
+            <el-input-number v-model="formData.tier4" :min="0" :precision="2" :step="10" />
+          </el-form-item>
+        </template>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="formData.remark" type="textarea" :rows="3" placeholder="请输入备注" />
         </el-form-item>
@@ -137,7 +165,7 @@
     >
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
         <template #title>
-          当前显示 <strong>{{ currentCenter?.centerName }}</strong> 的所有申请及其处理状态
+          仅监控申请进度。「补推第三方」只在已付款但提交第三方失败时出现，其它情况不可干预申请。
         </template>
       </el-alert>
       
@@ -164,21 +192,21 @@
         <el-table-column prop="remark" label="备注" width="200" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <div style="display: flex; gap: 4px;">
-              <!-- submitted 状态：显示"提交"按钮 -->
+              <!-- 仅：已付款 + 提交第三方失败（submitted 且无外部号） -->
               <el-button
-                v-if="row.status === 'submitted'"
-                type="primary"
+                v-if="canRetryThirdParty(row)"
+                v-permission="'smartscript:copyright:application:submit'"
+                type="danger"
                 size="small"
                 @click="submitToThirdParty(row)"
               >
-                提交
+                补推第三方
               </el-button>
-              
-              <!-- 所有状态都显示"状态查询"按钮 -->
               <el-button
+                v-if="canQueryStatus(row)"
                 type="info"
                 size="small"
                 @click="syncApplicationStatus(row)"
@@ -282,8 +310,87 @@ const formData = reactive({
   appId: '',
   status: 'enabled',
   priority: 0,
-  remark: ''
+  remark: '',
+  configJson: '',
+  feeType: 'national_word',
+  flatFee: 50,
+  tier1: 100,
+  tier2: 150,
+  tier3: 200,
+  tier4: 300
 })
+
+const defaultFeeForm = () => ({
+  feeType: 'national_word',
+  flatFee: 50,
+  tier1: 100,
+  tier2: 150,
+  tier3: 200,
+  tier4: 300
+})
+
+const parseFeeForm = (configJson) => {
+  const defaults = defaultFeeForm()
+  if (!configJson) return defaults
+  try {
+    const json = typeof configJson === 'string' ? JSON.parse(configJson) : configJson
+    const feeType = json.feeType === 'local_flat' ? 'local_flat' : 'national_word'
+    const flatFee = Number(json.flatFee ?? 50)
+    const tiers = Array.isArray(json.wordTiers) ? json.wordTiers : []
+    const feeAt = (idx, fallback) => {
+      const n = Number(tiers[idx]?.fee)
+      return Number.isFinite(n) ? n : fallback
+    }
+    return {
+      feeType,
+      flatFee: Number.isFinite(flatFee) ? flatFee : 50,
+      tier1: feeAt(0, 100),
+      tier2: feeAt(1, 150),
+      tier3: feeAt(2, 200),
+      tier4: feeAt(3, 300)
+    }
+  } catch (e) {
+    return defaults
+  }
+}
+
+const buildConfigJson = () => {
+  if (formData.feeType === 'local_flat') {
+    return JSON.stringify({
+      feeType: 'local_flat',
+      flatFee: Number(formData.flatFee || 0)
+    })
+  }
+  return JSON.stringify({
+    feeType: 'national_word',
+    wordTiers: [
+      { max: 100, fee: Number(formData.tier1 || 0) },
+      { max: 5000, fee: Number(formData.tier2 || 0) },
+      { max: 10000, fee: Number(formData.tier3 || 0) },
+      { max: null, fee: Number(formData.tier4 || 0) }
+    ]
+  })
+}
+
+const feeSummary = (configJson) => {
+  const fee = parseFeeForm(configJson)
+  if (fee.feeType === 'local_flat') {
+    return `一口价 ¥${Number(fee.flatFee).toFixed(2)}`
+  }
+  return `按字数 ¥${fee.tier1}/${fee.tier2}/${fee.tier3}/${fee.tier4}`
+}
+
+/** 已付款但提交第三方失败：有支付单、状态 submitted、尚无外部申请号 */
+const canRetryThirdParty = (row) => {
+  return row?.status === 'submitted'
+    && !!row?.payOrderId
+    && !row?.externalApplyNo
+}
+
+const canQueryStatus = (row) => {
+  const s = row?.status
+  return s === 'submitted' || s === 'reviewing' || s === 'pending' || s === 'approved'
+}
 
 const applicationsDialogVisible = ref(false)
 const applicationsLoading = ref(false)
@@ -332,13 +439,16 @@ const handleReset = () => {
 
 const handleAdd = () => {
   isEdit.value = false
+  Object.assign(formData, defaultFeeForm())
   dialogVisible.value = true
 }
 
 const handleEdit = async (row) => {
   try {
     const res = await getCopyrightCenterConfigDetail(row.configId)
-    Object.assign(formData, res.data)
+    const data = res.data || res
+    Object.assign(formData, data)
+    Object.assign(formData, parseFeeForm(data.configJson))
     isEdit.value = true
     dialogVisible.value = true
   } catch (error) {
@@ -367,12 +477,20 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
     submitLoading.value = true
-    
+    formData.configJson = buildConfigJson()
+    const payload = { ...formData }
+    delete payload.feeType
+    delete payload.flatFee
+    delete payload.tier1
+    delete payload.tier2
+    delete payload.tier3
+    delete payload.tier4
+
     if (isEdit.value) {
-      await updateCopyrightCenterConfig(formData)
+      await updateCopyrightCenterConfig(payload)
       ElMessage.success('更新成功')
     } else {
-      await addCopyrightCenterConfig(formData)
+      await addCopyrightCenterConfig(payload)
       ElMessage.success('新增成功')
     }
     
@@ -400,7 +518,9 @@ const handleDialogClose = () => {
     appId: '',
     status: 'enabled',
     priority: 0,
-    remark: ''
+    remark: '',
+    configJson: '',
+    ...defaultFeeForm()
   })
 }
 
@@ -481,15 +601,10 @@ const viewApplications = async (row) => {
   applicationsLoading.value = true
   
   try {
-    // 配置页只显示已从申请页提交过来的申请（status = submitted 及之后状态）
-    // 注意：approved 状态表示申请页本地审核通过，但用户还未点击"提交"按钮
-    // 只有用户在申请页点击"提交"后，状态才变为 submitted，此时才会进入配置页视野
+    // 监控该中心下申请；补推仅针对「已付款但第三方提交失败」
     const res = await getCopyrightApplicationList({
-      configId: row.configId,  // 使用configId查询该版权中心的申请
-      // submitted: 已提交到配置页（等待配置页提交到第三方）
-      // reviewing: 第三方审核中
-      // certificated: 已发证, rejected: 已驳回
-      statusList: 'submitted,reviewing,certificated,rejected',
+      configId: row.configId,
+      statusList: 'submitted,reviewing,certificated,rejected,pending,approved',
       pageNo: 1,
       pageSize: 100
     })
@@ -535,61 +650,65 @@ const syncApplicationStatus = async (application) => {
 // 获取状态进度描述
 const getProgressDescription = (status) => {
   const descriptions = {
-    submitted: '申请已提交到配置页，等待管理员处理提交到第三方版权中心',
-    reviewing: '申请已提交到第三方版权中心，正在审核中',
+    pending: '审核中（历史单）',
+    approved: '审核中（历史单）',
+    submitted: '已付款后提交第三方失败或处理中，可补推',
+    reviewing: '已提交到第三方版权中心，正在审核中',
     certificated: '审核通过，证书已颁发',
     rejected: '审核未通过，申请已被驳回'
   }
   return descriptions[status] || '状态未知'
 }
 
-// 提交到第三方版权中心
+// 仅失败补偿：补推到第三方
 const submitToThirdParty = async (application) => {
+  if (!canRetryThirdParty(application)) {
+    ElMessage.warning('当前申请不可补推（仅已付款且第三方提交失败时可操作）')
+    return
+  }
   try {
     await ElMessageBox.confirm(
-      `确认将申请"${application.applyNo}"提交到第三方版权中心吗？`,
-      '提交确认',
+      `确认将申请「${application.applyNo}」补推到第三方版权中心吗？仅用于付款成功但提交第三方失败的补偿。`,
+      '补推确认',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确定补推',
         cancelButtonText: '取消',
         type: 'warning'
       }
     )
-    
-    // 调用提交到第三方API接口（只需要 applyId）
+
     await submitApplicationToThirdParty(application.applyId)
-    ElMessage.success('提交成功')
-    
-    // 重新加载申请列表
+    ElMessage.success('补推成功')
     viewApplications(currentCenter.value)
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('提交到第三方失败:', error)
-      const errorMsg = error.response?.data?.msg || error.message || '提交失败'
+      console.error('补推第三方失败:', error)
+      const errorMsg = error.response?.data?.msg || error.message || '补推失败'
       ElMessage.error(errorMsg)
     }
   }
 }
 
 const getStatusLabel = (status) => {
-  // 版权中心配置页的状态标签
-  // 配置页只显示 submitted 及之后的状态
   const map = {
-    submitted: '待提交',      // 已从申请页提交过来，等待从配置页提交到第三方
-    reviewing: '审核中',      // 已从配置页提交到第三方，正在审核
-    certificated: '已发证',   // 第三方已发证
-    rejected: '已驳回'        // 第三方审核驳回
+    pending: '审核中',
+    approved: '审核中',
+    submitted: '审核中',
+    reviewing: '审核中',
+    certificated: '已发证',
+    rejected: '已驳回'
   }
   return map[status] || status
 }
 
 const getStatusType = (status) => {
-  // 状态对应的标签颜色
   const map = {
-    submitted: 'warning',     // 待提交 - 黄色
-    reviewing: 'primary',     // 审核中 - 蓝色
-    certificated: 'success',  // 已发证 - 绿色
-    rejected: 'danger'        // 已驳回 - 红色
+    pending: 'primary',
+    approved: 'primary',
+    submitted: 'primary',
+    reviewing: 'primary',
+    certificated: 'success',
+    rejected: 'danger'
   }
   return map[status] || ''
 }

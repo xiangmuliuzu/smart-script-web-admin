@@ -1,14 +1,11 @@
 <template>
   <PageContainer>
-    <PageHeader title="版权申请管理" description="管理作品的版权登记申请，跟踪审核状态及证书发放情况" />
+    <PageHeader title="版权申请管理" description="查看用户已缴费的确权申请，同步第三方审核进度；不可平台预审或常规干预，仅付款后第三方提交失败时可补推" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
         <el-select v-model="query.status" placeholder="申请状态" clearable style="width: 160px">
-          <el-option label="待审核" value="pending" />
-          <el-option label="待提交" value="approved" />
-          <el-option label="待提交到第三方" value="submitted" />
-          <el-option label="审核中" value="reviewing" />
+          <el-option label="审核中" value="reviewing_group" />
           <el-option label="已驳回" value="rejected" />
           <el-option label="已发证" value="certificated" />
         </el-select>
@@ -39,22 +36,10 @@
       :empty-text="emptyText"
       @page-change="loadApplications"
       @size-change="loadApplications"
-      @selection-change="handleSelectionChange"
     >
-      <template #actions>
-        <el-button 
-          v-permission="'smartscript:copyright:application:submit'"
-          type="primary"
-          :disabled="selectedRows.length === 0"
-          @click="handleBatchSubmit"
-        >
-          批量提交
-        </el-button>
-      </template>
-      <el-table-column type="selection" width="55" />
-      <el-table-column prop="applyNo" label="申请编号" width="180" show-overflow-tooltip />
-      <el-table-column prop="workName" label="作品名称" width="200" show-overflow-tooltip />
-      <el-table-column prop="centerName" label="版权中心" width="160" show-overflow-tooltip>
+      <el-table-column prop="applyNo" label="申请编号" width="160" show-overflow-tooltip />
+      <el-table-column prop="workName" label="作品名称" width="180" show-overflow-tooltip />
+      <el-table-column prop="centerName" label="版权中心" width="140" show-overflow-tooltip>
         <template #default="{ row }">
           <el-tooltip v-if="row.centerName" :content="`中心代码: ${row.copyrightCenter || '未知'}`" placement="top">
             <span>{{ row.centerName }}</span>
@@ -62,12 +47,20 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="externalApplyNo" label="外部申请号" width="160" show-overflow-tooltip>
+      <el-table-column prop="externalApplyNo" label="外部申请号" width="150" show-overflow-tooltip>
         <template #default="{ row }">
           <el-tooltip v-if="row.externalApplyNo" :content="`在${centerLabel(row.copyrightCenter)}的申请编号`" placement="top">
             <span>{{ row.externalApplyNo }}</span>
           </el-tooltip>
           <span v-else>—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="字数" width="90" align="right">
+        <template #default="{ row }">{{ row.wordCount ?? '—' }}</template>
+      </el-table-column>
+      <el-table-column label="登记费" width="100" align="right">
+        <template #default="{ row }">
+          {{ row.feeAmount != null ? `¥${Number(row.feeAmount).toFixed(2)}` : '—' }}
         </template>
       </el-table-column>
       <el-table-column label="申请状态" width="110">
@@ -78,56 +71,36 @@
         </template>
       </el-table-column>
       <el-table-column prop="submitTime" label="提交时间" width="170" />
-      <el-table-column prop="certNo" label="证书编号" width="160" show-overflow-tooltip>
+      <el-table-column prop="certNo" label="证书编号" width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ row.certNo || '—' }}</template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" width="200" show-overflow-tooltip>
+      <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.remark || '—' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">
             <el-button size="small" type="primary" @click="handleDetail(row)">详情</el-button>
-            
-            <!-- pending状态：显示审核按钮 -->
-            <template v-if="row.status === 'pending'">
-              <el-button
-                v-permission="'smartscript:copyright:application:approve'"
-                size="small"
-                type="success"
-                @click="handleReview(row)"
-              >
-                审核
-              </el-button>
-            </template>
-            
-            <!-- approved状态：显示提交按钮 -->
-            <template v-if="row.status === 'approved'">
-              <el-button
-                v-permission="'smartscript:copyright:application:submit'"
-                size="small"
-                type="primary"
-                @click="handleSubmitToCenter(row)"
-              >
-                提交
-              </el-button>
-            </template>
-            
-            <!-- submitted/reviewing状态：显示同步按钮 -->
-            <template v-if="row.status === 'submitted' || row.status === 'reviewing'">
-              <el-button
-                v-permission="'smartscript:copyright:application:sync'"
-                size="small"
-                type="warning"
-                :loading="syncingId === row.applyId"
-                :disabled="syncingId !== null && syncingId !== row.applyId"
-                @click="handleSync(row)"
-              >
-                状态查询
-              </el-button>
-            </template>
-            
-            <!-- rejected状态：显示重新提交按钮 -->
+            <el-button
+              v-if="canQueryStatus(row)"
+              v-permission="'smartscript:copyright:application:sync'"
+              size="small"
+              type="warning"
+              :loading="syncingId === row.applyId"
+              :disabled="syncingId !== null && syncingId !== row.applyId"
+              @click="handleSync(row)"
+            >
+              状态查询
+            </el-button>
+            <el-button
+              v-if="canRetryThirdParty(row)"
+              v-permission="'smartscript:copyright:application:submit'"
+              size="small"
+              type="danger"
+              @click="handleRetryThirdParty(row)"
+            >
+              补推第三方
+            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -157,7 +130,7 @@
               <el-descriptions-item label="申请编号">{{ currentRecord.applyNo }}</el-descriptions-item>
               <el-descriptions-item label="申请状态">
                 <el-tag :type="statusType(currentRecord.status)">
-                  {{ statusLabel(currentRecord.status) }}
+                  {{ currentRecord.displayStatusText || statusLabel(currentRecord.status) }}
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="版权中心" :span="2">
@@ -165,6 +138,15 @@
               </el-descriptions-item>
               <el-descriptions-item label="外部申请号" :span="2">
                 {{ currentRecord.externalApplyNo || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="计价字数">
+                {{ currentRecord.wordCount ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="登记费">
+                {{ currentRecord.feeAmount != null ? `¥${Number(currentRecord.feeAmount).toFixed(2)}` : '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="支付单ID">
+                {{ currentRecord.payOrderId || '—' }}
               </el-descriptions-item>
               <el-descriptions-item label="申请时间">
                 {{ currentRecord.createTime || '—' }}
@@ -433,8 +415,22 @@
       <template #footer>
         <div class="drawer-footer">
           <el-button @click="detailVisible = false">关闭</el-button>
-          <el-button v-if="currentRecord?.status === 'pending'" type="primary" @click="handleReview(currentRecord)">
-            审核申请
+          <el-button
+            v-if="canQueryStatus(currentRecord)"
+            v-permission="'smartscript:copyright:application:sync'"
+            type="warning"
+            :loading="syncingId === currentRecord?.applyId"
+            @click="handleSync(currentRecord)"
+          >
+            状态查询
+          </el-button>
+          <el-button
+            v-if="canRetryThirdParty(currentRecord)"
+            v-permission="'smartscript:copyright:application:submit'"
+            type="danger"
+            @click="handleRetryThirdParty(currentRecord)"
+          >
+            补推第三方
           </el-button>
         </div>
       </template>
@@ -446,33 +442,6 @@
       :material-url="previewUrl"
       :material-name="previewName"
     />
-
-    <!-- 审核对话框 -->
-    <!-- 审核对话框 -->
-    <el-dialog v-model="reviewDialogVisible" title="审核版权申请" width="500px">
-      <el-form :model="reviewForm" label-width="80px">
-        <el-form-item label="审核操作" required>
-          <el-radio-group v-model="reviewForm.action">
-            <el-radio label="approve">通过</el-radio>
-            <el-radio label="reject">驳回</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="reviewForm.action === 'reject'" label="驳回原因" required>
-          <el-input
-            v-model="reviewForm.reason"
-            type="textarea"
-            :rows="4"
-            placeholder="请输入驳回原因"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="reviewDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="reviewSubmitting" @click="confirmReview">确定</el-button>
-      </template>
-    </el-dialog>
 
     <!-- 状态查询结果对话框 -->
     <el-dialog v-model="syncStatusVisible" title="版权审核状态" width="600px">
@@ -659,6 +628,7 @@ import {
   syncCopyrightApplication,
   reviewCopyrightApplication,
   submitCopyrightApplicationToCenter,
+  submitApplicationToThirdParty,
   batchSubmitCopyrightApplicationToCenter,
   batchSyncCopyrightStatus,
   syncCopyrightApplicationStatus,
@@ -705,7 +675,12 @@ const reviewForm = reactive({
 const loadApplications = async () => {
   loading.value = true
   try {
-    const res = await getCopyrightApplicationList(query)
+    const params = { ...query }
+    if (params.status === 'reviewing_group') {
+      params.status = undefined
+      params.statusList = 'pending,approved,submitted,reviewing'
+    }
+    const res = await getCopyrightApplicationList(params)
     applications.value = res.rows || []
     total.value = res.total || 0
     emptyText.value = '暂无数据'
@@ -790,36 +765,64 @@ const handleSync = async (row) => {
 // 获取状态描述
 const getStatusDescription = (status) => {
   const map = {
-    pending: '待审核 - 等待管理员审核',
-    approved: '待提交 - 等待提交到版权中心配置页',
-    submitted: '待提交到第三方 - 已分配到版权中心配置页，需在配置页提交到第三方API',
+    pending: '审核中（历史单只读）',
+    approved: '审核中（历史单只读）',
+    submitted: '审核中 / 若已付款且无外部号可补推第三方',
     reviewing: '审核中 - 已提交到第三方版权中心，等待审核',
     certificated: '已发证 - 版权登记成功',
-    rejected: '已驳回'
+    rejected: '已驳回（用户需重新缴费申请）'
   }
   return map[status] || status
 }
 
-// 获取进度描述
 const getProgressDescription = (status, externalApplyNo) => {
-  if (status === 'pending') {
-    return '申请已创建，等待管理员审核'
+  if (status === 'pending' || status === 'approved') {
+    return '历史流程单据，仅可查看与状态查询，不可平台审核干预'
   }
-  
-  if (status === 'approved') {
-    return '管理员已审核通过，请提交到版权中心配置页'
-  }
-  
   if (status === 'submitted' && !externalApplyNo) {
-    return '已分配到版权中心配置页，需在配置页提交到第三方API后才能查询审核进度'
+    return '可能为付款成功后提交第三方失败，符合条件时可补推'
   }
-  
   const map = {
     reviewing: '已提交到第三方版权中心，正在审核中，请耐心等待',
     certificated: '版权证书已发放，可在详情中查看证书信息',
     rejected: '申请被第三方驳回，请查看驳回原因'
   }
   return map[status] || '处理中'
+}
+
+/** 已付款但提交第三方失败才可补推 */
+const canRetryThirdParty = (row) => {
+  return !!row
+    && row.status === 'submitted'
+    && !!row.payOrderId
+    && !row.externalApplyNo
+}
+
+const canQueryStatus = (row) => {
+  if (!row) return false
+  const s = row.status
+  return s === 'pending' || s === 'approved' || s === 'submitted' || s === 'reviewing'
+}
+
+const handleRetryThirdParty = async (row) => {
+  if (!canRetryThirdParty(row)) {
+    ElMessage.warning('当前申请不可补推（仅已付款且第三方提交失败时可操作）')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认将申请「${row.applyNo}」补推到第三方吗？仅用于付款成功但提交第三方失败的补偿，不会改变正常审核流程。`,
+      '补推确认',
+      { type: 'warning', confirmButtonText: '确定补推', cancelButtonText: '取消' }
+    )
+    await submitApplicationToThirdParty(row.applyId)
+    ElMessage.success('补推成功')
+    await loadApplications()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.msg || error.message || '补推失败')
+    }
+  }
 }
 
 // 表格选择变化
@@ -1002,10 +1005,10 @@ const centerLabel = (center) => {
 
 const statusLabel = (status) => {
   const map = {
-    pending: '待审核',
-    approved: '待提交',
-    submitted: '待提交到第三方',  // 已从申请页提交到配置页，等待配置页提交到第三方
-    reviewing: '审核中',  // 已从配置页提交到第三方
+    pending: '审核中',
+    approved: '审核中',
+    submitted: '审核中',
+    reviewing: '审核中',
     rejected: '已驳回',
     certificated: '已发证'
   }
@@ -1014,10 +1017,10 @@ const statusLabel = (status) => {
 
 const statusType = (status) => {
   const map = {
-    pending: 'info',
-    approved: 'warning',
-    submitted: 'warning',   // 待审核状态 - 黄色
-    reviewing: 'primary',   // 审核中状态 - 蓝色
+    pending: 'primary',
+    approved: 'primary',
+    submitted: 'primary',
+    reviewing: 'primary',
     rejected: 'danger',
     certificated: 'success'
   }

@@ -1,12 +1,12 @@
 <template>
   <PageContainer>
-    <PageHeader title="版权资产管理" description="仅管理已标记为有版权且未删除的作品上架状态；详情仅查看，不修改作品内容。" />
+    <PageHeader title="版权资产管理" description="查看已标记为有版权且未删除的作品资产；详情与授权历史仅查看，不在本页改作品内容。" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
-        <el-select v-model="query.status" placeholder="全部上架状态" clearable style="width: 160px">
-          <el-option label="已上架" value="on_shelf" />
-          <el-option label="已下架" value="off_shelf" />
+        <el-select v-model="query.workType" placeholder="全部作品类型" clearable style="width: 160px">
+          <el-option label="剧本" value="script" />
+          <el-option label="小说" value="novel" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -41,29 +41,12 @@
       <el-table-column prop="workType" label="作品类型" width="130">
         <template #default="{ row }">{{ workTypeLabel(row.workType) }}</template>
       </el-table-column>
-      <el-table-column label="上架状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" effect="light" size="small">
-            {{ statusLabel(row.status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="170" />
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <div class="asset-actions">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             <el-button v-permission="'smartscript:copyright:assets:history'" link type="primary" @click="openHistory(row)">授权历史</el-button>
-            <el-button
-              v-if="row.status === 'on_shelf' || row.status === 'off_shelf'"
-              v-permission="'smartscript:copyright:assets:edit'"
-              link
-              :loading="statusUpdatingWorkId === row.workId"
-              :disabled="statusUpdatingWorkId !== null && statusUpdatingWorkId !== row.workId"
-              @click="changeAssetStatus(row)"
-            >
-              {{ row.status === 'on_shelf' ? '下架' : '上架' }}
-            </el-button>
             <!-- A3 联系用户入口（任务 26）：待版权资产关联真实 userId 后自动启用 -->
             <el-button link type="primary" :disabled="!row.userId" @click="handleContactUser(row)">联系用户</el-button>
           </div>
@@ -82,7 +65,6 @@
             <el-descriptions-item label="作品名称">{{ detail.title || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作者">{{ detail.authorName || '—' }}</el-descriptions-item>
             <el-descriptions-item label="作品类型">{{ workTypeLabel(detail.workType) }}</el-descriptions-item>
-            <el-descriptions-item label="上架状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ detail.createTime || '—' }}</el-descriptions-item>
           </el-descriptions>
           <section class="summary-block">
@@ -132,7 +114,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useContactUser } from '@/composables/useContactUser'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -140,8 +121,7 @@ import TableCard from '@/components/TableCard.vue'
 import {
   getCopyrightAssets,
   getCopyrightAssetDetail,
-  getCopyrightAuthorizationHistory,
-  updateCopyrightAssetStatus
+  getCopyrightAuthorizationHistory
 } from '@/api/copyright'
 
 
@@ -162,11 +142,10 @@ const historyRows = ref([])
 const historyTotal = ref(0)
 const historyWorkId = ref(null)
 const historyQuery = ref({ pageNo: 1, pageSize: 10 })
-const statusUpdatingWorkId = ref(null)
-const query = ref({ pageNo: 1, pageSize: 10, status: '', keyword: '' })
+const query = ref({ pageNo: 1, pageSize: 10, workType: '', keyword: '' })
 const emptyText = computed(() => {
   if (loadFailed.value) return '加载失败，请重试'
-  if (query.value.status || query.value.keyword.trim()) return '没有符合当前筛选条件的版权资产'
+  if (query.value.workType || query.value.keyword.trim()) return '没有符合当前筛选条件的版权资产'
   return '暂无版权资产。仅显示作品管理中标记有版权且未删除的作品。'
 })
 let assetsRequestId = 0
@@ -174,30 +153,10 @@ let detailRequestId = 0
 let historyRequestId = 0
 let selectedWorkId = null
 
-const statusTexts = {
-  on_shelf: '已上架',
-  off_shelf: '已下架',
-  approved: '审核通过',
-  pending: '审核中',
-  draft: '草稿'
-}
-
+// 与版权申请可选类型对齐；当前库内作品以 script 为主，novel 预留
 const typeTexts = {
   script: '剧本',
-  novel: '小说',
-  short_drama: '短剧',
-  movie: '电影剧本',
-  tv_series: '电视剧剧本'
-}
-
-function statusLabel(status) {
-  return statusTexts[status] || status || '未知'
-}
-
-function statusType(status) {
-  if (status === 'on_shelf' || status === 'approved') return 'success'
-  if (status === 'pending') return 'warning'
-  return 'info'
+  novel: '小说'
 }
 
 function workTypeLabel(type) {
@@ -211,7 +170,7 @@ async function loadAssets() {
     const result = await getCopyrightAssets({
       pageNo: query.value.pageNo,
       pageSize: query.value.pageSize,
-      status: query.value.status || undefined,
+      workType: query.value.workType || undefined,
       keyword: query.value.keyword.trim() || undefined
     })
     if (!Array.isArray(result?.rows) || !Number.isFinite(Number(result.total))) {
@@ -241,7 +200,7 @@ function handleQuery() {
 }
 
 function handleReset() {
-  query.value = { pageNo: 1, pageSize: 10, status: '', keyword: '' }
+  query.value = { pageNo: 1, pageSize: 10, workType: '', keyword: '' }
   loadAssets()
 }
 
@@ -276,32 +235,6 @@ async function loadDetail(workId) {
     if (requestId === detailRequestId) {
       detailLoading.value = false
     }
-  }
-}
-
-async function changeAssetStatus(row) {
-  if (statusUpdatingWorkId.value !== null) return
-  const nextStatus = row.status === 'on_shelf' ? 'off_shelf' : 'on_shelf'
-  const action = nextStatus === 'on_shelf' ? '上架' : '下架'
-  statusUpdatingWorkId.value = row.workId
-  try {
-    await ElMessageBox.confirm(`确认${action}《${row.title}》？`, '版权资产状态变更', {
-      type: 'warning',
-      confirmButtonText: '确认',
-      cancelButtonText: '取消'
-    })
-    await updateCopyrightAssetStatus(row.workId, nextStatus)
-    ElMessage.success(`${action}成功`)
-    await loadAssets()
-    if (detail.value?.workId === row.workId) {
-      await loadDetail(row.workId)
-    }
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(error?.message || `${action}失败`)
-    }
-  } finally {
-    statusUpdatingWorkId.value = null
   }
 }
 
