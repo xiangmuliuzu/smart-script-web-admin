@@ -63,33 +63,43 @@
           @page-change="loadAllList"
           @size-change="loadAllList"
         >
-          <el-table-column label="封面" width="72">
+          <el-table-column label="封面" width="64">
             <template #default="{ row }">
               <CoverThumb :url="row.cover" />
             </template>
           </el-table-column>
-          <el-table-column prop="title" label="标题" min-width="280" show-overflow-tooltip />
-          <el-table-column label="频道" width="80">
+          <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+          <el-table-column label="频道" min-width="84">
             <template #default="{ row }">
               <el-tag v-if="row.channelId === 146" size="small" type="primary">男频</el-tag>
               <el-tag v-else-if="row.channelId === 147" size="small" type="danger">女频</el-tag>
               <el-tag v-else size="small" type="info">未设置</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="authorName" label="作者" min-width="140" show-overflow-tooltip />
-          <el-table-column label="标签" min-width="220">
+          <el-table-column prop="authorName" label="作者" min-width="120" show-overflow-tooltip />
+          <el-table-column label="上下架" min-width="96">
             <template #default="{ row }">
-              <span v-if="!row.tags || row.tags.length === 0">—</span>
-              <el-tag
-                v-for="tag in row.tags"
-                :key="tag.tagId"
-                size="small"
-                class="work-tag"
-              >{{ tag.tagName }}</el-tag>
+              <el-tooltip
+                :disabled="canToggleStatus(row.status)"
+                :content="statusToggleTip(row.status)"
+                placement="top"
+              >
+                <!-- 禁用态 el-switch 不触发事件，需外层 span 承载 tooltip -->
+                <span class="status-switch-wrap">
+                  <el-switch
+                    v-permission="['content:bookstore:edit']"
+                    :model-value="row.status === 'on_shelf'"
+                    :loading="statusChangingWorkId === row.workId"
+                    :disabled="!canToggleStatus(row.status)
+                      || (statusChangingWorkId !== null && statusChangingWorkId !== row.workId)"
+                    @change="(val) => handleStatusChange(row, val)"
+                  />
+                </span>
+              </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column prop="viewCount" label="浏览量" width="100" />
-          <el-table-column label="状态" width="100">
+          <el-table-column prop="viewCount" label="浏览量" min-width="90" />
+          <el-table-column label="状态" min-width="90">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusText(row.status) }}
@@ -97,7 +107,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <el-button
                 v-permission="['content:work:query']"
@@ -200,12 +210,13 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import CoverThumb from './cover-thumb.vue'
-import { listWork, getWork, listWorkChapters, listTag } from '@/api/content'
+import { listWork, getWork, listWorkChapters, listTag, changeBookstoreStatus } from '@/api/content'
 import { TRADE_TYPE, contentEnumLabel } from '@/constants/contentEnum'
 
 defineOptions({ name: 'ContentWork' })
@@ -240,6 +251,33 @@ function statusText(status) {
 }
 function statusTagType(status) {
   return STATUS_TAG_TYPE_MAP[status] || 'info'
+}
+
+// ============ 管理员兜底上下架 ============
+// 只有已上架/已下架可切换；草稿、待审核、已通过、已驳回必须走审核链路，避免绕过审核直接发布。
+const statusChangingWorkId = ref(null)
+
+function canToggleStatus(status) {
+  return status === 'on_shelf' || status === 'off_shelf'
+}
+function statusToggleTip(status) {
+  return `当前状态「${statusText(status)}」，需完成审核后才能上下架`
+}
+
+async function handleStatusChange(row, nextOn) {
+  const targetStatus = nextOn ? 'on_shelf' : 'off_shelf'
+  statusChangingWorkId.value = row.workId
+  try {
+    // 复用书城管理页同一接口：仅改 status，下架时后端联动关闭交易
+    await changeBookstoreStatus({ workId: row.workId, status: targetStatus })
+    // 受控开关：成功后回写状态，「状态」列同步更新
+    row.status = targetStatus
+    ElMessage.success(`${nextOn ? '上架' : '下架'}成功`)
+  } catch {
+    // 失败不写回，开关保持原状态；错误信息已由 request 拦截器统一提示
+  } finally {
+    statusChangingWorkId.value = null
+  }
 }
 
 function buildAllQuery() {
@@ -366,6 +404,9 @@ async function loadTagOptions() {
 .work-tag {
   margin-right: 6px;
   margin-bottom: 2px;
+}
+.status-switch-wrap {
+  display: inline-flex;
 }
 </style>
 
