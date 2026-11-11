@@ -31,6 +31,7 @@
       @size-change="loadConfigs"
     >
       <template #actions>
+        <el-button type="info" plain @click="openMessagesDrawer">第三方消息</el-button>
         <el-button v-permission="'smartscript:copyright:centerConfig:add'" type="primary" @click="handleAdd">
           新增配置
         </el-button>
@@ -259,6 +260,45 @@
         <el-button type="primary" @click="statusDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 第三方消息抽屉：记录代理/Mock 回调，不单独建菜单页 -->
+    <el-drawer
+      v-model="messagesDrawerVisible"
+      title="第三方消息"
+      size="56%"
+      destroy-on-close
+    >
+      <div style="padding: 0 8px 16px">
+        <el-alert
+          type="info"
+          :closable="false"
+          style="margin-bottom: 12px"
+          title="记录版权中心/代理推送的消息（补正、发证、驳回等）。申请详情只展示补正信息，完整流水在此查看。"
+        />
+        <div style="margin-bottom: 12px">
+          <el-button type="primary" :loading="messagesLoading" @click="loadMessages">刷新</el-button>
+        </div>
+        <el-table v-loading="messagesLoading" :data="messageList" border stripe max-height="70vh">
+          <el-table-column prop="createTime" label="时间" width="170" />
+          <el-table-column prop="applyNo" label="申请编号" width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.applyNo || '—' }}</template>
+          </el-table-column>
+          <el-table-column prop="externalApplyNo" label="外部申请号" width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.externalApplyNo || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="类型" width="120">
+            <template #default="{ row }">
+              <el-tag size="small" :type="messageTypeTag(row.messageType)">
+                {{ messageTypeLabel(row.messageType) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="content" label="内容" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="processStatus" label="处理" width="90" />
+        </el-table>
+      </div>
+    </el-drawer>
   </PageContainer>
 </template>
 
@@ -280,7 +320,8 @@ import {
   changeCopyrightCenterStatus,
   getCopyrightApplicationList,
   syncCopyrightApplicationStatus,
-  submitApplicationToThirdParty
+  submitApplicationToThirdParty,
+  getCopyrightThirdPartyMessages
 } from '@/api/copyright'
 
 const loading = ref(false)
@@ -389,7 +430,56 @@ const canRetryThirdParty = (row) => {
 
 const canQueryStatus = (row) => {
   const s = row?.status
-  return s === 'submitted' || s === 'reviewing' || s === 'pending' || s === 'approved'
+  return s === 'submitted'
+    || s === 'reviewing'
+    || s === 'pending'
+    || s === 'approved'
+    || s === 'need_supplement'
+    || s === 'supplement_overdue'
+}
+
+const messagesDrawerVisible = ref(false)
+const messagesLoading = ref(false)
+const messageList = ref([])
+
+const openMessagesDrawer = () => {
+  messagesDrawerVisible.value = true
+  loadMessages()
+}
+
+const loadMessages = async () => {
+  messagesLoading.value = true
+  try {
+    const res = await getCopyrightThirdPartyMessages({ limit: 100 })
+    messageList.value = Array.isArray(res) ? res : (res?.data || [])
+  } catch (e) {
+    messageList.value = []
+    ElMessage.error('加载第三方消息失败')
+  } finally {
+    messagesLoading.value = false
+  }
+}
+
+const messageTypeLabel = (type) => {
+  const map = {
+    supplement_required: '要求补正',
+    notice: '通知',
+    certificated: '发证',
+    rejected: '驳回',
+    other: '其他'
+  }
+  return map[type] || type || '—'
+}
+
+const messageTypeTag = (type) => {
+  const map = {
+    supplement_required: 'warning',
+    notice: 'info',
+    certificated: 'success',
+    rejected: 'danger',
+    other: ''
+  }
+  return map[type] || 'info'
 }
 
 const applicationsDialogVisible = ref(false)
@@ -604,7 +694,7 @@ const viewApplications = async (row) => {
     // 监控该中心下申请；补推仅针对「已付款但第三方提交失败」
     const res = await getCopyrightApplicationList({
       configId: row.configId,
-      statusList: 'submitted,reviewing,certificated,rejected,pending,approved',
+      statusList: 'submitted,reviewing,need_supplement,supplement_overdue,certificated,rejected,pending,approved',
       pageNo: 1,
       pageSize: 100
     })
@@ -654,6 +744,8 @@ const getProgressDescription = (status) => {
     approved: '审核中（历史单）',
     submitted: '已付款后提交第三方失败或处理中，可补推',
     reviewing: '已提交到第三方版权中心，正在审核中',
+    need_supplement: '第三方要求补正材料（同一申请内补正，不重交官费）',
+    supplement_overdue: '补正已超时，可能不予登记',
     certificated: '审核通过，证书已颁发',
     rejected: '审核未通过，申请已被驳回'
   }
@@ -695,6 +787,8 @@ const getStatusLabel = (status) => {
     approved: '审核中',
     submitted: '审核中',
     reviewing: '审核中',
+    need_supplement: '待补正',
+    supplement_overdue: '逾期待驳回',
     certificated: '已发证',
     rejected: '已驳回'
   }
@@ -707,6 +801,8 @@ const getStatusType = (status) => {
     approved: 'primary',
     submitted: 'primary',
     reviewing: 'primary',
+    need_supplement: 'warning',
+    supplement_overdue: 'danger',
     certificated: 'success',
     rejected: 'danger'
   }

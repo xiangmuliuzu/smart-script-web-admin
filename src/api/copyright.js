@@ -396,6 +396,15 @@ export function changeCopyrightCenterStatus(data) {
 }
 
 // 获取可用的版权中心列表
+/** 第三方消息流水（版权中心配置页抽屉） */
+export function getCopyrightThirdPartyMessages(params) {
+  return adminV1Request({
+    url: `${PRODUCT_PREFIX}/content/copyright/config/third-party/messages`,
+    method: 'get',
+    params
+  })
+}
+
 export function getAvailableCopyrightCenters() {
   return adminV1Request({
     url: `${PRODUCT_PREFIX}/content/copyright/config/active`,

@@ -6,6 +6,8 @@
       <el-form-item>
         <el-select v-model="query.status" placeholder="申请状态" clearable style="width: 160px">
           <el-option label="审核中" value="reviewing_group" />
+          <el-option label="待补正" value="need_supplement" />
+          <el-option label="逾期待驳回" value="supplement_overdue" />
           <el-option label="已驳回" value="rejected" />
           <el-option label="已发证" value="certificated" />
         </el-select>
@@ -68,6 +70,17 @@
           <el-tag :type="statusType(row.status)" effect="light" size="small">
             {{ row.statusText || statusLabel(row.status) }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="补正截止" width="170">
+        <template #default="{ row }">
+          <span
+            v-if="row.supplementDeadline"
+            :style="{ color: row.status === 'supplement_overdue' ? '#cf1322' : (row.status === 'need_supplement' ? '#fa541c' : undefined) }"
+          >
+            {{ row.supplementDeadline }}
+          </span>
+          <span v-else>—</span>
         </template>
       </el-table-column>
       <el-table-column prop="submitTime" label="提交时间" width="170" />
@@ -171,6 +184,58 @@
             </el-descriptions>
           </el-card>
 
+          <!-- 补正信息 -->
+          <el-card
+            v-if="currentRecord.supplementNotice || currentRecord.supplementDeadline || currentRecord.status === 'need_supplement' || currentRecord.status === 'supplement_overdue'"
+            shadow="never"
+            class="detail-card"
+          >
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Document /></el-icon>
+                  补正信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="补正截止">
+                {{ currentRecord.supplementDeadline || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="当前状态">
+                <el-tag :type="statusType(currentRecord.status)" size="small">
+                  {{ statusLabel(currentRecord.status) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="补正要求" :span="2">
+                {{ currentRecord.supplementNotice || currentRecord.openSupplement?.requirementText || '—' }}
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">补正单</el-divider>
+            <el-table
+              v-if="(currentRecord.supplements || []).length"
+              :data="currentRecord.supplements"
+              border
+              size="small"
+              style="margin-bottom: 12px"
+            >
+              <el-table-column prop="supplementId" label="单号" width="80" />
+              <el-table-column prop="status" label="状态" width="100">
+                <template #default="{ row }">{{ supplementStatusLabel(row.status) }}</template>
+              </el-table-column>
+              <el-table-column prop="deadlineTime" label="截止" width="170" />
+              <el-table-column prop="submitTime" label="提交时间" width="170">
+                <template #default="{ row }">{{ row.submitTime || '—' }}</template>
+              </el-table-column>
+              <el-table-column prop="requirementText" label="要求" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="userRemark" label="用户说明" min-width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.userRemark || '—' }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="暂无补正单" :image-size="48" />
+          </el-card>
+
           <!-- 申请人信息 -->
           <el-card shadow="never" class="detail-card">
             <template #header>
@@ -186,6 +251,9 @@
               <el-descriptions-item label="姓名">{{ currentRecord.userName || '—' }}</el-descriptions-item>
               <el-descriptions-item label="手机号">{{ currentRecord.userPhone || '—' }}</el-descriptions-item>
               <el-descriptions-item label="邮箱">{{ currentRecord.userEmail || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="权利人">{{ currentRecord.rightsHolderName || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="证件类型">{{ idDocTypeLabel(currentRecord.idDocType) }}</el-descriptions-item>
+              <el-descriptions-item label="证件号码" :span="2">{{ currentRecord.idDocNo || '—' }}</el-descriptions-item>
             </el-descriptions>
           </el-card>
 
@@ -769,6 +837,8 @@ const getStatusDescription = (status) => {
     approved: '审核中（历史单只读）',
     submitted: '审核中 / 若已付款且无外部号可补推第三方',
     reviewing: '审核中 - 已提交到第三方版权中心，等待审核',
+    need_supplement: '待补正 - 第三方要求补充材料（不重交官费）',
+    supplement_overdue: '逾期待驳回 - 补正已超时',
     certificated: '已发证 - 版权登记成功',
     rejected: '已驳回（用户需重新缴费申请）'
   }
@@ -784,6 +854,8 @@ const getProgressDescription = (status, externalApplyNo) => {
   }
   const map = {
     reviewing: '已提交到第三方版权中心，正在审核中，请耐心等待',
+    need_supplement: '请通知用户在截止日前于 App 提交补正材料',
+    supplement_overdue: '补正已超时，最终结果以版权中心为准',
     certificated: '版权证书已发放，可在详情中查看证书信息',
     rejected: '申请被第三方驳回，请查看驳回原因'
   }
@@ -801,7 +873,12 @@ const canRetryThirdParty = (row) => {
 const canQueryStatus = (row) => {
   if (!row) return false
   const s = row.status
-  return s === 'pending' || s === 'approved' || s === 'submitted' || s === 'reviewing'
+  return s === 'pending'
+    || s === 'approved'
+    || s === 'submitted'
+    || s === 'reviewing'
+    || s === 'need_supplement'
+    || s === 'supplement_overdue'
 }
 
 const handleRetryThirdParty = async (row) => {
@@ -1009,6 +1086,8 @@ const statusLabel = (status) => {
     approved: '审核中',
     submitted: '审核中',
     reviewing: '审核中',
+    need_supplement: '待补正',
+    supplement_overdue: '逾期待驳回',
     rejected: '已驳回',
     certificated: '已发证'
   }
@@ -1021,10 +1100,33 @@ const statusType = (status) => {
     approved: 'primary',
     submitted: 'primary',
     reviewing: 'primary',
+    need_supplement: 'warning',
+    supplement_overdue: 'danger',
     rejected: 'danger',
     certificated: 'success'
   }
   return map[status] || 'info'
+}
+
+const idDocTypeLabel = (type) => {
+  const map = {
+    id_card: '居民身份证',
+    passport: '护照',
+    hk_macau_pass: '港澳居民来往内地通行证',
+    taiwan_pass: '台湾居民来往大陆通行证',
+    other: '其他'
+  }
+  return map[type] || type || '—'
+}
+
+const supplementStatusLabel = (status) => {
+  const map = {
+    open: '待用户提交',
+    submitted: '已提交',
+    overdue: '已逾期',
+    closed: '已关闭'
+  }
+  return map[status] || status || '—'
 }
 
 // 解析URL字符串（支持逗号分隔、JSON字符串数组、JSON对象数组格式）
