@@ -31,7 +31,6 @@ import UserCreatorApply from '@/views/user/creator-apply/index.vue'
 import MessagesAnnouncements from '@/views/support/MessagesAnnouncements.vue'
 import ReceivedAnnouncements from '@/views/support/ReceivedAnnouncements.vue'
 import UserFeedback from '@/views/user/feedback/index.vue'
-import RiskManage from '@/views/risk/RiskManage.vue'
 import AiOperations from '@/views/system/AiOperations.vue'
 import SystemUser from '@/views/system/user/index.vue'
 import SystemRole from '@/views/system/role/index.vue'
@@ -89,7 +88,6 @@ export const componentMap = {
   'support/MessagesAnnouncements': MessagesAnnouncements,
   'support/ReceivedAnnouncements': ReceivedAnnouncements,
   'user/feedback/index': UserFeedback,
-  'risk/RiskManage': RiskManage,
   'system/AiOperations': AiOperations,
   'welfare/WelfarePoints': WelfarePoints,
 
