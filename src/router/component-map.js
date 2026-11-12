@@ -24,6 +24,7 @@ import AuthOrders from '@/views/trade/AuthOrders.vue'
 import Inquiry from '@/views/trade/Inquiry.vue'
 import Quote from '@/views/trade/Quote.vue'
 import Demand from '@/views/trade/Demand.vue'
+import DemandDetail from '@/views/trade/DemandDetail.vue'
 import AdConfig from '@/views/operation/AdConfig.vue'
 import UserManageProduct from '@/views/user/UserManage.vue'
 import UserRealName from '@/views/user/realname/index.vue'
@@ -80,6 +81,7 @@ export const componentMap = {
   'trade/Inquiry': Inquiry,
   'trade/Quote': Quote,
   'trade/Demand': Demand,
+  'trade/DemandDetail': DemandDetail,
   'operation/AdConfig': AdConfig,
   'user/UserManage': UserManageProduct,
   'user/realname/index': UserRealName,

@@ -13,7 +13,7 @@
  * - 金额：后端为 BigDecimal（单位「元」），页面展示值统一格式化为 ¥ + 千分位两位小数。
  * - 幂等：所有映射使用 `页面字段 ?? 后端字段` 兜底，重复适配或字段已对齐时不会破坏数据。
  */
-import { enumLabel } from '@/constants/tradeEnum'
+import { enumLabel, normalizeDemandTaskType } from '@/constants/tradeEnum'
 
 /** 题材 ID → 名称（与 Demand.vue 发布表单内置题材选项保持一致；接口未返回题材名时兜底） */
 const GENRE_MAP = {
@@ -131,6 +131,7 @@ export function adaptDemands(res) {
     budgetText: d.budgetText || formatMoney(d.budget),
     escrowText: d.escrowText || formatMoney(d.escrowAmount),
     depositText: d.depositText || formatMoney(d.depositAmount),
+    taskTypeLabel: d.taskTypeLabel || enumLabel('demandTaskType', normalizeDemandTaskType(d.taskType)),
     escrowStatusLabel: d.escrowStatusLabel || enumLabel('demandEscrow', d.escrowStatus),
     depositStatusLabel: d.depositStatusLabel || enumLabel('demandDeposit', d.depositStatus)
   }))

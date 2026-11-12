@@ -115,6 +115,26 @@ export const DEMAND_STATUS = [
   { value: 'failed', label: '已失败', tagType: 'danger' }
 ]
 
+/** 任务类型（sys_demand.task_type，与 APP/企业/创作者端同口径） */
+export const DEMAND_TASK_TYPE = [
+  { value: 'script', label: '只征集剧本', tagType: 'primary' },
+  { value: 'script_storyboard', label: '剧本+分镜', tagType: 'warning' },
+  { value: 'storyboard', label: '提供剧本做分镜', tagType: 'success' }
+]
+
+/** 任务类型交付口径说明（发布/接单/详情三处共用，与 APP/企业/创作者端逐字同口径） */
+export const DEMAND_TASK_TYPE_HINT = {
+  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入发布者人工验收',
+  script_storyboard: '逐轮交付剧本作品，分镜以文件链接或交付说明随本轮一并提交，AI 剧本审核通过后进入人工验收',
+  storyboard: '按发布者提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收'
+}
+
+/** 脏值/缺值统一回落 script，与后端 normalizeAndValidateTaskType 及 APP DemandTaskType.normalize 同规则，
+    否则历史脏数据会把英文原值直接渲染到管理端列表 */
+export function normalizeDemandTaskType(value) {
+  return DEMAND_TASK_TYPE.some(item => item.value === value) ? value : 'script'
+}
+
 /** 需求任务托管资金状态（入账走支付宝沙箱，出账记账） */
 export const DEMAND_ESCROW_STATUS = [
   { value: 'none', label: '无托管', tagType: 'info' },
@@ -134,6 +154,51 @@ export const DEMAND_DEPOSIT_STATUS = [
   { value: 'held', label: '在押', tagType: 'primary' },
   { value: 'refunded', label: '已退还', tagType: 'success' },
   { value: 'forfeited', label: '已没收', tagType: 'danger' }
+]
+
+/**
+ * 验收轮次状态（sys_demand_stage.status），值取自后端 SysDemandStage.STAGE_STATUS_*。
+ * 逾期不是状态而是 is_overdue 标记，由页面单独渲染成红色标签。
+ */
+export const DEMAND_STAGE_STATUS = [
+  { value: 'pending', label: '未开始', tagType: 'info' },
+  { value: 'ai_reviewing', label: 'AI审核中', tagType: 'warning' },
+  { value: 'submitted', label: '待人工验收', tagType: 'warning' },
+  { value: 'approved', label: '已通过', tagType: 'success' },
+  { value: 'rejected', label: '已驳回', tagType: 'danger' }
+]
+
+/** 延时记录来源（sys_demand_extend_apply.apply_type）：创作者申请需发布者裁决，发布者自主延时写入即生效。 */
+export const DEMAND_EXTEND_APPLY_TYPE = [
+  { value: 'request', label: '申请延时', tagType: 'warning' },
+  { value: 'self', label: '自主延时', tagType: 'primary' }
+]
+
+/** 延时记录处理态（sys_demand_extend_apply.status 与 sys_demand_stage.extend_status 同源）。 */
+export const DEMAND_EXTEND_STATUS = [
+  { value: 'pending', label: '待处理', tagType: 'warning' },
+  { value: 'approved', label: '已同意', tagType: 'success' },
+  { value: 'rejected', label: '已驳回', tagType: 'info' }
+]
+
+/** 沙箱收款用途（demand_sandbox_payment.purpose）。 */
+export const DEMAND_SANDBOX_PURPOSE = [
+  { value: 'escrow', label: '任务托管款', tagType: 'primary' },
+  { value: 'deposit', label: '接单押金', tagType: 'warning' }
+]
+
+/** 沙箱收款状态（demand_sandbox_payment.status），PENDING 含「已换号失效的旧码当前态」。 */
+export const DEMAND_SANDBOX_STATUS = [
+  { value: 'PENDING', label: '待支付', tagType: 'warning' },
+  { value: 'PAID', label: '已入账', tagType: 'success' },
+  { value: 'CLOSED', label: '已关闭', tagType: 'info' }
+]
+
+/** 逐轮放款结算状态（sys_income_settle.status）：出账目前仅记账，确认动作由收款创作者完成。 */
+export const SETTLE_STATUS = [
+  { value: 'pending', label: '待确认', tagType: 'warning' },
+  { value: 'confirmed', label: '已确认入账', tagType: 'success' },
+  { value: 'disputed', label: '争议中', tagType: 'danger' }
 ]
 
 /** 投稿状态（sys_demand_submission）⚠️ 临时，待后端确认 */
@@ -190,8 +255,15 @@ export const ENUM_REGISTRY = {
   work: WORK_STATUS,
   followMethod: FOLLOW_METHOD,
   demand: DEMAND_STATUS,
+  demandTaskType: DEMAND_TASK_TYPE,
   demandEscrow: DEMAND_ESCROW_STATUS,
   demandDeposit: DEMAND_DEPOSIT_STATUS,
+  demandStage: DEMAND_STAGE_STATUS,
+  demandExtendApplyType: DEMAND_EXTEND_APPLY_TYPE,
+  demandExtendStatus: DEMAND_EXTEND_STATUS,
+  demandSandboxPurpose: DEMAND_SANDBOX_PURPOSE,
+  demandSandboxStatus: DEMAND_SANDBOX_STATUS,
+  settleStatus: SETTLE_STATUS,
   submission: SUBMISSION_STATUS,
   cooperationSource: COOPERATION_SOURCE,
   cooperationStatus: COOPERATION_STATUS

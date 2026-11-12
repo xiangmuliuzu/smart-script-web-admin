@@ -65,7 +65,9 @@ defineProps({
   emptyImage: { type: String, default: '' },
   rowKey: { type: [String, Function], default: undefined },
   treeProps: { type: Object, default: undefined },
-  expandRowKeys: { type: Array, default: () => [] }
+  // element-plus 2.14 起：expand-row-keys 只要不是 undefined 就强制要求 row-key，
+  // 默认给 [] 会让所有不展开行的列表页在 ElTable setup 里直接抛错整页白屏。
+  expandRowKeys: { type: Array, default: undefined }
 })
 const emit = defineEmits(['update:page', 'update:pageSize', 'page-change', 'size-change', 'selection-change'])
 

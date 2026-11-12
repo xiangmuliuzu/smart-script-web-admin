@@ -101,3 +101,25 @@ export function createDemand(data) {
   if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
   return request({ url: `${PREFIX}/trade/demand`, method: 'post', data })
 }
+
+/* ==================== 需求任务运营视图（只读；金额字段为库内「元」口径） ==================== */
+
+/** 任务详情 GET /trade/demand/{demandId} */
+export function getDemandDetail(demandId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}`, method: 'get' })
+}
+
+/** 逐轮验收明细 GET /trade/demand/{demandId}/stages */
+export function getDemandStages(demandId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/stages`, method: 'get' })
+}
+
+/** 资金流水 GET /trade/demand/{demandId}/payments → { sandboxPayments, stageSettles } */
+export function getDemandPayments(demandId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/payments`, method: 'get' })
+}
+
+/** 延时记录 GET /trade/demand/{demandId}/extend-applies */
+export function getDemandExtendApplies(demandId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/extend-applies`, method: 'get' })
+}

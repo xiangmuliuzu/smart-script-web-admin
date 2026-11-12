@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="任务管理" description="买方发布的剧本接单任务管理（对应 sys_demand，抢单制·先到先得），本页面仅支持查看详情">
+    <PageHeader title="任务管理" description="买方发布的剧本/分镜接单任务管理（对应 sys_demand，接单制·先到先得，任务类型分只征集剧本/剧本+分镜/提供剧本做分镜），本页面仅支持查看详情">
     </PageHeader>
 
     <FilterBar @query="handleQuery" @reset="handleReset">
@@ -8,6 +8,16 @@
         <el-select v-model="query.status" placeholder="全部任务状态" style="width: 150px" clearable>
           <el-option
             v-for="opt in demandStatusOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-select v-model="query.taskType" placeholder="全部任务类型" style="width: 170px" clearable>
+          <el-option
+            v-for="opt in demandTaskTypeOptions"
             :key="opt.value"
             :label="opt.label"
             :value="opt.value"
@@ -36,6 +46,11 @@
     >
       <el-table-column prop="demandNo" label="任务编号" width="120" />
       <el-table-column prop="title" label="任务标题" min-width="160" />
+      <el-table-column label="任务类型" width="130">
+        <template #default="{ row }">
+          <el-tag :type="taskTypeTagType(row.taskType)" size="small">{{ row.taskTypeLabel }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="client" label="发布方" width="120" />
       <el-table-column label="标签" min-width="140">
         <template #default="{ row }">
@@ -68,9 +83,10 @@
           <StatusTag type="demand" :status="row.status" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="handleViewDetail(row)">查看详情</el-button>
+          <el-button size="small" @click="handleOpenOperation(row)">运营详情</el-button>
         </template>
       </el-table-column>
     </TableCard>
@@ -86,6 +102,15 @@
           </el-descriptions-item>
           <el-descriptions-item label="任务标题">{{ detail.title }}</el-descriptions-item>
           <el-descriptions-item label="发布方">{{ detail.client }}</el-descriptions-item>
+          <el-descriptions-item label="任务类型">
+            <el-tag :type="taskTypeTagType(detail.taskType)" size="small">{{ detail.taskTypeLabel }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="交付要求">{{ taskTypeHint(detail.taskType) }}</el-descriptions-item>
+          <el-descriptions-item v-if="detail.taskType === 'storyboard'" label="源剧本" :span="2">
+            <span v-if="detail.sourceWorkTitle">《{{ detail.sourceWorkTitle }}》</span>
+            <a v-if="detail.sourceScriptUrl" :href="resolveMediaUrl(detail.sourceScriptUrl)" target="_blank" rel="noopener" style="margin-left:6px">{{ detail.sourceScriptName || '剧本文件' }}</a>
+            <span v-if="!detail.sourceWorkTitle && !detail.sourceScriptUrl" class="text-muted">-</span>
+          </el-descriptions-item>
           <el-descriptions-item label="标签" :span="2">
             <el-tag v-for="t in (detail.tags || detail.genre || '').split(',').filter(Boolean)" :key="t" size="small" style="margin-right:4px">{{ t }}</el-tag>
             <span v-if="!(detail.tags || detail.genre)">-</span>
@@ -128,28 +153,36 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
-import { enumOptions, enumTagType } from '@/constants/tradeEnum'
+import { enumOptions, enumTagType, DEMAND_TASK_TYPE_HINT, normalizeDemandTaskType } from '@/constants/tradeEnum'
+import { resolveMediaUrl } from '@/utils/request'
 import { getDemandList } from '@/api/trade'
 
 defineOptions({ name: 'Demand' })
 
+const router = useRouter()
+
 // 任务状态枚举（接单制，见 constants/tradeEnum.js DEMAND_STATUS）
 const demandStatusOptions = enumOptions('demand')
+// 任务类型枚举（sys_demand.task_type）
+const demandTaskTypeOptions = enumOptions('demandTaskType')
 
 // 托管/押金 tag 颜色（入账走沙箱、出账记账，仅展示）
 const escrowTagType = (v) => enumTagType('demandEscrow', v)
 const depositTagType = (v) => enumTagType('demandDeposit', v)
+const taskTypeTagType = (v) => enumTagType('demandTaskType', normalizeDemandTaskType(v))
+const taskTypeHint = (v) => DEMAND_TASK_TYPE_HINT[normalizeDemandTaskType(v)]
 
 const loading = ref(false)
 const list = ref([])
 const total = ref(0)
-const query = ref({ pageNo: 1, pageSize: 10, status: '', keyword: '' })
+const query = ref({ pageNo: 1, pageSize: 10, status: '', taskType: '', keyword: '' })
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
@@ -176,7 +209,7 @@ function handleQuery() {
 }
 
 function handleReset() {
-  query.value = { pageNo: 1, pageSize: 10, status: '', keyword: '' }
+  query.value = { pageNo: 1, pageSize: 10, status: '', taskType: '', keyword: '' }
   loadList()
 }
 
@@ -184,6 +217,11 @@ function handleViewDetail(row) {
   // 只读详情：直接使用列表行数据（含接单制新字段），不展示发布/投稿操作
   detail.value = { ...row }
   detailVisible.value = true
+}
+
+function handleOpenOperation(row) {
+  // 逐轮验收、资金流水与延时记录数据量大，走独立运营详情页按需拉取
+  router.push({ path: '/trade/demand-detail', query: { demandId: row.demandId } })
 }
 
 onMounted(() => { loadList() })
