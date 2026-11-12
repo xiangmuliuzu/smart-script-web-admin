@@ -34,18 +34,6 @@ export function listMessages(sessionId) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/messages`, method: 'get' })
 }
 
-/** 管理端发起会话：data = { targetUserId, businessType, businessId, businessName } */
-export function createSession(data) {
-  return request({ url: `${PREFIX}/sessions`, method: 'post', data })
-}
-
-/**
- * createSession 的别名导出：版权审核（ReviewWorkbench/CopyrightAssets/SealReview）
- * 与授权订单（AuthOrders）等管理页以 adminCreateSession 命名发起「联系用户」会话，
- * 与 createSession 同一端点、同一入参，仅为调用方命名习惯提供兼容。
- */
-export const adminCreateSession = createSession
-
 /** 管理员回复消息：data = { content, msgType? }，返回消息 VO */
 export function sendMessage(sessionId, data) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/messages`, method: 'post', data })

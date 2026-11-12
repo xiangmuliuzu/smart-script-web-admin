@@ -66,7 +66,6 @@
             <el-button v-if="row.reviewStatus === 'approved' && ['disabled', 'enabled'].includes(row.sealStatus)" v-permission="'smartscript:copyright:seals:status'" :type="row.sealStatus === 'enabled' ? 'danger' : 'success'" link :loading="statusChangingSealId === row.sealId" :disabled="statusChangingSealId !== null && statusChangingSealId !== row.sealId" @click="changeStatus(row)">
               {{ row.sealStatus === 'enabled' ? '停用' : '启用' }}
             </el-button>
-            <el-button link type="primary" :disabled="!row.userId" @click="handleContactUser(row)">联系用户</el-button>
           </div>
         </template>
       </el-table-column>
@@ -215,7 +214,6 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useContactUser } from '@/composables/useContactUser'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
@@ -406,15 +404,6 @@ function openReview(row) {
   reviewForm.value = { sealId: row.sealId, action: 'approve', reason: '' }
   reviewVisible.value = true
 }
-
-// A3 联系用户（任务 27）：复用公共 composable 创建会话并跳转聊天详情
-const { handleContactUser } = useContactUser({
-  businessType: 'SEAL',
-  extractUserId: (row) => row.userId,
-  extractBusinessId: (row) => row.sealId,
-  extractBusinessName: (row) => row.sealName,
-  emptyMessage: '该印章申请暂未关联用户，无法发起沟通'
-})
 
 async function submitReview() {
   if (reviewSubmitting.value) return

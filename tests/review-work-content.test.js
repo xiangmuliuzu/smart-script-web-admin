@@ -49,7 +49,6 @@ async function wbSetup(overrides = {}) {
   const context = {
     ref, reactive, computed,
     onMounted() {}, onBeforeUnmount() {}, defineExpose() {},
-    useContactUser: () => ({ handleContactUser() {} }),
     ElMessage: { success() {}, error() {}, warning() {}, info() {} },
     ...overrides
   }

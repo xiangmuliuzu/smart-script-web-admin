@@ -228,8 +228,6 @@
         :loading="detailContentLoading"
       />
       <template #footer>
-        <!-- A3 联系用户入口（任务 25）：待作品关联真实 userId 后自动启用 -->
-        <el-button type="primary" plain :disabled="!currentDetail.userId" @click="handleContactUser(currentDetail)">联系用户</el-button>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -240,25 +238,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useContactUser } from '@/composables/useContactUser'
-import { sendMessage } from '@/api/adminChat'
-import { buildReviewNotice } from '@/utils/reviewNotice'
 import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
-
-// A3 联系用户（任务 25）：复用公共 composable 创建会话并跳转聊天详情
-// 顺带把作品审核详情（AI 评分/风险/问题定位）作为首条消息发给用户，便于用户看到驳回原因
-const { handleContactUser } = useContactUser({
-  businessType: 'WORK',
-  extractUserId: (row) => row.userId,
-  extractBusinessId: (row) => row.workId || row.reviewId,
-  extractBusinessName: (row) => row.workTitle || row.workName || row.name,
-  emptyMessage: '该作品暂未关联用户，无法发起沟通',
-  sendFirstMessage: async (sessionId, row) => {
-    // 消息对管理员简洁，对用户具体：附 AI 原始驳回原因 + 问题章节命中词及原文片段
-    const content = buildReviewNotice(row, (detailContent.value && detailContent.value.issues) || null, (detailContent.value && detailContent.value.aiInfo) || null)
-    await sendMessage(sessionId, { content })
-  }
-})
 
 // 筛选表单
 const filterForm = ref({

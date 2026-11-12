@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@vue/compiler-sfc'
-import { computed, ref, reactive } from 'vue'
+import { computed } from 'vue'
 
 // ---- 面板：AI 问题定位模式（红字 + 章节后驳回原因 + 只显示问题章节） ----
 async function panelSetup(content, aiInfo, issues) {
@@ -75,30 +75,4 @@ test('面板: 无 issues 字段（旧接口）走兼容分支，hasIssues 为 fa
   const page = await panelSetup(content, null, null)
   assert.equal(page.hasIssues.value, false)
   assert.equal(page.chapters.value.length, 1)
-})
-
-// ---- 审核工作台：联系用户时配置了"先发作品详情再跳转" ----
-test('工作台: 联系用户注入 sendFirstMessage（发作品审核详情给用户）', async () => {
-  const source = await readFile(
-    new URL('../src/views/copyright/ReviewWorkbench.vue', import.meta.url), 'utf8'
-  )
-  const { descriptor } = parse(source)
-  const code = descriptor.scriptSetup.content
-    .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?$/gm, '')
-  let capturedOpts = null
-  const context = {
-    ref, reactive, computed,
-    onMounted() {}, onBeforeUnmount() {}, defineExpose() {},
-    ElMessage: { success() {}, error() {}, warning() {}, info() {} },
-    useContactUser: (opts) => {
-      capturedOpts = opts
-      return { handleContactUser() {} }
-    }
-  }
-  runInNewContext(code, context)
-
-  assert.ok(capturedOpts, '应调用 useContactUser')
-  assert.equal(capturedOpts.businessType, 'WORK')
-  assert.equal(typeof capturedOpts.sendFirstMessage, 'function', '应配置发送首条消息的回调')
-  assert.equal(typeof capturedOpts.extractUserId, 'function')
 })

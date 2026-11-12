@@ -107,8 +107,6 @@
         <el-empty v-else description="暂无状态流转记录" :image-size="60" />
       </div>
       <template #footer>
-        <!-- A3 联系用户入口（任务 28）：待订单关联真实作者 userId 后自动启用 -->
-        <el-button type="primary" plain :disabled="!detail.creator?.userId" @click="handleContactUser">联系作者</el-button>
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -117,7 +115,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useContactUser } from '@/composables/useContactUser'
 import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -181,15 +178,6 @@ async function handleDetail(row) {
     detailLoading.value = false
   }
 }
-
-// A3 联系用户（任务 28）：复用公共 composable 创建会话并跳转聊天详情
-const { handleContactUser } = useContactUser({
-  businessType: 'ORDER',
-  extractUserId: () => detail.value?.creator?.userId,
-  extractBusinessId: () => currentOrderId.value,
-  extractBusinessName: () => detail.value?.workTitle,
-  emptyMessage: '该订单暂未关联作者用户，无法发起沟通'
-})
 
 function handleExport() {
   ElMessage.info('导出订单')
