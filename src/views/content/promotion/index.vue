@@ -59,7 +59,7 @@
               :class="{ on: slotChip === chip.value }"
               @click="slotChip = chip.value"
             >
-              {{ chip.label }}<b v-if="chip.count">{{ chip.count }}</b>
+              {{ chip.label }}<b>{{ chip.count }}</b>
             </span>
           </div>
           <div class="toolbar-right">
@@ -83,47 +83,34 @@
           <el-table-column v-if="activeSlotType === 'banner'" label="Banner 素材" min-width="280">
             <template #default="{ row }">
               <div class="material-cell">
-                <template v-if="row.current && row.current.materialUrl">
-                  <el-image
-                    :src="resolveMediaUrl(row.current.materialUrl)"
-                    :preview-src-list="[resolveMediaUrl(row.current.materialUrl)]"
-                    preview-teleported
-                    fit="cover"
-                    class="mini-banner"
-                  />
-                  <div class="material-main">
-                    <div class="work-title">{{ row.current.workTitle || '—' }}</div>
-                    <div class="sub">{{ row.current.source === 'admin_grant' ? '运营直上' : '作者提交素材' }} · 第 {{ row.slotNo }} 位</div>
-                  </div>
-                </template>
-                <template v-else-if="row.backup">
-                  <el-image
-                    v-if="row.backup.materialUrl"
-                    :src="resolveMediaUrl(row.backup.materialUrl)"
-                    :preview-src-list="[resolveMediaUrl(row.backup.materialUrl)]"
-                    preview-teleported
-                    fit="cover"
-                    class="mini-banner"
-                  />
-                  <div v-else class="mini-banner mini-banner--missing">无图</div>
-                  <div class="material-main">
-                    <div class="work-title">{{ row.backup.workTitle || '运营兜底素材' }}</div>
-                    <div class="sub">运营兜底 · 可被付费素材覆盖</div>
-                  </div>
-                </template>
-                <template v-else>
-                  <div class="mini-banner mini-banner--missing">
-                    {{ needsMaterial(row) ? '待上传' : '空闲' }}
-                  </div>
-                  <div class="material-main">
-                    <div v-if="needsMaterial(row)" class="work-title">待上传素材</div>
-                    <div v-else-if="row.current" class="work-title">{{ row.current.workTitle || '—' }}</div>
-                    <div v-else class="work-title muted">空闲位次</div>
-                    <div class="sub">
-                      {{ needsMaterial(row) ? '缺少 16:9 Banner 素材' : row.current ? '未绑定 Banner 素材' : '可接受申请' }}
+                <div class="material-row">
+                  <template v-if="row.current">
+                    <el-image
+                      v-if="row.current.materialUrl"
+                      :src="resolveMediaUrl(row.current.materialUrl)"
+                      :preview-src-list="[resolveMediaUrl(row.current.materialUrl)]"
+                      preview-teleported
+                      fit="cover"
+                      class="mini-banner"
+                    />
+                    <div v-else class="mini-banner mini-banner--missing">
+                      {{ needsMaterial(row) ? '待上传' : '无图' }}
                     </div>
-                  </div>
-                </template>
+                    <div class="material-main">
+                      <div class="work-title">{{ row.current.workTitle || '—' }}</div>
+                      <div class="sub">
+                        {{ needsMaterial(row) ? '缺少 16:9 Banner 素材' : `第 ${row.slotNo} 位` }}
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="mini-banner mini-banner--missing">空闲</div>
+                    <div class="material-main">
+                      <div class="work-title muted">空闲位次</div>
+                      <div class="sub">可接受申请</div>
+                    </div>
+                  </template>
+                </div>
               </div>
             </template>
           </el-table-column>
@@ -190,12 +177,12 @@
               <div class="state-cell">
                 <el-tag size="small" :type="slotStateMeta(row.state).type">{{ slotStateMeta(row.state).text }}</el-tag>
                 <span v-if="row.state === 'locked' && row.current" class="sub">{{ lockLabel(row.current) }}</span>
-                <span v-else-if="row.state === 'active' && !row.current" class="sub">运营兜底 · 可覆盖</span>
+                <span v-else-if="row.state === 'active' && row.current?.exclusive === 0" class="sub">可被覆盖</span>
               </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="操作" width="300" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <div class="op-cell">
                 <el-button
@@ -215,37 +202,21 @@
                   @click="handleOffline(row.current)"
                 >下架</el-button>
                 <el-button
-                  v-if="row.backup"
-                  v-hasPermi="['content:promotion:audit']"
-                  link
-                  type="danger"
-                  size="small"
-                  @click="handleOffline(row.backup)"
-                >下架兜底</el-button>
-                <el-button
                   v-if="canToggleExclusive(row.current)"
                   v-hasPermi="['content:promotion:grant']"
                   link
                   type="warning"
                   size="small"
-                  @click="handleToggleExclusive(row.current, 0)"
-                >改为可覆盖</el-button>
+                  @click="handleToggleExclusive(row.current, row.current.exclusive === 0 ? 1 : 0)"
+                >{{ row.current.exclusive === 0 ? '锁定' : '解锁' }}</el-button>
                 <el-button
-                  v-if="canToggleExclusive(row.backup)"
-                  v-hasPermi="['content:promotion:grant']"
-                  link
-                  type="warning"
-                  size="small"
-                  @click="handleToggleExclusive(row.backup, 1)"
-                >设为锁定</el-button>
-                <el-button
-                  v-if="!row.current && (row.state === 'idle' || row.state === 'active')"
+                  v-if="row.state === 'idle'"
                   v-hasPermi="['content:promotion:grant']"
                   link
                   type="primary"
                   size="small"
                   @click="openGrant(row)"
-                >免费上架</el-button>
+                >上架</el-button>
               </div>
             </template>
           </el-table-column>
@@ -569,7 +540,7 @@
         <el-form-item label="锁定该位次">
           <el-switch v-model="grantForm.exclusive" :active-value="1" :inactive-value="0" />
           <div class="banner-uploader__tip">
-            锁定：该时段独占，App 显示「已占用至」且不可预约；不锁定：作为运营兜底素材，App 显示「运营素材 · 可覆盖」，可被付费素材覆盖
+            锁定：该时段独占，App 显示「已占用至」且不可预约；不锁定：App 显示「运营素材 · 可预约」，被付费素材覆盖后自动下架
           </div>
         </el-form-item>
       </el-form>
@@ -772,7 +743,6 @@ const filteredSlots = computed(() => {
   if (keyword) {
     rows = rows.filter((row) => {
       const text = [
-        row.backup?.workTitle,
         row.current?.workTitle,
         row.current?.authorName
       ].filter(Boolean).join(' ').toLowerCase()
@@ -893,7 +863,7 @@ function lockLabel(app) {
 }
 
 function periodInfo(row) {
-  const app = row.current || row.backup
+  const app = row.current
   const start = app?.startTime
   const end = app?.endTime
   if (!start || !end) return null
@@ -952,18 +922,13 @@ function needsMaterial(row) {
 }
 
 function bannerSource(row) {
-  if (row.current) {
-    if (row.current.source !== 'admin_grant') {
-      return { text: '作者推广', sub: row.current.authorName || '—' }
-    }
-    return row.current.exclusive === 0
-      ? { text: '运营兜底', sub: '可被覆盖' }
-      : { text: '运营直上', sub: '锁定独占' }
+  if (!row.current) return { text: '—', sub: '' }
+  if (row.current.source !== 'admin_grant') {
+    return { text: '作者推广', sub: row.current.authorName || '—' }
   }
-  if (row.backup) {
-    return { text: '运营兜底', sub: '可被覆盖' }
-  }
-  return { text: '—', sub: '' }
+  return row.current.exclusive === 0
+    ? { text: '运营上架', sub: '可被覆盖' }
+    : { text: '运营上架', sub: '锁定独占' }
 }
 
 /** 仅管理员上架且投放中的记录允许切换锁定状态 */
@@ -972,12 +937,12 @@ function canToggleExclusive(app) {
 }
 
 async function handleToggleExclusive(app, exclusive) {
-  const action = exclusive === 1 ? '锁定' : '改为可覆盖'
+  const action = exclusive === 1 ? '锁定' : '解锁'
   try {
     await ElMessageBox.confirm(
       exclusive === 1
         ? '锁定后该时段将被独占，App 端不可再预约，确定继续？'
-        : '改为可覆盖后，该时段可被付费素材覆盖，App 端可正常预约，确定继续？',
+        : '解锁后该时段可被付费素材覆盖，付费素材生效时当前素材会自动下架，确定继续？',
       action,
       { type: 'warning' }
     )
@@ -986,7 +951,7 @@ async function handleToggleExclusive(app, exclusive) {
   }
   try {
     await updatePromotionExclusive(app.applyId, exclusive)
-    ElMessage.success(exclusive === 1 ? '已锁定' : '已改为可覆盖')
+    ElMessage.success(exclusive === 1 ? '已锁定' : '已解锁')
     await refreshAfterAppMutation()
   } catch {
     // 错误信息已由 request 拦截器统一提示
@@ -1225,7 +1190,7 @@ const grantForm = reactive({
   startTime: '',
   days: 7,
   materialUrl: '',
-  // 1=锁定独占（App 不可预约），0=运营兜底（可被付费素材覆盖）
+  // 1=锁定独占（App 不可预约），0=不锁定（可被付费素材覆盖，覆盖后自动下架）
   exclusive: 1
 })
 const grantUploading = ref(false)
@@ -1575,7 +1540,13 @@ onMounted(async () => {
   font-size: 9px;
 }
 
-.material-cell,
+.material-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.material-row,
 .work-cell {
   display: flex;
   align-items: center;
@@ -1586,6 +1557,7 @@ onMounted(async () => {
 .work-main {
   min-width: 0;
 }
+
 .mini-banner {
   flex: 0 0 62px;
   width: 62px;
