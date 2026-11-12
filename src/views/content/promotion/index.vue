@@ -92,23 +92,23 @@
                     class="mini-banner"
                   />
                   <div class="material-main">
-                    <div class="work-title">{{ row.current.workTitle || row.banner?.title || '—' }}</div>
-                    <div class="sub">作者提交素材 · 第 {{ row.slotNo }} 位</div>
+                    <div class="work-title">{{ row.current.workTitle || '—' }}</div>
+                    <div class="sub">{{ row.current.source === 'admin_grant' ? '运营直上' : '作者提交素材' }} · 第 {{ row.slotNo }} 位</div>
                   </div>
                 </template>
-                <template v-else-if="row.banner">
+                <template v-else-if="row.backup">
                   <el-image
-                    v-if="row.banner.imageUrl"
-                    :src="resolveMediaUrl(row.banner.imageUrl)"
-                    :preview-src-list="[resolveMediaUrl(row.banner.imageUrl)]"
+                    v-if="row.backup.materialUrl"
+                    :src="resolveMediaUrl(row.backup.materialUrl)"
+                    :preview-src-list="[resolveMediaUrl(row.backup.materialUrl)]"
                     preview-teleported
                     fit="cover"
                     class="mini-banner"
                   />
                   <div v-else class="mini-banner mini-banner--missing">无图</div>
                   <div class="material-main">
-                    <div class="work-title">{{ row.banner.title || '未命名 Banner' }}</div>
-                    <div class="sub">{{ bannerLinkText(row.banner) }}</div>
+                    <div class="work-title">{{ row.backup.workTitle || '运营兜底素材' }}</div>
+                    <div class="sub">运营兜底 · 可被付费素材覆盖</div>
                   </div>
                 </template>
                 <template v-else>
@@ -190,11 +190,12 @@
               <div class="state-cell">
                 <el-tag size="small" :type="slotStateMeta(row.state).type">{{ slotStateMeta(row.state).text }}</el-tag>
                 <span v-if="row.state === 'locked' && row.current" class="sub">{{ lockLabel(row.current) }}</span>
+                <span v-else-if="row.state === 'active' && !row.current" class="sub">运营兜底 · 可覆盖</span>
               </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="操作" width="220" fixed="right">
+          <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <div class="op-cell">
                 <el-button
@@ -214,7 +215,31 @@
                   @click="handleOffline(row.current)"
                 >下架</el-button>
                 <el-button
-                  v-if="!row.current && row.state === 'idle'"
+                  v-if="row.backup"
+                  v-hasPermi="['content:promotion:audit']"
+                  link
+                  type="danger"
+                  size="small"
+                  @click="handleOffline(row.backup)"
+                >下架兜底</el-button>
+                <el-button
+                  v-if="canToggleExclusive(row.current)"
+                  v-hasPermi="['content:promotion:grant']"
+                  link
+                  type="warning"
+                  size="small"
+                  @click="handleToggleExclusive(row.current, 0)"
+                >改为可覆盖</el-button>
+                <el-button
+                  v-if="canToggleExclusive(row.backup)"
+                  v-hasPermi="['content:promotion:grant']"
+                  link
+                  type="warning"
+                  size="small"
+                  @click="handleToggleExclusive(row.backup, 1)"
+                >设为锁定</el-button>
+                <el-button
+                  v-if="!row.current && (row.state === 'idle' || row.state === 'active')"
                   v-hasPermi="['content:promotion:grant']"
                   link
                   type="primary"
@@ -541,6 +566,12 @@
         <el-form-item label="投放天数">
           <el-input-number v-model="grantForm.days" :min="1" :max="365" />
         </el-form-item>
+        <el-form-item label="锁定该位次">
+          <el-switch v-model="grantForm.exclusive" :active-value="1" :inactive-value="0" />
+          <div class="banner-uploader__tip">
+            锁定：该时段独占，App 显示「已占用至」且不可预约；不锁定：作为运营兜底素材，App 显示「运营素材 · 可覆盖」，可被付费素材覆盖
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="grantDialog.visible = false">取消</el-button>
@@ -628,6 +659,7 @@ import {
   auditPromotionApplication,
   offlinePromotionApplication,
   grantPromotion,
+  updatePromotionExclusive,
   updatePromotionPrices
 } from '@/api/content/promotion'
 import { resolveMediaUrl } from '@/utils/request'
@@ -740,7 +772,7 @@ const filteredSlots = computed(() => {
   if (keyword) {
     rows = rows.filter((row) => {
       const text = [
-        row.banner?.title,
+        row.backup?.workTitle,
         row.current?.workTitle,
         row.current?.authorName
       ].filter(Boolean).join(' ').toLowerCase()
@@ -861,16 +893,10 @@ function lockLabel(app) {
 }
 
 function periodInfo(row) {
-  const app = row.current
-  const banner = row.banner
-  const start = app?.startTime || banner?.startTime
-  const end = app?.endTime || banner?.endTime
-  if (!start || !end) {
-    if (banner && !app) {
-      return { text: '长期展示', pct: 100, remainText: '运营自建素材', warn: false }
-    }
-    return null
-  }
+  const app = row.current || row.backup
+  const start = app?.startTime
+  const end = app?.endTime
+  if (!start || !end) return null
   const startDate = toDate(start)
   const endDate = toDate(end)
   if (!startDate || !endDate) return null
@@ -922,26 +948,49 @@ function currentSub(row) {
 }
 
 function needsMaterial(row) {
-  return !row.banner && !!row.current && !row.current.materialUrl
+  return !!row.current && !row.current.materialUrl && !row.current.bannerId
 }
 
 function bannerSource(row) {
   if (row.current) {
-    return row.current.source === 'admin_grant'
-      ? { text: '运营直上', sub: '官方运营' }
-      : { text: '作者推广', sub: row.current.authorName || '—' }
+    if (row.current.source !== 'admin_grant') {
+      return { text: '作者推广', sub: row.current.authorName || '—' }
+    }
+    return row.current.exclusive === 0
+      ? { text: '运营兜底', sub: '可被覆盖' }
+      : { text: '运营直上', sub: '锁定独占' }
   }
-  if (row.banner) {
-    return { text: '运营自建', sub: '官方运营' }
+  if (row.backup) {
+    return { text: '运营兜底', sub: '可被覆盖' }
   }
   return { text: '—', sub: '' }
 }
 
-function bannerLinkText(banner) {
-  if (!banner) return ''
-  if (banner.linkType === 'work') return '链接：作品详情'
-  if (banner.linkType === 'url' || banner.linkUrl) return '链接：外部地址'
-  return '未配置跳转'
+/** 仅管理员上架且投放中的记录允许切换锁定状态 */
+function canToggleExclusive(app) {
+  return !!app && app.source === 'admin_grant'
+}
+
+async function handleToggleExclusive(app, exclusive) {
+  const action = exclusive === 1 ? '锁定' : '改为可覆盖'
+  try {
+    await ElMessageBox.confirm(
+      exclusive === 1
+        ? '锁定后该时段将被独占，App 端不可再预约，确定继续？'
+        : '改为可覆盖后，该时段可被付费素材覆盖，App 端可正常预约，确定继续？',
+      action,
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await updatePromotionExclusive(app.applyId, exclusive)
+    ElMessage.success(exclusive === 1 ? '已锁定' : '已改为可覆盖')
+    await refreshAfterAppMutation()
+  } catch {
+    // 错误信息已由 request 拦截器统一提示
+  }
 }
 
 function canOffline(app) {
@@ -1169,7 +1218,16 @@ async function ensureGrantWorks() {
 
 // ============ 免费直上 ============
 const grantDialog = reactive({ visible: false, submitting: false })
-const grantForm = reactive({ workId: null, slotType: 'banner', slotNo: null, startTime: '', days: 7, materialUrl: '' })
+const grantForm = reactive({
+  workId: null,
+  slotType: 'banner',
+  slotNo: null,
+  startTime: '',
+  days: 7,
+  materialUrl: '',
+  // 1=锁定独占（App 不可预约），0=运营兜底（可被付费素材覆盖）
+  exclusive: 1
+})
 const grantUploading = ref(false)
 const grantSlotOptions = computed(() =>
   (slotPages[grantForm.slotType]?.slots || []).filter((slot) => slot.enabled !== '0')
@@ -1183,6 +1241,7 @@ async function openGrant(row) {
   grantForm.startTime = ''
   grantForm.days = 7
   grantForm.materialUrl = ''
+  grantForm.exclusive = 1
   grantDialog.visible = true
   if (!grantForm.slotNo) {
     grantForm.slotNo = grantSlotOptions.value[0]?.slotNo || null
@@ -1210,7 +1269,8 @@ async function submitGrant() {
       slotNo: grantForm.slotNo,
       startTime: grantForm.startTime || null,
       days: grantForm.days,
-      materialUrl: grantForm.slotType === 'banner' ? grantForm.materialUrl : ''
+      materialUrl: grantForm.slotType === 'banner' ? grantForm.materialUrl : '',
+      exclusive: grantForm.exclusive
     })
     ElMessage.success('免费上推荐成功')
     grantDialog.visible = false

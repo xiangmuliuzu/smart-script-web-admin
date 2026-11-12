@@ -50,6 +50,15 @@ export function offlinePromotionApplication(applyId) {
   })
 }
 
+/** 切换锁定标记：1=锁定独占，0=可被付费素材覆盖 */
+export function updatePromotionExclusive(applyId, exclusive) {
+  return adminV1Request({
+    url: `${PROMOTION_PREFIX}/applications/${applyId}/exclusive`,
+    method: 'put',
+    data: { exclusive }
+  })
+}
+
 /** 免费直上推荐 */
 export function grantPromotion(data) {
   return adminV1Request({
