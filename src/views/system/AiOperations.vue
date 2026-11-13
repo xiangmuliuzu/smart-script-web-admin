@@ -162,6 +162,7 @@
       <!-- ==================== Tab 2：AI 渠道 / 模型配置 ==================== -->
       <el-tab-pane label="AI 渠道/模型配置" name="channel">
         <div class="tab-head">
+          <el-button class="black-button" @click="openDefaultModelDialog">默认模型设置</el-button>
           <el-button type="primary" class="black-button" @click="openChannelAdd">新增渠道</el-button>
         </div>
         <el-card shadow="never">
@@ -178,11 +179,16 @@
               <el-option label="停用" value="1" />
             </el-select>
             <el-button type="primary" class="black-button" @click="fetchChannelList">查询</el-button>
-            <span class="toolbar-tip">配置后，用户端 / App 端将可按模型调用各渠道 AI（未配置模型时回退默认环境）。</span>
+            <span class="toolbar-tip">配置后，用户端 / App 端将可按模型调用各渠道 AI（未指定模型时走右侧「默认模型设置」指定的渠道与模型）。</span>
           </div>
 
           <el-table :data="channelList" v-loading="channelLoading" style="width: 100%" class="table-margin">
-            <el-table-column prop="channelName" label="渠道名称" min-width="120" />
+            <el-table-column label="渠道名称" min-width="150">
+              <template #default="{ row }">
+                {{ row.channelName }}
+                <el-tag v-if="row.isDefault === 1" size="small" type="success" class="default-tag">默认</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="provider" label="服务商" min-width="100">
               <template #default="{ row }">{{ row.provider || '-' }}</template>
             </el-table-column>
@@ -192,7 +198,9 @@
                 <el-tag v-for="m in splitModels(row.models)" :key="m" size="small" class="model-tag">{{ m }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="defaultModel" label="默认模型" width="130" />
+            <el-table-column label="默认模型" width="150">
+              <template #default="{ row }">{{ row.isDefault === 1 ? (row.defaultModel || '-') : '-' }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.status === '0' ? 'success' : 'info'" size="small">
@@ -203,9 +211,10 @@
             <el-table-column label="创建时间" width="170">
               <template #default="{ row }">{{ row.createTime || '-' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="210" fixed="right">
+            <el-table-column label="操作" width="280" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" @click="openChannelEdit(row)">编辑</el-button>
+                <el-button size="small" :loading="channelTestingId === row.channelId" @click="testChannel(row)">测试</el-button>
                 <el-button size="small" @click="toggleChannelStatus(row)">
                   {{ row.status === '0' ? '停用' : '启用' }}
                 </el-button>
@@ -246,12 +255,7 @@
             </el-form-item>
             <el-form-item label="模型列表" required>
               <el-input v-model="channelForm.models" placeholder="逗号分隔，如：deepseek-chat,deepseek-reasoner,deepseek-flash" />
-            </el-form-item>
-            <el-form-item label="默认模型" required>
-              <el-select v-model="channelForm.defaultModel" placeholder="从模型列表中选择" style="width: 100%" filterable>
-                <el-option v-for="m in channelModelOptions" :key="m" :label="m" :value="m" />
-              </el-select>
-              <div class="file-hint">默认模型必须属于上方模型列表；用户端未指定模型时使用该模型。</div>
+              <div class="file-hint">渠道内默认模型自动取列表第一个；全站默认模型请用上方「默认模型设置」单独指定。</div>
             </el-form-item>
             <el-form-item label="状态">
               <el-switch v-model="channelForm.status" :active-value="'0'" :inactive-value="'1'" active-text="启用" inactive-text="停用" />
@@ -260,6 +264,27 @@
           <template #footer>
             <el-button @click="channelDialogVisible = false">取消</el-button>
             <el-button type="primary" class="black-button" :loading="channelSubmitting" @click="handleChannelSave">保存</el-button>
+          </template>
+        </el-dialog>
+
+        <!-- 默认模型设置（全站唯一） -->
+        <el-dialog v-model="defaultDialogVisible" title="默认模型设置" width="480px" destroy-on-close>
+          <el-form :model="defaultForm" label-width="90px">
+            <el-form-item label="默认渠道">
+              <el-select v-model="defaultForm.channelId" placeholder="选择渠道" style="width: 100%" @change="onDefaultChannelChange">
+                <el-option v-for="c in defaultChannels" :key="c.channelId" :label="c.channelName" :value="c.channelId" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="默认模型">
+              <el-select v-model="defaultForm.model" placeholder="选择模型" style="width: 100%" filterable>
+                <el-option v-for="m in defaultModelOptions" :key="m" :label="m" :value="m" />
+              </el-select>
+            </el-form-item>
+            <div class="file-hint">用户端 / App 未指定模型时使用这里的渠道与模型；全站唯一，只标注这一个「默认」。</div>
+          </el-form>
+          <template #footer>
+            <el-button @click="defaultDialogVisible = false">取消</el-button>
+            <el-button type="primary" class="black-button" :loading="defaultSaving" @click="handleDefaultSave">保存</el-button>
           </template>
         </el-dialog>
       </el-tab-pane>
@@ -534,12 +559,10 @@ const channelQuery = reactive({ channelName: '', status: '', pageNum: 1, pageSiz
 const channelDialogVisible = ref(false)
 const channelEditingId = ref(null)
 const channelSubmitting = ref(false)
-const channelForm = reactive({ channelName: '', provider: '', baseUrl: '', apiKey: '', models: '', defaultModel: '', status: '0' })
+const channelTestingId = ref(null)
+const channelForm = reactive({ channelName: '', provider: '', baseUrl: '', apiKey: '', models: '', status: '0' })
 
-/** 模型列表输入 → 默认模型下拉选项（实时跟随） */
-const channelModelOptions = computed(() =>
-  (channelForm.models || '').split(',').map((s) => s.trim()).filter(Boolean)
-)
+/** 模型列表输入 → 列表（渠道内默认模型由后端取第一个） */
 
 function splitModels(models) {
   return (models || '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -570,7 +593,6 @@ function resetChannelForm() {
   channelForm.baseUrl = ''
   channelForm.apiKey = ''
   channelForm.models = ''
-  channelForm.defaultModel = ''
   channelForm.status = '0'
 }
 
@@ -587,7 +609,6 @@ async function openChannelEdit(row) {
   channelForm.provider = row.provider || ''
   channelForm.baseUrl = row.baseUrl || ''
   channelForm.models = row.models || ''
-  channelForm.defaultModel = row.defaultModel || ''
   channelForm.status = row.status || '0'
   channelDialogVisible.value = true
   // 拉详情回显 apiKey（列表接口不含密钥）
@@ -615,14 +636,6 @@ async function handleChannelSave() {
     ElMessage.error('请填写模型列表')
     return
   }
-  if (!channelForm.defaultModel || !channelForm.defaultModel.trim()) {
-    ElMessage.error('请选择默认模型')
-    return
-  }
-  if (!channelModelOptions.value.includes(channelForm.defaultModel.trim())) {
-    ElMessage.error('默认模型必须属于模型列表')
-    return
-  }
   if (!channelEditingId.value && !channelForm.apiKey.trim()) {
     ElMessage.error('新增渠道必须填写 API Key')
     return
@@ -632,7 +645,6 @@ async function handleChannelSave() {
     provider: channelForm.provider.trim() || null,
     baseUrl: channelForm.baseUrl.trim(),
     models: channelForm.models.trim(),
-    defaultModel: channelForm.defaultModel.trim(),
     status: channelForm.status
   }
   if (channelEditingId.value) {
@@ -657,6 +669,106 @@ async function handleChannelSave() {
     fetchChannelList()
   } finally {
     channelSubmitting.value = false
+  }
+}
+
+/* ---------------- 默认模型设置（全站唯一） ---------------- */
+const defaultDialogVisible = ref(false)
+const defaultSaving = ref(false)
+const defaultLoading = ref(false)
+const defaultChannels = ref([])
+const defaultForm = reactive({ channelId: null, model: '' })
+const defaultModelOptions = computed(() => {
+  const c = defaultChannels.value.find((x) => x.channelId === defaultForm.channelId)
+  return c ? splitModels(c.models) : []
+})
+
+function onDefaultChannelChange() {
+  defaultForm.model = defaultModelOptions.value[0] || ''
+}
+
+async function openDefaultModelDialog() {
+  defaultLoading.value = true
+  try {
+    const resp = await adminFetch(`${CHANNEL_BASE}/list?pageNum=1&pageSize=100&status=0`)
+    const json = await resp.json()
+    if (json.code !== 200) {
+      ElMessage.error(json.msg || '加载渠道失败')
+      return
+    }
+    defaultChannels.value = json.rows || []
+    if (!defaultChannels.value.length) {
+      ElMessage.warning('没有启用中的渠道，请先新增并启用渠道')
+      return
+    }
+    const marked = defaultChannels.value.find((c) => c.isDefault === 1)
+    const target = marked || defaultChannels.value[0]
+    defaultForm.channelId = target.channelId
+    defaultForm.model = marked ? (marked.defaultModel || '') : (splitModels(target.models)[0] || '')
+    defaultDialogVisible.value = true
+  } finally {
+    defaultLoading.value = false
+  }
+}
+
+async function handleDefaultSave() {
+  if (!defaultForm.channelId) {
+    ElMessage.error('请选择渠道')
+    return
+  }
+  if (!defaultForm.model) {
+    ElMessage.error('请选择模型')
+    return
+  }
+  defaultSaving.value = true
+  try {
+    const resp = await adminFetch(`${CHANNEL_BASE}/default-model`, {
+      method: 'POST',
+      body: JSON.stringify({ channelId: defaultForm.channelId, model: defaultForm.model })
+    })
+    const json = await resp.json()
+    if (json.code !== 200) {
+      ElMessage.error(json.msg || '设置失败')
+      return
+    }
+    ElMessage.success('默认模型已更新，用户端未指定模型时使用该模型')
+    defaultDialogVisible.value = false
+    fetchChannelList()
+  } finally {
+    defaultSaving.value = false
+  }
+}
+
+/** 测试渠道连通性：后端用该渠道自己的密钥发一次最小请求，失败时回显上游原文 */
+async function testChannel(row) {  channelTestingId.value = row.channelId
+  try {
+    const resp = await adminFetch(`${CHANNEL_BASE}/test`, {
+      method: 'POST',
+      body: JSON.stringify({ channelId: row.channelId })
+    })
+    const json = await resp.json()
+    if (json.code !== 200) {
+      ElMessage.error(json.msg || '测试失败')
+      return
+    }
+    const d = json.data || {}
+    if (d.ok) {
+      ElMessageBox.alert(
+        `模型：${d.model} ｜ 耗时：${d.latencyMs} ms ｜ 返回：${d.reply}`,
+        `「${row.channelName}」连接正常`,
+        { type: 'success', confirmButtonText: '知道了' }
+      )
+    } else {
+      ElMessageBox.alert(
+        `HTTP ${d.status || '无响应'} ｜ ${d.error || '未知错误'}`,
+        `「${row.channelName}」调用失败`,
+        { type: 'error', confirmButtonText: '知道了' }
+      )
+    }
+  } catch (e) {
+    ElMessage.error('测试请求失败：' + (e.message || e))
+  } finally {
+    channelTestingId.value = null
   }
 }
 
