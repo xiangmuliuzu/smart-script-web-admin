@@ -21,12 +21,13 @@
   </el-drawer>
 </template>
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChatLineSquare, UserFilled } from '@element-plus/icons-vue'
 import AnnouncementReader from '@/components/messages/AnnouncementReader.vue'
 import { adminAnnouncements } from '@/api/announcements'
 import { getChatUnreadCount, listSessions } from '@/api/adminChat'
+import { isRealtimeConnected, onRealtime } from '@/utils/realtimeSocket'
 import { unreadSources } from '@/utils/notificationDraft'
 import { avatarUrl } from '@/utils/avatarUrl'
 import { useUserStore } from '@/stores/user'
@@ -83,8 +84,35 @@ function goAllSessions() {
 function onNoticeChanged() { refreshCount(); if (visible.value) reader.value?.refresh() }
 function refreshCount() { generation++; inFlight = false; refreshAll() }
 function onExternalChange() { refreshCount(); if (visible.value && chatTab.value) loadChat() }
-onMounted(() => { refreshAll(); timer = setInterval(refreshAll, 5000); document.addEventListener('visibilitychange', refreshAll); window.addEventListener('admin-chat-changed', onExternalChange); window.addEventListener('announcements-changed', onNoticeChanged) })
-onBeforeUnmount(() => { generation++; chatGeneration++; clearInterval(timer); document.removeEventListener('visibilitychange', refreshAll); window.removeEventListener('admin-chat-changed', onExternalChange); window.removeEventListener('announcements-changed', onNoticeChanged) })
+// 长连接可用时未读角标由服务端帧驱动，轮询退居兜底并拉长；连接不可用时恢复原来的 5s 频率。
+const POLL_ACTIVE_MS = 5000
+const POLL_IDLE_MS = 60000
+function applyPollInterval() {
+  clearInterval(timer)
+  timer = setInterval(refreshAll, isRealtimeConnected() ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+}
+let offRealtime = []
+onMounted(() => {
+  refreshAll()
+  applyPollInterval()
+  document.addEventListener('visibilitychange', refreshAll)
+  window.addEventListener('admin-chat-changed', onExternalChange)
+  window.addEventListener('announcements-changed', onNoticeChanged)
+  offRealtime = [
+    onRealtime('chat', onExternalChange),
+    onRealtime('notification', refreshCount),
+    onRealtime('connected', applyPollInterval),
+    onRealtime('disconnected', applyPollInterval)
+  ]
+})
+onBeforeUnmount(() => {
+  generation++; chatGeneration++
+  clearInterval(timer)
+  offRealtime.forEach(off => off())
+  document.removeEventListener('visibilitychange', refreshAll)
+  window.removeEventListener('admin-chat-changed', onExternalChange)
+  window.removeEventListener('announcements-changed', onNoticeChanged)
+})
 </script>
 <style scoped>
 .communication-badge :deep(.el-badge__content){background:#f56c6c;border:0}

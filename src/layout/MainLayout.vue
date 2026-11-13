@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
@@ -91,11 +91,16 @@ import { Files, Avatar, Right } from '@element-plus/icons-vue'
 import SidebarMenuItem from '@/components/SidebarMenuItem.vue'
 import AdminCommunicationInbox from '@/components/messages/AdminCommunicationInbox.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
+import { connectRealtime, disconnectRealtime } from '@/utils/realtimeSocket'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
+
+// 站内实时通知长连接：布局存活期间共享一条连接，各视图只订阅事件。
+onMounted(() => connectRealtime())
+onBeforeUnmount(() => disconnectRealtime())
 
 // 当前激活的菜单
 const activeMenu = computed(() => route.path)

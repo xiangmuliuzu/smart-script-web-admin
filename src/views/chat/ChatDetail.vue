@@ -116,6 +116,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { getSession, openSession, listMessages, sendMessage, markSessionRead, changeStatus } from '@/api/adminChat'
 import { useUserStore } from '@/stores/user'
 import { avatarUrl } from '@/utils/avatarUrl'
+import { isRealtimeConnected, onRealtime } from '@/utils/realtimeSocket'
 
 defineOptions({ name: 'ChatDetail' })
 
@@ -280,8 +281,10 @@ function goBack() {
 }
 
 // 5s 轮询刷新会话与消息，页面隐藏时暂停。
-const POLL_INTERVAL_MS = 5000
-let timer = null, refreshing = false, disposed = false
+// 长连接可用时由服务端帧驱动刷新，轮询退居兜底并拉长；断开时恢复 5s 原频率。
+const POLL_ACTIVE_MS = 5000
+const POLL_IDLE_MS = 60000
+let timer = null, refreshing = false, disposed = false, offRealtime = []
 async function poll() {
   if (document.hidden || !sessionId || refreshing || disposed) return
   if (!opened.value) { if (!loading.value) await loadAll(); return }
@@ -292,17 +295,29 @@ async function poll() {
   } catch { /* 后续刷新重试，不改变处理人。 */ }
   finally { refreshing = false }
 }
+function applyPollInterval() {
+  if (timer) clearInterval(timer)
+  timer = setInterval(poll, isRealtimeConnected() ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+}
 
 onMounted(async () => {
   await loadAll()
   if (disposed) return
-  timer = setInterval(poll, POLL_INTERVAL_MS)
+  applyPollInterval()
   document.addEventListener('visibilitychange', poll)
+  offRealtime = [
+    onRealtime('chat', frame => { if (String(frame?.sessionId) === String(sessionId)) poll() }),
+    // 断线重连期间可能对端发了消息，立刻补拉一次
+    onRealtime('reconnect', () => poll()),
+    onRealtime('connected', applyPollInterval),
+    onRealtime('disconnected', applyPollInterval)
+  ]
 })
 
 onUnmounted(() => {
   disposed = true
   if (timer) clearInterval(timer)
+  offRealtime.forEach(off => off())
   document.removeEventListener('visibilitychange', poll)
 })
 </script>

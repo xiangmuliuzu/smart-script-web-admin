@@ -36,6 +36,13 @@ export default defineConfig(({ mode }) => {
           target,
           changeOrigin: true
         },
+        // 站内实时通知长连接。ws: true 才会转发 HTTP Upgrade；
+        // 生产环境的 Nginx 同样需要为 /ws 打开 proxy_http_version 1.1 + Upgrade 头。
+        '/ws': {
+          target,
+          changeOrigin: true,
+          ws: true
+        },
         // PC端管理API（提现审核、合同管理、结算管理、财务异常等），统一前缀 /pc/copyright。
         // 只代理 /pc/copyright 而非 /pc：否则会拦截 SPA 用户端路由（/pc/user/**），
         // 导致直接访问或刷新用户端页面时被转发到后端并返回 JSON 401。
