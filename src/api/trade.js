@@ -96,10 +96,66 @@ export function getDemandSubmissions(demandId) {
   return request({ url: `${PREFIX}/trade/demand/${demandId}/submissions`, method: 'get' }).then(adaptDemandSubmissions)
 }
 
-/** 发布征集令 POST /trade/demand */
-export function createDemand(data) {
+/* ==================== 需求任务（发布权已收归平台，以下即运营侧全部动作） ==================== */
+
+/**
+ * 发布任务 POST /trade/demand
+ * @param {{demand: object, stages?: Array}} payload 轮次缺省时服务端固定补一轮「最后一轮验收」
+ */
+export function createDemand(payload) {
   if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
-  return request({ url: `${PREFIX}/trade/demand`, method: 'post', data })
+  return request({ url: `${PREFIX}/trade/demand`, method: 'post', data: payload })
+}
+
+/** 编辑任务 PUT /trade/demand/{demandId}（仅未接单；传 stages 则整组重建轮次） */
+export function updateDemand(demandId, payload) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}`, method: 'put', data: payload })
+}
+
+/** 关闭征集 PUT /trade/demand/{demandId}/close（仅待接单状态可调） */
+export function closeDemand(demandId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/close`, method: 'put' })
+}
+
+/** 分镜任务源剧本候选：按创作者编号取其未删除作品 GET /trade/demand/source-works?authorId= */
+export function getDemandSourceWorks(authorId) {
+  return request({ url: `${PREFIX}/trade/demand/source-works`, method: 'get', params: { authorId } })
+}
+
+/** 源剧本文件上传 POST /trade/demand/upload-script → {url, fileName} */
+export function uploadDemandScript(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `${PREFIX}/trade/demand/upload-script`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+/** 逐轮验收 PUT .../stage/{stageId}/review → {approved, rejectReason} */
+export function reviewDemandStage(demandId, stageId, data) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/stage/${stageId}/review`, method: 'put', data })
+}
+
+/** 验收前核对本轮交付正文 GET .../stage/{stageId}/deliverable-work */
+export function getStageDeliverableWork(demandId, stageId) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/stage/${stageId}/deliverable-work`, method: 'get' })
+}
+
+/** 处理创作者延时申请 PUT .../stage/{stageId}/extend/decision → {approved} */
+export function decideStageExtend(demandId, stageId, approved) {
+  return request({
+    url: `${PREFIX}/trade/demand/${demandId}/stage/${stageId}/extend/decision`,
+    method: 'put',
+    data: { approved }
+  })
+}
+
+/** 自主延时（不经申请直接顺延本轮截止）PUT .../stage/{stageId}/extend → {hours} */
+export function selfExtendStage(demandId, stageId, hours) {
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/stage/${stageId}/extend`, method: 'put', data: { hours } })
 }
 
 /* ==================== 需求任务运营视图（只读；金额字段为库内「元」口径） ==================== */

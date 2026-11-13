@@ -15,16 +15,6 @@
  */
 import { enumLabel, normalizeDemandTaskType } from '@/constants/tradeEnum'
 
-/** 题材 ID → 名称（与 Demand.vue 发布表单内置题材选项保持一致；接口未返回题材名时兜底） */
-const GENRE_MAP = {
-  1: '都市情感',
-  2: '古装武侠',
-  3: '悬疑推理',
-  4: '科幻奇幻',
-  5: '家庭伦理',
-  99: '其他'
-}
-
 /** 金额格式化：后端 BigDecimal（元）→「¥50,000.00」 */
 function formatMoney(val) {
   if (val == null || val === '') return ''
@@ -122,18 +112,15 @@ export function adaptQuotes(res) {
 }
 
 /* ==================== 征集项目（缺口接口）==================== */
-/** SysDemand → Demand.vue：clientName→client, tags→tags, budget→budgetText, escrow/deposit→Text */
+/** SysDemand → Demand.vue：clientName→client, tags→tags, budget→budgetText
+    托管/押金列已随后端退役（新单恒为 none），不再产出展示字段 */
 export function adaptDemands(res) {
   return mapRows(res, (d) => ({
     ...d,
     client: d.client ?? d.clientName,
     tags: d.tags || '',
     budgetText: d.budgetText || formatMoney(d.budget),
-    escrowText: d.escrowText || formatMoney(d.escrowAmount),
-    depositText: d.depositText || formatMoney(d.depositAmount),
-    taskTypeLabel: d.taskTypeLabel || enumLabel('demandTaskType', normalizeDemandTaskType(d.taskType)),
-    escrowStatusLabel: d.escrowStatusLabel || enumLabel('demandEscrow', d.escrowStatus),
-    depositStatusLabel: d.depositStatusLabel || enumLabel('demandDeposit', d.depositStatus)
+    taskTypeLabel: d.taskTypeLabel || enumLabel('demandTaskType', normalizeDemandTaskType(d.taskType))
   }))
 }
 

@@ -122,11 +122,22 @@ export const DEMAND_TASK_TYPE = [
   { value: 'storyboard', label: '提供剧本做分镜', tagType: 'success' }
 ]
 
-/** 任务类型交付口径说明（发布/接单/详情三处共用，与 APP/企业/创作者端逐字同口径） */
+/** 任务题材（sys_demand.genre_id，沿用 APP 发布页历史口径；tags 为自由文本另填） */
+export const DEMAND_GENRE_OPTIONS = [
+  { value: 1, label: '都市情感' },
+  { value: 2, label: '古装武侠' },
+  { value: 3, label: '悬疑推理' },
+  { value: 4, label: '科幻奇幻' },
+  { value: 5, label: '家庭伦理' },
+  { value: 99, label: '其他' }
+]
+
+/** 任务类型交付口径说明（发布/接单/详情三处共用，与 APP/创作者端逐字同口径）
+    发布权已收归平台：逐轮验收由运营在管理端处理，不再出现「发布者验收」口径 */
 export const DEMAND_TASK_TYPE_HINT = {
-  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入发布者人工验收',
+  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入平台人工验收',
   script_storyboard: '逐轮交付剧本作品，分镜以文件链接或交付说明随本轮一并提交，AI 剧本审核通过后进入人工验收',
-  storyboard: '按发布者提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收'
+  storyboard: '按平台提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收'
 }
 
 /** 脏值/缺值统一回落 script，与后端 normalizeAndValidateTaskType 及 APP DemandTaskType.normalize 同规则，
@@ -134,27 +145,6 @@ export const DEMAND_TASK_TYPE_HINT = {
 export function normalizeDemandTaskType(value) {
   return DEMAND_TASK_TYPE.some(item => item.value === value) ? value : 'script'
 }
-
-/** 需求任务托管资金状态（入账走支付宝沙箱，出账记账） */
-export const DEMAND_ESCROW_STATUS = [
-  { value: 'none', label: '无托管', tagType: 'info' },
-  { value: 'pending_payment', label: '待付托管', tagType: 'warning' },
-  { value: 'escrowed', label: '已托管', tagType: 'primary' },
-  { value: 'released', label: '已放款', tagType: 'success' },
-  { value: 'refunded_to_publisher', label: '已退回发布者', tagType: 'danger' }
-]
-
-/**
- * 需求任务押金资金状态
- * 押金(deposit)是创作者缴纳的履约保证金，与发布者托管的预算款(escrow)是两笔钱，
- * held 不能译作「已托管」，否则两条状态行读起来完全分不开（与 APP DemandDepositStatus 同源）。
- */
-export const DEMAND_DEPOSIT_STATUS = [
-  { value: 'none', label: '未缴', tagType: 'info' },
-  { value: 'held', label: '在押', tagType: 'primary' },
-  { value: 'refunded', label: '已退还', tagType: 'success' },
-  { value: 'forfeited', label: '已没收', tagType: 'danger' }
-]
 
 /**
  * 验收轮次状态（sys_demand_stage.status），值取自后端 SysDemandStage.STAGE_STATUS_*。
@@ -256,8 +246,6 @@ export const ENUM_REGISTRY = {
   followMethod: FOLLOW_METHOD,
   demand: DEMAND_STATUS,
   demandTaskType: DEMAND_TASK_TYPE,
-  demandEscrow: DEMAND_ESCROW_STATUS,
-  demandDeposit: DEMAND_DEPOSIT_STATUS,
   demandStage: DEMAND_STAGE_STATUS,
   demandExtendApplyType: DEMAND_EXTEND_APPLY_TYPE,
   demandExtendStatus: DEMAND_EXTEND_STATUS,
