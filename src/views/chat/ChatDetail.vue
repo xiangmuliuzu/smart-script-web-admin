@@ -156,14 +156,16 @@ function statusTagType(status) {
   return 'info'
 }
 function businessTypeLabel(type) {
-  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', GENERAL: '通用' }
+  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', INQUIRY: '询盘', DEMAND: '任务', ACCOUNT: '账号', GENERAL: '通用' }
   return map[type] || (type || '通用')
 }
-// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL 或无路由时不出按钮
+// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL/ACCOUNT 或无路由时不出按钮
 const businessRouteMap = {
   WORK: '/copyright/ai-review/review',
   COPYRIGHT: '/copyright/assets',
   ORDER: '/trade/orders',
+  INQUIRY: '/trade/inquiry',
+  DEMAND: '/trade/demand',
   SEAL: '/copyright/seals'
 }
 const businessRoute = computed(() => {

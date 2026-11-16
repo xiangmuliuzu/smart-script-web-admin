@@ -104,12 +104,16 @@ const statusOptions = [
   { value: 0, label: '进行中' },
   { value: 2, label: '已结束' }
 ]
-// 业务类型（会话列表筛选与展示：WORK / SEAL / COPYRIGHT / ORDER / GENERAL）
+// 业务类型（会话列表筛选与展示）：值域取自后端与会话创建入口，缺一类就筛不出、只能显示英文原值。
+// WORK/SEAL/COPYRIGHT/ORDER/GENERAL 来自 APP 与用户端咨询入口，INQUIRY/DEMAND 由交易流程自动建会话。
 const businessTypeOptions = [
   { value: 'WORK', label: '作品' },
   { value: 'SEAL', label: '印章' },
   { value: 'COPYRIGHT', label: '版权' },
   { value: 'ORDER', label: '订单' },
+  { value: 'INQUIRY', label: '询盘' },
+  { value: 'DEMAND', label: '任务' },
+  { value: 'ACCOUNT', label: '账号' },
   { value: 'GENERAL', label: '通用' }
 ]
 

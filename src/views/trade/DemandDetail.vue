@@ -14,7 +14,7 @@
           <el-descriptions-item label="任务编号">{{ detail.demandNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="任务标题">{{ detail.title || '-' }}</el-descriptions-item>
           <el-descriptions-item label="任务状态">
-            <el-tag v-if="detail.isOverdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
+            <el-tag v-if="detail.overdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
             <StatusTag type="demand" :status="detail.status" />
           </el-descriptions-item>
           <el-descriptions-item label="任务类型">
@@ -31,6 +31,11 @@
           <el-descriptions-item label="需求方电话">{{ detail.contactInfo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="总集数">{{ detail.totalEpisodes ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="完成时限">{{ detail.durationHours ? detail.durationHours + ' 小时' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="征集截止">
+            <span v-if="detail.deadline">{{ detail.deadline }}</span>
+            <span v-else class="text-muted">不限</span>
+            <el-tag v-if="recruitExpired" type="warning" size="small" style="margin-left:4px">已截止</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="当前截止">{{ detail.dueAt || '-' }}</el-descriptions-item>
           <el-descriptions-item label="源剧本" :span="3">
             <span v-if="detail.sourceWorkTitle">《{{ detail.sourceWorkTitle }}》</span>
@@ -340,6 +345,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { enumLabel, enumTagType, DEMAND_TASK_TYPE_HINT, normalizeDemandTaskType } from '@/constants/tradeEnum'
 import { resolveMediaUrl } from '@/utils/request'
+import { isRecruitExpired } from '@/utils/recruitExpiry'
 import { useUserStore } from '@/stores/user'
 import {
   getDemandDetail, getDemandStages, getDemandPayments, getDemandExtendApplies,
@@ -393,6 +399,9 @@ const stalledRounds = computed(() =>
     .filter((s) => s.status === 'submitted' || s.status === 'ai_reviewing')
     .map((s) => s.stageOrder)
 )
+
+// 征集截止已过但仍未被接单：广场已不曝光，只等定时任务收口，本页据此提示运营
+const recruitExpired = computed(() => isRecruitExpired(detail.value))
 
 /* ==================== 交付核对 / 验收 / 延时 ==================== */
 
