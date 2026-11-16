@@ -100,7 +100,8 @@ onMounted(() => {
   window.addEventListener('announcements-changed', onNoticeChanged)
   offRealtime = [
     onRealtime('chat', onExternalChange),
-    onRealtime('notification', refreshCount),
+    // 服务端公告帧只带「有新公告」，红点与抽屉里的列表一起跟进；抽屉没打开时只更新角标
+    onRealtime('notification', onNoticeChanged),
     onRealtime('connected', applyPollInterval),
     onRealtime('disconnected', applyPollInterval)
   ]

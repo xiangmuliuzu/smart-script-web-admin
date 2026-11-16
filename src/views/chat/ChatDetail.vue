@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="会话详情" description="阅读即已读，由打开详情的管理员处理，可结束或重新打开会话">
+    <PageHeader title="会话详情" description="阅读即已读，由打开详情的管理员处理，可重新打开已结束的会话">
       <template #actions>
         <el-button @click="goBack">返回列表</el-button>
       </template>
@@ -97,8 +97,7 @@
         <div class="side-block">
           <div class="side-title">会话操作</div>
           <div v-permission="['chat:session:status']" class="status-actions">
-            <el-button v-if="!isClosed" type="danger" class="close-btn" :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('close')">结束会话</el-button>
-            <el-button v-else :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('reopen')">重新打开</el-button>
+            <el-button v-if="isClosed" :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('reopen')">重新打开</el-button>
           </div>
         </div>
       </el-card>
@@ -157,14 +156,16 @@ function statusTagType(status) {
   return 'info'
 }
 function businessTypeLabel(type) {
-  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', GENERAL: '通用' }
+  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', INQUIRY: '询盘', DEMAND: '任务', ACCOUNT: '账号', GENERAL: '通用' }
   return map[type] || (type || '通用')
 }
-// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL 或无路由时不出按钮
+// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL/ACCOUNT 或无路由时不出按钮
 const businessRouteMap = {
   WORK: '/copyright/ai-review/review',
   COPYRIGHT: '/copyright/assets',
   ORDER: '/trade/orders',
+  INQUIRY: '/trade/inquiry',
+  DEMAND: '/trade/demand',
   SEAL: '/copyright/seals'
 }
 const businessRoute = computed(() => {
@@ -345,8 +346,6 @@ onUnmounted(() => {
 .chat-input-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
 .closed-tip { color: #f56c6c; font-size: 12px; margin-right: auto; }
 .black-button { background-color: #1f2329 !important; border-color: #1f2329 !important; color: #fff !important; }
-.close-btn { color: #fff !important; }
-.close-btn:hover { color: #000 !important; }
 .chat-side { width: 320px; min-width: 320px; }
 .side-block { padding: 4px 0 18px; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
 .side-block:last-child { border-bottom: 0; margin-bottom: 0; }

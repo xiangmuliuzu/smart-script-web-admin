@@ -72,6 +72,13 @@
       <el-table-column label="总集数" width="80">
         <template #default="{ row }">{{ row.totalEpisodes ?? '-' }}</template>
       </el-table-column>
+      <el-table-column label="征集截止" width="160">
+        <template #default="{ row }">
+          <span v-if="row.deadline">{{ row.deadline }}</span>
+          <span v-else class="text-muted">不限</span>
+          <el-tag v-if="recruitExpired(row)" type="warning" size="small" style="margin-left:4px">已截止</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="接单人" width="110">
         <template #default="{ row }">
           <span v-if="row.acceptedCreatorName || row.acceptedCreatorId">{{ row.acceptedCreatorName || ('#' + row.acceptedCreatorId) }}</span>
@@ -134,7 +141,12 @@
             <span class="price-text">{{ detail.budgetText }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="总集数">{{ detail.totalEpisodes ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="发布日期">{{ detail.deadline }}</el-descriptions-item>
+          <el-descriptions-item label="征集截止">
+            <span v-if="detail.deadline">{{ detail.deadline }}</span>
+            <span v-else class="text-muted">不限</span>
+            <el-tag v-if="recruitExpired(detail)" type="warning" size="small" style="margin-left:4px">已截止</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="发布时间">{{ detail.createdAt || detail.createTime || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系方式">{{ detail.contactInfo }}</el-descriptions-item>
           <el-descriptions-item label="接单人">{{ detail.acceptedCreatorName || (detail.acceptedCreatorId ? '#' + detail.acceptedCreatorId : '-') }}</el-descriptions-item>
           <el-descriptions-item label="接单时间">{{ detail.acceptedAt || '-' }}</el-descriptions-item>
@@ -366,6 +378,7 @@ import {
   enumOptions, enumTagType, DEMAND_TASK_TYPE_HINT, DEMAND_GENRE_OPTIONS, normalizeDemandTaskType
 } from '@/constants/tradeEnum'
 import { resolveMediaUrl } from '@/utils/request'
+import { isRecruitExpired } from '@/utils/recruitExpiry'
 import {
   getDemandList, getDemandStages, createDemand, updateDemand, closeDemand,
   getDemandSourceWorks, uploadDemandScript
@@ -382,6 +395,8 @@ const demandTaskTypeOptions = enumOptions('demandTaskType')
 const genreOptions = DEMAND_GENRE_OPTIONS
 
 const taskTypeTagType = (v) => enumTagType('demandTaskType', normalizeDemandTaskType(v))
+// 过截止仍挂 open 的单：广场已不曝光、也接不了单，列表要能看出来（与后端同口径）
+const recruitExpired = isRecruitExpired
 const taskTypeHint = (v) => DEMAND_TASK_TYPE_HINT[normalizeDemandTaskType(v)]
 
 const loading = ref(false)
