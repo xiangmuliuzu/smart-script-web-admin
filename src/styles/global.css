@@ -110,9 +110,12 @@ body {
   border-color: #E6A23C !important;
 }
 
+/* 上面 .el-button 的底色是 !important，会连 link/plain 变体一起刷成实心红，
+   危险色文字落在红底上直接看不见（任务管理·验收轮次的「删除」就是这样），这里统一给白字。 */
 .el-button--danger {
   background-color: #F56C6C !important;
   border-color: #F56C6C !important;
+  color: #ffffff !important;
 }
 
 .el-button--default {

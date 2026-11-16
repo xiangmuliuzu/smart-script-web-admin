@@ -1,6 +1,6 @@
 <template>
   <component :is="embedded ? 'section' : PageContainer">
-    <PageHeader title="用户沟通" description="查看用户会话，打开详情即可阅读并处理，可结束或重新打开会话；咨询由用户端发起，管理端仅回复处理">
+    <PageHeader title="用户沟通" description="查看用户会话，打开详情即可阅读并处理，可重新打开已结束的会话；咨询由用户端发起，管理端仅回复处理">
       <template #actions>
         <el-button :disabled="loading" @click="loadList()">刷新会话</el-button>
       </template>
