@@ -1,6 +1,6 @@
-# 智能剧本创作平台 PC Web
+# 智能剧本创作平台 PC 运维管理端
 
-Vue 3 + Vite 应用。管理员账号（`00`）进入管理端，用户账号（`01/02/03`）进入个人工作台。管理端菜单来自后端 `/getRouters`；用户侧使用独立路由和 App 凭证域接口。页面、接口、权限与样式位于 `src/`，`scripts/` 与 `tests/` 用于校验。
+Vue 3 + Vite 应用，仅供运维管理员使用。认证使用若依原生接口，业务菜单来自后端 /getRouters。PC 用户端和企业端分别位于独立仓库，旧用户端主体页面不迁移。历史阶段文档仅用于追溯。
 
 ## 安装与运行
 
@@ -12,6 +12,10 @@ npm run dev
 ```
 
 开发服务器默认使用 `http://localhost:3000`。联调时设置 `VITE_API_TARGET` 指向后端；后端数据库初始化及启动见 [后端 README](../smart-script-backend/README.md)。
+
+登录页的「忘记密码？」支持管理员用绑定的手机号自助重置，走 `POST /api/v1/pc-auth/admin/sms/send` 与 `POST /api/v1/pc-auth/admin/password/reset`；接口匿名可达，只接受 `user_type='00'` 的启用账号，未绑定手机号也返回统一提示以避免枚举。开发环境短信固定码为 `123456`，接口细节见 [PC 账号找回契约](../smart-script-backend/docs/contracts/2026-10-18-pc-account-recovery.md)。
+
+三端按服务器目录部署：管理员端 `/`（http://124.221.131.38/）、用户端 `/user/`、企业端 `/enterprise/`。本管理端 Vite 基础路径固定为 `/`，Router 使用 `import.meta.env.BASE_URL`；生产构建的 `dist` 内容部署到站点根目录。服务器须优先处理两个子应用及站点级 API，再将管理端 SPA 路由回退到根目录的 `index.html`。子应用的 `dist` 分别部署到各自目录，不能共用根目录的 SPA 回退。
 
 环境变量从 `.env.development` 读取，完整字段说明见 `.env.example`：
 
@@ -35,14 +39,14 @@ npm run gate
 | `npm run test` | 单元测试 |
 | `npm run build` | 生产构建 |
 
-管理端遵循若依返回体和 RBAC 权限；用户侧请求使用 App Access Token。客户端隐藏无权限操作，写入权限仍由后端校验。
+管理端遵循若依返回体和 RBAC 权限。客户端隐藏无权限操作，写入权限仍由后端校验。
 
 ## 目录导航
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/api/` | 接口封装，按域分文件（`pcWork` 作品、`chat` / `adminChat` 沟通、`copyright` 版权、`trade` 交易等），系统类接口在 `system/`、`monitor/`、`user/` 子目录 |
-| `src/views/` | 页面，按模块分目录：`system` 若依管理端、`pc` 用户工作台、`chat` 沟通、`copyright` 版权、`trade` 交易、`content` 内容、`risk` 风控、`statistics` 统计等 |
+| `src/api/` | 接口封装，按域分文件（`adminChat` 沟通、`copyright` 版权、`trade` 交易等），系统类接口在 `system/`、`monitor/`、`user/` 子目录 |
+| `src/views/` | 页面，按模块分目录：`system` 若依管理端、`chat` 沟通、`copyright` 版权、`trade` 交易、`content` 内容、`risk` 风控、`statistics` 统计等 |
 | `src/router/` | 路由、动态菜单适配与组件映射 |
 | `src/utils/` | `request`、若依返回体解包、菜单图标等公共工具 |
 | `src/components/` | 跨页面复用组件 |

@@ -13,7 +13,15 @@
       <slot name="toolbar" />
     </div>
 
-    <el-table v-loading="loading" :data="data" style="width: 100%">
+    <el-table
+      v-loading="loading"
+      :data="data"
+      :row-key="rowKey"
+      :tree-props="treeProps"
+      :expand-row-keys="expandRowKeys"
+      style="width: 100%"
+      @selection-change="onSelectionChange"
+    >
       <slot />
       <template #empty>
         <el-empty :description="emptyText" :image-size="emptyImage ? 120 : 72" :image="emptyImage || undefined" />
@@ -54,10 +62,18 @@ defineProps({
   pageSizes: { type: Array, default: () => [10, 20, 50] },
   showPagination: { type: Boolean, default: true },
   emptyText: { type: String, default: '暂无数据' },
-  emptyImage: { type: String, default: '' }
+  emptyImage: { type: String, default: '' },
+  rowKey: { type: [String, Function], default: undefined },
+  treeProps: { type: Object, default: undefined },
+  // element-plus 2.14 起：expand-row-keys 只要不是 undefined 就强制要求 row-key，
+  // 默认给 [] 会让所有不展开行的列表页在 ElTable setup 里直接抛错整页白屏。
+  expandRowKeys: { type: Array, default: undefined }
 })
-const emit = defineEmits(['update:page', 'update:pageSize', 'page-change', 'size-change'])
+const emit = defineEmits(['update:page', 'update:pageSize', 'page-change', 'size-change', 'selection-change'])
 
+function onSelectionChange(rows) {
+  emit('selection-change', rows)
+}
 function onPageChange(val) {
   emit('update:page', val)
   emit('page-change', val)

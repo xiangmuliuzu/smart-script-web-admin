@@ -1,5 +1,12 @@
 <template>
   <div class="a4-page">
+    <el-alert
+      title="阿里云核验通过后，由运维审核身份证材料。"
+      type="info"
+      :closable="false"
+      show-icon
+      class="records-notice"
+    />
     <el-card class="filter-card">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item>
@@ -7,7 +14,7 @@
             <el-option label="全部状态" value="" />
             <el-option label="待审核" value="PENDING" />
             <el-option label="已通过" value="APPROVED" />
-            <el-option label="已驳回" value="REJECTED" />
+            <el-option label="未通过" value="REJECTED" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -22,7 +29,7 @@
 
     <el-card class="table-card">
       <el-table :data="rows" style="width: 100%" v-loading="loading">
-        <el-table-column prop="applicationId" label="申请编号" width="110" />
+        <el-table-column prop="applicationId" label="认证编号" width="110" />
         <el-table-column prop="userId" label="用户 ID" width="90" />
         <el-table-column prop="nickname" label="昵称" min-width="140" show-overflow-tooltip />
         <el-table-column prop="phoneMasked" label="手机号" width="130">
@@ -39,26 +46,20 @@
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="reviewerName" label="审核人" width="110">
-          <template #default="{ row }">{{ row.reviewerName || '—' }}</template>
+        <el-table-column label="认证时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.reviewedAt) }}</template>
         </el-table-column>
+        <el-table-column prop="rejectReason" label="未通过原因" min-width="200" show-overflow-tooltip />
         <el-table-column label="提交时间" width="170">
           <template #default="{ row }">{{ formatTime(row.submittedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="90" fixed="right">
           <template #default="{ row }">
             <el-button
               v-permission="['user:realname:query']"
               size="small"
               @click="openDetail(row)"
             >详情</el-button>
-            <el-button
-              v-if="row.status === 'PENDING'"
-              v-permission="['user:realname:audit']"
-              type="primary"
-              size="small"
-              @click="openDecide(row)"
-            >审核</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -80,61 +81,25 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="实名申请详情" width="560px">
-      <div v-if="detailForbidden" class="forbidden-hint">无详情权限，无法查看材料信息</div>
+    <el-dialog v-model="detailVisible" title="实名认证记录详情" width="560px">
+      <div v-if="detailForbidden" class="forbidden-hint">无详情权限，无法查看认证详情</div>
       <el-descriptions v-else-if="detail" :column="1" border>
-        <el-descriptions-item label="申请编号">{{ detail.applicationId }}</el-descriptions-item>
+        <el-descriptions-item label="认证编号">{{ detail.applicationId }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
         <el-descriptions-item label="昵称">{{ detail.nickname }}</el-descriptions-item>
         <el-descriptions-item label="手机号">{{ detail.phoneMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="姓名（掩码）">{{ detail.realNameMasked || '—' }}</el-descriptions-item>
         <el-descriptions-item label="证件号（掩码）">{{ detail.idNumberMasked || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="身份证材料"><template v-if="detail.materialRefs?.length"><el-button v-for="(_, index) in detail.materialRefs" :key="index" link type="primary" :disabled="downloading" @click="downloadMaterial(index)">{{ detail.materialRefs.length === 1 ? '下载历史材料' : index === 0 ? '下载正面' : '下载反面' }}</el-button></template><span v-else>无材料</span></el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
-        <el-descriptions-item label="审核人">{{ detail.reviewerName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ formatTime(detail.submittedAt) }}</el-descriptions-item>
-        <el-descriptions-item label="审核时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
-        <el-descriptions-item label="驳回原因">{{ detail.rejectReason || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="材料">
-          <div v-if="detail.materialRefs && detail.materialRefs.length" class="material-list">
-            <el-button
-              v-for="(ref, idx) in detail.materialRefs"
-              :key="ref"
-              size="small"
-              type="primary"
-              link
-              :loading="materialBusy === ref"
-              @click="viewMaterial(ref)"
-            >查看材料 {{ idx + 1 }}</el-button>
-            <div class="material-hint">
-              每次查看都会消耗该短时引用（{{ materialTtlHint }} 内有效，且只能使用一次）
-            </div>
-          </div>
-          <span v-else>—</span>
-        </el-descriptions-item>
+        <el-descriptions-item label="认证时间">{{ formatTime(detail.reviewedAt) }}</el-descriptions-item>
+        <el-descriptions-item label="未通过原因">{{ detail.rejectReason || '—' }}</el-descriptions-item>
       </el-descriptions>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="decideVisible" title="实名审核决定" width="480px">
-      <el-form label-width="90px">
-        <el-form-item label="申请人">
-          {{ decideTarget ? `${decideTarget.nickname}（ID ${decideTarget.userId}）` : '' }}
-        </el-form-item>
-        <el-form-item label="决定">
-          <el-radio-group v-model="decideForm.decision">
-            <el-radio label="APPROVE">通过</el-radio>
-            <el-radio label="REJECT">驳回</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="decideForm.decision === 'REJECT'" label="驳回原因" required>
-          <el-input v-model="decideForm.rejectReason" type="textarea" :rows="3" placeholder="驳回时必填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="decideVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitDecide">确定</el-button>
+        <el-button v-if="detail?.status === 'PENDING'" v-permission="['user:realname:audit']" type="danger" :loading="saving" @click="decide('REJECT')">驳回</el-button>
+        <el-button v-if="detail?.status === 'PENDING'" v-permission="['user:realname:audit']" type="primary" :loading="saving" @click="decide('APPROVE')">通过</el-button>
       </template>
     </el-dialog>
   </div>
@@ -145,14 +110,10 @@ import { reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listRealNameApplications,
-  getRealNameApplication,
-  decideRealNameApplication,
-  redeemMaterialToken,
-  downloadMaterialContent
+  getRealNameApplication, decideRealNameApplication, redeemMaterialToken, downloadMaterialContent
 } from '@/api/user/realName'
 
 const loading = ref(false)
-const saving = ref(false)
 const rows = ref([])
 const total = ref(0)
 const errorText = ref('')
@@ -162,39 +123,14 @@ const filterForm = reactive({ status: '', keyword: '' })
 const detailVisible = ref(false)
 const detail = ref(null)
 const detailForbidden = ref(false)
-const decideVisible = ref(false)
-const decideTarget = ref(null)
-const decideForm = reactive({ decision: 'APPROVE', rejectReason: '' })
+const saving = ref(false)
+const downloading = ref(false)
 
-const materialTtlHint = '5 分钟'
-const materialBusy = ref('')
-
-/**
- * 查看材料：先用短时令牌兑换一次性访问链接，再取回真实内容。
- *
- * 令牌是一次性的，查看后该引用即失效，因此刷新详情才能拿到新的令牌。
- */
-async function viewMaterial(token) {
-  materialBusy.value = token
-  try {
-    const res = await redeemMaterialToken(token)
-    const accessUrl = res?.data?.accessUrl
-    if (!accessUrl) {
-      ElMessage.error('材料访问链接获取失败')
-      return
-    }
-    await downloadMaterialContent(accessUrl, 'material')
-  } catch (e) {
-    ElMessage.error(e?.message || '材料查看失败，请重新打开详情获取新的引用')
-  } finally {
-    materialBusy.value = ''
-  }
-}
 
 function statusLabel(status) {
   if (status === 'PENDING') return '待审核'
   if (status === 'APPROVED') return '已通过'
-  if (status === 'REJECTED') return '已驳回'
+  if (status === 'REJECTED') return '未通过'
   return status || '—'
 }
 
@@ -251,65 +187,64 @@ function onPageChange(page) {
   load()
 }
 
+async function fetchDetail(applicationId) {
+  const res = await getRealNameApplication(applicationId)
+  return res?.data || res
+}
+
 async function openDetail(row) {
   detail.value = null
   detailForbidden.value = false
   detailVisible.value = true
   try {
-    const res = await getRealNameApplication(row.applicationId)
-    detail.value = res?.data || res
+    detail.value = await fetchDetail(row.applicationId)
   } catch (e) {
     // 后端仍是最终边界：权限不足时只展示受限提示，不弹出误导性错误
     detailForbidden.value = true
   }
 }
 
-function openDecide(row) {
-  decideTarget.value = row
-  decideForm.decision = 'APPROVE'
-  decideForm.rejectReason = ''
-  decideVisible.value = true
-}
-
-async function submitDecide() {
-  const reject = decideForm.decision === 'REJECT'
-  if (reject && !decideForm.rejectReason.trim()) {
-    ElMessage.warning('驳回原因必填')
-    return
-  }
+async function downloadMaterial(index) {
+  if (downloading.value || !detail.value) return
+  downloading.value = true
   try {
-    await ElMessageBox.confirm(
-      reject ? '确认驳回该实名申请？' : '确认通过该实名申请？',
-      '审核确认',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return
+    // 材料令牌 5 分钟有效且一次性：每次下载前重新拉详情取新令牌。
+    // 否则上次超时/中断后令牌已被消费，再点就会直接返回「资源不存在」。
+    const fresh = await fetchDetail(detail.value.applicationId)
+    detail.value = fresh
+    const token = fresh.materialRefs?.[index]
+    if (!token) throw new Error('材料不可用，请让申请人重新上传')
+    const result = await redeemMaterialToken(token)
+    const url = (result?.data || result)?.accessUrl
+    if (!url) throw new Error('材料访问链接不可用')
+    const fileName = fresh.materialRefs.length === 1
+      ? '历史实名材料'
+      : index === 0 ? '身份证正面.png' : '身份证反面.png'
+    await downloadMaterialContent(url, fileName)
+  } catch (e) {
+    ElMessage.error(e?.message || '材料下载失败，请重试')
+  } finally {
+    downloading.value = false
   }
+}
+async function decide(decision) {
+  if (saving.value) return
+  let reason = ''
+  try {
+    if (decision === 'REJECT') {
+      const result = await ElMessageBox.prompt('请填写驳回原因', '驳回申请', { inputValidator: value => value?.trim() && value.trim().length <= 500 || '请填写不超过 500 字的原因' })
+      reason = result.value.trim()
+    } else await ElMessageBox.confirm('确认通过该实名认证申请？', '审核确认', { type: 'warning' })
+  } catch { return }
   saving.value = true
   try {
-    await decideRealNameApplication(decideTarget.value.applicationId, {
-      decision: decideForm.decision,
-      rejectReason: reject ? decideForm.rejectReason.trim() : undefined,
-      expectedStatus: 'PENDING'
-    })
+    await decideRealNameApplication(detail.value.applicationId, { decision, rejectReason: reason || undefined, expectedStatus: 'PENDING' })
     ElMessage.success('审核已完成')
-    decideVisible.value = false
+    detailVisible.value = false
     await load()
-  } catch (e) {
-    // 409 = 并发审核或状态已变化，提示刷新而不是重复提交
-    const status = e?.response?.status
-    if (status === 409) {
-      ElMessage.error('该申请已被处理或状态已变化，请刷新后查看')
-      await load()
-    } else {
-      ElMessage.error(e?.message || '审核失败')
-    }
-  } finally {
-    saving.value = false
-  }
+  } catch (e) { ElMessage.error(e?.message || '审核失败，请刷新后重试'); await load() }
+  finally { saving.value = false }
 }
-
 onMounted(load)
 </script>
 
@@ -317,6 +252,10 @@ onMounted(load)
 .a4-page {
   padding: 20px;
   background-color: #f7f8fa;
+}
+
+.records-notice {
+  margin-bottom: 16px;
 }
 
 .filter-card {
@@ -358,17 +297,6 @@ onMounted(load)
   padding: 18px 0;
   color: #8c8c8c;
   font-size: 13px;
-}
-
-.material-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.material-hint {
-  font-size: 12px;
-  color: #8c8c8c;
 }
 
 .forbidden-hint {

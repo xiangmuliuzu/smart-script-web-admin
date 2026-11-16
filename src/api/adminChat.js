@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import { adminV1Request as request } from '@/utils/request'
 
 /**
  * 管理端聊天（A3 用户沟通，若依 Token 域）。
@@ -34,18 +34,6 @@ export function listMessages(sessionId) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/messages`, method: 'get' })
 }
 
-/** 管理端发起会话：data = { targetUserId, businessType, businessId, businessName } */
-export function createSession(data) {
-  return request({ url: `${PREFIX}/sessions`, method: 'post', data })
-}
-
-/**
- * createSession 的别名导出：版权审核（ReviewWorkbench/CopyrightAssets/SealReview）
- * 与授权订单（AuthOrders）等管理页以 adminCreateSession 命名发起「联系用户」会话，
- * 与 createSession 同一端点、同一入参，仅为调用方命名习惯提供兼容。
- */
-export const adminCreateSession = createSession
-
 /** 管理员回复消息：data = { content, msgType? }，返回消息 VO */
 export function sendMessage(sessionId, data) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/messages`, method: 'post', data })
@@ -54,16 +42,6 @@ export function sendMessage(sessionId, data) {
 /** 管理员标记会话已读 */
 export function markSessionRead(sessionId, throughMessageId) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/read`, method: 'put', params: { throughMessageId } })
-}
-
-/** 可分配的管理员候选列表（管理域账号且挂有有效角色），返回 [{ userId, userName, nickName, avatar }] */
-export function listAdmins() {
-  return request({ url: `${PREFIX}/admins`, method: 'get' })
-}
-
-/** 分配处理管理员 */
-export function assignAdmin(sessionId, adminId) {
-  return request({ url: `${PREFIX}/sessions/${sessionId}/assign`, method: 'put', params: { adminId } })
 }
 
 /** 变更会话状态：action = 'close' | 'reopen' */

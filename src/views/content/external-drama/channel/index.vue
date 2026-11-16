@@ -41,6 +41,7 @@
       :loading="loading"
       :total="total"
       empty-text="暂无渠道数据"
+      row-key="channelId"
       @page-change="loadList"
       @size-change="loadList"
     >

@@ -10,6 +10,14 @@ const PATH_COMPONENT_OVERRIDES = {
   '/copyright/seals': 'copyright/SealReview'
 }
 
+function messageRedirect(to) {
+  return { path: '/support/messages', query: { ...to.query, tab: 'messages' }, hash: to.hash }
+}
+
+function chatRedirect(to) {
+  return { path: '/support/messages', query: { ...to.query, tab: 'chat' }, hash: to.hash }
+}
+
 function isExternal(path) {
   return typeof path === 'string' && /^(https?:|mailto:|tel:)/i.test(path)
 }
@@ -77,17 +85,21 @@ export function adaptRuoYiRoutes(routers) {
         continue
       }
 
+      const isLegacyMessages = componentId === 'user/message/index'
+      const isLegacyChat = componentId === 'chat/ChatSessions'
+      const legacyRedirect = isLegacyMessages ? messageRedirect : isLegacyChat ? chatRedirect : null
+      if (legacyRedirect) meta.hidden = true
       const leaf = {
         path,
-        // name 必须全局唯一：避免 product /user 与 system /system/user 都叫 User
+        // name 必须全局唯一：同一组件可能用于多个菜单入口。
         name: (item.name ? `${item.name}` : String(componentId).replace(/[^\w]+/g, '_')) +
           '__' + path.replace(/[^\w]+/g, '_'),
-        component: comp,
+        ...(legacyRedirect ? { redirect: legacyRedirect } : { component: comp }),
         meta,
-        hidden: !!item.hidden
+        hidden: meta.hidden
       }
       leaves.push(leaf)
-      if (!item.hidden) {
+      if (!meta.hidden) {
         localSidebar.push({
           path,
           name: leaf.name,
@@ -103,6 +115,32 @@ export function adaptRuoYiRoutes(routers) {
   const topSidebar = walk(routers, '')
   sidebar.push(...topSidebar)
 
+  // 旧菜单和收藏地址统一进入消息页；旧菜单不再出现在用户中心。
+  const hasLegacyMessages = leaves.some(leaf => leaf.redirect === messageRedirect || leaf.redirect === chatRedirect)
+  let hasMessagesPage = leaves.some(leaf => leaf.path === '/support/messages')
+  if (hasLegacyMessages && !hasMessagesPage) {
+    const messagesComp = resolveComponent('support/MessagesAnnouncements')
+    if (messagesComp) {
+      leaves.push({ path: '/support/messages', name: 'LegacyMessagesPage', component: messagesComp,
+        meta: { title: '消息与公告', hidden: true }, hidden: true })
+      hasMessagesPage = true
+    }
+  }
+  if (hasMessagesPage) {
+    for (const path of ['/appuser/message', '/user/message']) {
+      if (!leaves.some(leaf => leaf.path === path)) {
+        leaves.push({ path, name: `LegacyMessages_${path.replace(/\W+/g, '_')}`, redirect: messageRedirect,
+          meta: { title: '用户消息', hidden: true }, hidden: true })
+      }
+    }
+    for (const path of ['/appuser/chat-sessions']) {
+      if (!leaves.some(leaf => leaf.path === path)) {
+        leaves.push({ path, name: `LegacyChat_${path.replace(/\W+/g, '_')}`, redirect: chatRedirect,
+          meta: { title: '用户沟通', hidden: true }, hidden: true })
+      }
+    }
+  }
+
   const layoutComp = resolveComponent('Layout')
   // 接收者阅读只依赖后台身份。没有业务菜单的管理员也需要布局和阅读入口。
   // 隐藏路由不加入侧栏，也不提供任何公告管理能力。
@@ -112,12 +150,12 @@ export function adaptRuoYiRoutes(routers) {
       meta: { title: '后台公告', hidden: true }, hidden: true })
   }
   const visibleLeaves = leaves.filter((l) => !l.meta?.hidden)
-  // 首页优先：数据总览(/workspace/dashboard) > 旧 /dashboard > /user > 首个可见叶子。
+  // 首页优先：数据总览(/workspace/dashboard) > 旧 /dashboard > App用户与创作者 > 首个可见叶子。
   // 根路由 '/' 的 redirect 据此解析，登录后即落到工作台数据总览。
   const preferred =
     visibleLeaves.find((l) => l.path === '/workspace/dashboard') ||
     visibleLeaves.find((l) => l.path === '/dashboard') ||
-    visibleLeaves.find((l) => l.path === '/user') ||
+    visibleLeaves.find((l) => l.path === '/appuser/users') ||
     visibleLeaves[0] ||
     leaves[0]
 

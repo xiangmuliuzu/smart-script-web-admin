@@ -54,8 +54,7 @@
               </el-breadcrumb>
             </div>
             <div class="header-right">
-              <AdminChatInbox />
-              <AdminAnnouncementInbox />
+              <AdminCommunicationInbox />
               <el-dropdown @command="handleCommand">
                 <span class="user-info">
                   <el-icon><Avatar /></el-icon>
@@ -63,7 +62,8 @@
                 </span>
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                    <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                    <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -77,24 +77,30 @@
         </el-main>
       </el-container>
     </el-container>
+    <ChangePasswordDialog v-model="passwordDialogVisible" @success="handlePasswordChanged" />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Files, Avatar, Right } from '@element-plus/icons-vue'
 import SidebarMenuItem from '@/components/SidebarMenuItem.vue'
-import AdminAnnouncementInbox from '@/components/messages/AdminAnnouncementInbox.vue'
-import AdminChatInbox from '@/components/messages/AdminChatInbox.vue'
+import AdminCommunicationInbox from '@/components/messages/AdminCommunicationInbox.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
+import { connectRealtime, disconnectRealtime } from '@/utils/realtimeSocket'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
+
+// 站内实时通知长连接：布局存活期间共享一条连接，各视图只订阅事件。
+onMounted(() => connectRealtime())
+onBeforeUnmount(() => disconnectRealtime())
 
 // 当前激活的菜单
 const activeMenu = computed(() => route.path)
@@ -117,8 +123,26 @@ function sanitize(nodes) {
 /** 服务端菜单树（permission store），无硬编码生产菜单回退 */
 const menuTree = computed(() => sanitize(permissionStore.sidebarRoutes))
 
+// 修改密码弹窗
+const passwordDialogVisible = ref(false)
+
+/** 改密成功后退出当前会话，强制用新密码重新登录 */
+const handlePasswordChanged = async () => {
+  try {
+    await userStore.logout()
+  } catch (error) {
+    console.error('退出失败:', error)
+  }
+  permissionStore.resetRoutes()
+  router.push('/login')
+}
+
 // 处理下拉菜单命令
 const handleCommand = async (command) => {
+  if (command === 'password') {
+    passwordDialogVisible.value = true
+    return
+  }
   if (command === 'logout') {
     try {
       await ElMessageBox.confirm('确认退出登录？', '提示', {
@@ -229,7 +253,7 @@ const handleCommand = async (command) => {
 .sidebar-menu :deep(.el-menu-item span),
 .sidebar-menu :deep(.el-sub-menu__title span) {
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 /* 一级分组标题：参考设计里它是无图标的小节标题 */
@@ -241,7 +265,7 @@ const handleCommand = async (command) => {
 }
 
 .sidebar-menu :deep(.menu-depth-0.el-sub-menu > .el-sub-menu__title > span) {
-  font-size: 11px;
+  font-size: 15px;
   color: #909399;
   font-weight: 700;
   letter-spacing: 1.5px;
@@ -303,7 +327,7 @@ const handleCommand = async (command) => {
 .sidebar-menu :deep(.el-sub-menu .el-sub-menu .el-menu-item) {
   height: 36px;
   line-height: 36px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item .el-icon) {
@@ -312,7 +336,7 @@ const handleCommand = async (command) => {
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item span) {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 /* 子菜单展开箭头 */
@@ -466,6 +490,8 @@ const handleCommand = async (command) => {
 .main-content {
   background-color: #f5f6f8;
   overflow-y: auto;
+  /* 预留滚动条槽位，避免内容高度临界时滚动条反复出现/消失引发布局抖动 */
+  scrollbar-gutter: stable;
   padding: 0;
 }
 </style>

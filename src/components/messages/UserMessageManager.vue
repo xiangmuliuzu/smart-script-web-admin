@@ -19,7 +19,7 @@
     </TableCard>
     <el-dialog v-model="createVisible" title="发送用户消息" width="640px" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" @closed="closeDraft">
       <el-form :model="form" label-width="90px" :disabled="saving">
-        <el-form-item label="消息类型" required><el-select v-model="form.type"><el-option v-for="item in types" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="消息类型"><el-tag type="info">系统消息</el-tag></el-form-item>
         <el-form-item label="标题" required><el-input v-model="form.title" maxlength="200" show-word-limit /></el-form-item>
         <el-form-item label="正文" required><el-input v-model="form.content" type="textarea" :rows="6" maxlength="2000" show-word-limit /></el-form-item>
         <el-form-item label="收件人" required><el-select v-model="form.userIds" multiple filterable remote :remote-method="searchReceivers" :loading="receiverLoading" :multiple-limit="50" placeholder="搜索昵称、账号或手机号" style="width:100%"><el-option v-for="user in receiverOptions" :key="user.userId" :value="user.userId" :label="receiverLabel(user)" /></el-select><span class="hint">已选择 {{ form.userIds.length }} 人，每次最多50人</span><span v-if="receiverError" class="form-error">{{ receiverError }} <el-button link @click="searchReceivers(receiverKeyword)">重试</el-button></span></el-form-item>
@@ -46,7 +46,7 @@ import { useUserStore } from '@/stores/user'
 import { listNotifications, getNotification, createNotification } from '@/api/user/message'
 import { listAppUsers } from '@/api/user/appUser'
 import { notificationPayload, notificationError, notificationSubmission, mergeReceiverOptions } from '@/utils/notificationDraft'
-import { formatRegisteredTime as formatTime } from '@/utils/pcFormat'
+import { formatRegisteredTime as formatTime } from '@/utils/dateFormat'
 const userStore = useUserStore()
 const canSend = computed(() => userStore.hasPermission('user:message:add'))
 const canSelectUsers = computed(() => userStore.hasPermission('user:app:list'))
@@ -110,6 +110,7 @@ async function openDetail(id) {
   catch (e) { if (generation === detailGeneration) detailError.value = e?.message || '详情加载失败' }
   finally { if (generation === detailGeneration) detailLoading.value = false }
 }
+defineExpose({ refresh: load })
 onMounted(load)
 onBeforeUnmount(() => { listGeneration++; receiverGeneration++; detailGeneration++ })
 </script>

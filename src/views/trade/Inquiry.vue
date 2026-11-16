@@ -1,9 +1,7 @@
 <template>
   <PageContainer>
     <PageHeader title="询盘管理" description="买方对交易作品发起的询盘；在报价管理接受报价即直接生成授权订单并置已达成（订单后续交 D 接手）">
-      <template #actions>
-        <el-button @click="handleExport">导出</el-button>
-      </template>
+
     </PageHeader>
 
     <FilterBar @query="handleQuery" @reset="handleReset">
@@ -101,9 +99,6 @@
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button v-if="detail.status === 'pending'" type="success" @click="handleAcceptInquiry(detail)">接受询盘</el-button>
-        <el-button v-if="detail.status === 'pending'" type="danger" @click="handleRejectInquiry(detail)">拒绝询盘</el-button>
-        <el-button v-if="canClose(detail.status)" @click="handleCloseInquiry(detail)">关闭询盘</el-button>
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -112,20 +107,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { enumOptions } from '@/constants/tradeEnum'
-import {
-  getInquiryList,
-  getInquiryDetail,
-  acceptInquiry,
-  rejectInquiry,
-  closeInquiry
-} from '@/api/trade'
+import { getInquiryList, getInquiryDetail } from '@/api/trade'
 
 defineOptions({ name: 'Inquiry' })
 
@@ -178,54 +167,6 @@ async function handleDetail(row) {
   } finally {
     detailLoading.value = false
   }
-}
-
-function handleExport() {
-  ElMessage.info('导出询盘')
-}
-
-/** 关闭询盘：pending/quoted/rejected 可关闭（deal/closed 不可） */
-function canClose(status) {
-  return ['pending', 'quoted', 'rejected'].includes(status)
-}
-
-async function handleAcceptInquiry(row) {
-  if (!row || !row.inquiryId) return
-  try {
-    await ElMessageBox.confirm(`确认接受询盘 ${row.inquiryNo}？`, '接受询盘', {
-      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
-    })
-    await acceptInquiry(row.inquiryId)
-    ElMessage.success('已接受询盘，已进入议价中')
-    detailVisible.value = false
-    loadList()
-  } catch { /* 用户取消 */ }
-}
-
-async function handleRejectInquiry(row) {
-  if (!row || !row.inquiryId) return
-  try {
-    await ElMessageBox.confirm(`确认拒绝询盘 ${row.inquiryNo}？`, '拒绝询盘', {
-      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
-    })
-    await rejectInquiry(row.inquiryId)
-    ElMessage.success('已拒绝询盘')
-    detailVisible.value = false
-    loadList()
-  } catch { /* 用户取消 */ }
-}
-
-async function handleCloseInquiry(row) {
-  if (!row || !row.inquiryId) return
-  try {
-    await ElMessageBox.confirm(`确认关闭询盘 ${row.inquiryNo}？关闭后不可再报价。`, '关闭询盘', {
-      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
-    })
-    await closeInquiry(row.inquiryId)
-    ElMessage.success('已关闭询盘')
-    detailVisible.value = false
-    loadList()
-  } catch { /* 用户取消 */ }
 }
 
 onMounted(loadList)

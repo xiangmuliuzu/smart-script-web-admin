@@ -1,0 +1,1770 @@
+<template>
+  <PageContainer>
+    <PageHeader title="版权申请管理" description="查看用户已缴费的确权申请，同步第三方审核进度；不可平台预审或常规干预，仅付款后第三方提交失败时可补推" />
+
+    <FilterBar @query="handleQuery" @reset="handleReset">
+      <el-form-item>
+        <el-select v-model="query.status" placeholder="申请状态" clearable style="width: 160px">
+          <el-option label="审核中" value="reviewing_group" />
+          <el-option label="待补正" value="need_supplement" />
+          <el-option label="逾期待驳回" value="supplement_overdue" />
+          <el-option label="已驳回" value="rejected" />
+          <el-option label="已发证" value="certificated" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-select v-model="query.copyrightCenter" placeholder="版权中心" clearable style="width: 160px">
+          <el-option label="国家版权中心" value="national" />
+          <el-option label="地方版权中心" value="local" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-input
+          v-model="query.applyNo"
+          clearable
+          placeholder="申请编号"
+          style="width: 200px"
+          @keyup.enter="handleQuery"
+        />
+      </el-form-item>
+    </FilterBar>
+
+    <TableCard
+      v-model:page="query.pageNo"
+      v-model:pageSize="query.pageSize"
+      :data="applications"
+      :loading="loading"
+      :total="total"
+      :empty-text="emptyText"
+      @page-change="loadApplications"
+      @size-change="loadApplications"
+    >
+      <el-table-column prop="applyNo" label="申请编号" width="160" show-overflow-tooltip />
+      <el-table-column prop="workName" label="作品名称" width="180" show-overflow-tooltip />
+      <el-table-column prop="centerName" label="版权中心" width="140" show-overflow-tooltip>
+        <template #default="{ row }">
+          <el-tooltip v-if="row.centerName" :content="`中心代码: ${row.copyrightCenter || '未知'}`" placement="top">
+            <span>{{ row.centerName }}</span>
+          </el-tooltip>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="externalApplyNo" label="外部申请号" width="150" show-overflow-tooltip>
+        <template #default="{ row }">
+          <el-tooltip v-if="row.externalApplyNo" :content="`在${centerLabel(row.copyrightCenter)}的申请编号`" placement="top">
+            <span>{{ row.externalApplyNo }}</span>
+          </el-tooltip>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="字数" width="90" align="right">
+        <template #default="{ row }">{{ row.wordCount ?? '—' }}</template>
+      </el-table-column>
+      <el-table-column label="登记费" width="100" align="right">
+        <template #default="{ row }">
+          {{ row.feeAmount != null ? `¥${Number(row.feeAmount).toFixed(2)}` : '—' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="申请状态" width="110">
+        <template #default="{ row }">
+          <el-tag :type="statusType(row.status)" effect="light" size="small">
+            {{ row.statusText || statusLabel(row.status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="补正截止" width="170">
+        <template #default="{ row }">
+          <span
+            v-if="row.supplementDeadline"
+            :style="{ color: row.status === 'supplement_overdue' ? '#cf1322' : (row.status === 'need_supplement' ? '#fa541c' : undefined) }"
+          >
+            {{ row.supplementDeadline }}
+          </span>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="submitTime" label="提交时间" width="170" />
+      <el-table-column prop="certNo" label="证书编号" width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.certNo || '—' }}</template>
+      </el-table-column>
+      <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.remark || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="260" fixed="right">
+        <template #default="{ row }">
+          <div class="action-buttons">
+            <el-button size="small" type="primary" @click="handleDetail(row)">详情</el-button>
+            <el-button
+              v-if="canQueryStatus(row)"
+              v-permission="'smartscript:copyright:application:sync'"
+              size="small"
+              type="warning"
+              :loading="syncingId === row.applyId"
+              :disabled="syncingId !== null && syncingId !== row.applyId"
+              @click="handleSync(row)"
+            >
+              状态查询
+            </el-button>
+            <el-button
+              v-if="canRetryThirdParty(row)"
+              v-permission="'smartscript:copyright:application:submit'"
+              size="small"
+              type="danger"
+              @click="handleRetryThirdParty(row)"
+            >
+              补推第三方
+            </el-button>
+          </div>
+        </template>
+      </el-table-column>
+    </TableCard>
+
+    <!-- 详情抽屉 -->
+    <el-drawer 
+      v-model="detailVisible" 
+      :title="`版权申请详情 - ${currentRecord?.applyNo || ''}`"
+      size="65%"
+      destroy-on-close
+    >
+      <div v-loading="detailLoading" style="min-height: 400px; padding: 0 20px 20px">
+        <div v-if="currentRecord && currentRecord.applyId" class="detail-content">
+          
+          <!-- 申请基本信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Document /></el-icon>
+                  申请信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="申请编号">{{ currentRecord.applyNo }}</el-descriptions-item>
+              <el-descriptions-item label="申请状态">
+                <el-tag :type="statusType(currentRecord.status)">
+                  {{ currentRecord.displayStatusText || statusLabel(currentRecord.status) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="版权中心" :span="2">
+                {{ currentRecord.centerName || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="外部申请号" :span="2">
+                {{ currentRecord.externalApplyNo || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="计价字数">
+                {{ currentRecord.wordCount ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="登记费">
+                {{ currentRecord.feeAmount != null ? `¥${Number(currentRecord.feeAmount).toFixed(2)}` : '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="支付单ID">
+                {{ currentRecord.payOrderId || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="申请时间">
+                {{ currentRecord.createTime || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="提交时间">
+                {{ currentRecord.submitTime || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.certNo" label="证书编号" :span="2">
+                {{ currentRecord.certNo }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.certUrl" label="证书文件" :span="2">
+                <el-link type="primary" :href="currentRecord.certUrl" target="_blank">
+                  <el-icon><Document /></el-icon> 查看证书
+                </el-link>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.rejectReason" label="驳回原因" :span="2">
+                <div class="reject-reason">{{ currentRecord.rejectReason }}</div>
+              </el-descriptions-item>
+              <el-descriptions-item v-if="currentRecord.remark" label="备注" :span="2">
+                {{ currentRecord.remark }}
+              </el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+
+          <!-- 补正信息 -->
+          <el-card
+            v-if="currentRecord.supplementNotice || currentRecord.supplementDeadline || currentRecord.status === 'need_supplement' || currentRecord.status === 'supplement_overdue'"
+            shadow="never"
+            class="detail-card"
+          >
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Document /></el-icon>
+                  补正信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="补正截止">
+                {{ currentRecord.supplementDeadline || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="当前状态">
+                <el-tag :type="statusType(currentRecord.status)" size="small">
+                  {{ statusLabel(currentRecord.status) }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="补正要求" :span="2">
+                {{ currentRecord.supplementNotice || currentRecord.openSupplement?.requirementText || '—' }}
+              </el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">补正单</el-divider>
+            <el-table
+              v-if="(currentRecord.supplements || []).length"
+              :data="currentRecord.supplements"
+              border
+              size="small"
+              style="margin-bottom: 12px"
+            >
+              <el-table-column prop="supplementId" label="单号" width="80" />
+              <el-table-column prop="status" label="状态" width="100">
+                <template #default="{ row }">{{ supplementStatusLabel(row.status) }}</template>
+              </el-table-column>
+              <el-table-column prop="deadlineTime" label="截止" width="170" />
+              <el-table-column prop="submitTime" label="提交时间" width="170">
+                <template #default="{ row }">{{ row.submitTime || '—' }}</template>
+              </el-table-column>
+              <el-table-column prop="requirementText" label="要求" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="userRemark" label="用户说明" min-width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.userRemark || '—' }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="暂无补正单" :image-size="48" />
+          </el-card>
+
+          <!-- 申请人信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><User /></el-icon>
+                  申请人信息
+                </span>
+              </div>
+            </template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="用户ID">{{ currentRecord.userId || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="姓名">{{ currentRecord.userName || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="手机号">{{ currentRecord.userPhone || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="邮箱">{{ currentRecord.userEmail || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="权利人">{{ currentRecord.rightsHolderName || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="证件类型">{{ idDocTypeLabel(currentRecord.idDocType) }}</el-descriptions-item>
+              <el-descriptions-item label="证件号码" :span="2">{{ currentRecord.idDocNo || '—' }}</el-descriptions-item>
+            </el-descriptions>
+          </el-card>
+
+          <!-- 作品信息 -->
+          <el-card shadow="never" class="detail-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><Reading /></el-icon>
+                  作品详细信息
+                </span>
+              </div>
+            </template>
+            <div class="work-display">
+              <div v-if="currentRecord.workCoverUrl" class="work-cover">
+                <el-image
+                  :src="resolveMediaUrl(currentRecord.workCoverUrl)"
+                  :preview-src-list="[resolveMediaUrl(currentRecord.workCoverUrl)]"
+                  fit="cover"
+                  class="work-cover-img"
+                  :preview-teleported="true"
+                >
+                  <template #error>
+                    <div class="img-placeholder">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
+              <div v-else class="work-cover">
+                <div class="img-placeholder">
+                  <el-icon><Picture /></el-icon>
+                  <div>暂无封面</div>
+                </div>
+              </div>
+              <div class="work-info-section">
+                <h3 class="work-title-text">{{ currentRecord.workName || '未命名作品' }}</h3>
+                <el-descriptions :column="2" border size="small">
+                  <el-descriptions-item label="作品ID">
+                    {{ currentRecord.workId || '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品类型">
+                    <el-tag size="small" type="primary">{{ workTypeLabel(currentRecord.workType) }}</el-tag>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品规模">
+                    <span v-if="currentRecord.workWordCount">{{ currentRecord.workWordCount.toLocaleString() }} 字</span>
+                    <span v-else-if="currentRecord.workDuration">{{ formatDuration(currentRecord.workDuration) }}</span>
+                    <span v-else>—</span>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="创作完成日期">
+                    {{ currentRecord.workCreationDate ? currentRecord.workCreationDate.split(' ')[0] : '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="首次发表日期">
+                    {{ currentRecord.workPublishDate ? currentRecord.workPublishDate.split(' ')[0] : '—' }}
+                  </el-descriptions-item>
+                  <el-descriptions-item label="作品简介" :span="2">
+                    <div class="work-intro">{{ currentRecord.workSummary || '暂无简介' }}</div>
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+            
+            <!-- 作品内容区域 -->
+            <el-divider content-position="left">
+              <span style="display: flex; align-items: center; gap: 4px;">
+                <el-icon><FolderOpened /></el-icon>
+                作品内容文件
+              </span>
+            </el-divider>
+            <div v-if="currentRecord.workFileUrl" class="work-files-section">
+              <div class="file-item-card" @click="previewFile(currentRecord.workFileUrl)">
+                <div class="file-icon-large">
+                  <el-icon :size="32" color="#409eff">
+                    <component :is="getFileIcon(currentRecord.workFileUrl)" />
+                  </el-icon>
+                </div>
+                <div class="file-info-detail">
+                  <div class="file-name-large">{{ getFileName(currentRecord.workFileUrl) }}</div>
+                  <div class="file-actions-row">
+                    <el-button size="small" type="primary" plain>
+                      <el-icon><View /></el-icon> 在线预览
+                    </el-button>
+                    <el-button size="small" @click.stop="downloadFile(currentRecord.workFileUrl)">
+                      <el-icon><Download /></el-icon> 下载文件
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无作品文件" :image-size="60" />
+          </el-card>
+
+          <!-- 申请材料 -->
+          <el-card shadow="never" class="detail-card materials-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">
+                  <el-icon><FolderOpened /></el-icon>
+                  申请材料
+                </span>
+                <span class="material-tips">点击文件可在线预览</span>
+              </div>
+            </template>
+
+            <div v-if="hasAnyMaterials(currentRecord)" class="materials-section">
+              <!-- 原创性证明 -->
+              <div v-if="parseMaterials(currentRecord.originalityProofUrls).length > 0" class="material-section">
+                <div class="material-title">原创性证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(file, idx) in parseMaterials(currentRecord.originalityProofUrls)"
+                    :key="`originality-${idx}`"
+                    class="file-item"
+                    @click="previewFile(file.url, file.filename)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ file.filename }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 作者身份证明 -->
+              <div v-if="parseMaterials(currentRecord.authorIdentityDocUrls).length > 0" class="material-section">
+                <div class="material-title">作者身份证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(file, idx) in parseMaterials(currentRecord.authorIdentityDocUrls)"
+                    :key="`identity-${idx}`"
+                    class="file-item"
+                    @click="previewFile(file.url, file.filename)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ file.filename }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 创作过程材料 -->
+              <div v-if="parseMaterials(currentRecord.creationProcessUrls).length > 0" class="material-section">
+                <div class="material-title">创作过程说明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(file, idx) in parseMaterials(currentRecord.creationProcessUrls)"
+                    :key="`process-${idx}`"
+                    class="file-item"
+                    @click="previewFile(file.url, file.filename)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ file.filename }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 其他证明材料 -->
+              <div v-if="parseMaterials(currentRecord.otherProofUrls).length > 0" class="material-section">
+                <div class="material-title">其他辅助证明材料</div>
+                <div class="material-files">
+                  <div
+                    v-for="(file, idx) in parseMaterials(currentRecord.otherProofUrls)"
+                    :key="`other-${idx}`"
+                    class="file-item"
+                    @click="previewFile(file.url, file.filename)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ file.filename }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 兼容旧版本的申请材料 -->
+              <div v-if="currentRecord.attachmentUrl && !currentRecord.originalityProofUrls && !currentRecord.authorIdentityDocUrls && !currentRecord.creationProcessUrls && !currentRecord.otherProofUrls" class="material-section">
+                <div class="material-title">申请材料（旧版本）</div>
+                <div class="material-files">
+                  <div
+                    v-for="(file, idx) in parseMaterials(currentRecord.attachmentUrl)"
+                    :key="`attachment-${idx}`"
+                    class="file-item"
+                    @click="previewFile(file.url, file.filename)"
+                  >
+                    <el-icon class="file-icon" :size="24"><Document /></el-icon>
+                    <div class="file-info">
+                      <span class="file-name">{{ file.filename }}</span>
+                      <div class="file-action">
+                        <el-link type="primary" :underline="false">预览</el-link>
+                        <el-divider direction="vertical" />
+                        <el-link type="primary" :underline="false" @click.stop="downloadFile(file.url)">下载</el-link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无申请材料" :image-size="80" />
+          </el-card>
+
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="drawer-footer">
+          <el-button @click="detailVisible = false">关闭</el-button>
+          <el-button
+            v-if="canQueryStatus(currentRecord)"
+            v-permission="'smartscript:copyright:application:sync'"
+            type="warning"
+            :loading="syncingId === currentRecord?.applyId"
+            @click="handleSync(currentRecord)"
+          >
+            状态查询
+          </el-button>
+          <el-button
+            v-if="canRetryThirdParty(currentRecord)"
+            v-permission="'smartscript:copyright:application:submit'"
+            type="danger"
+            @click="handleRetryThirdParty(currentRecord)"
+          >
+            补推第三方
+          </el-button>
+        </div>
+      </template>
+    </el-drawer>
+
+    <!-- 文件预览对话框（与印章审核共用，支持图片 / txt / PDF） -->
+    <MaterialPreviewDialog
+      v-model="previewVisible"
+      :material-url="previewUrl"
+      :material-name="previewName"
+    />
+
+    <!-- 状态查询结果对话框 -->
+    <el-dialog v-model="syncStatusVisible" title="版权审核状态" width="600px">
+      <div v-loading="syncStatusLoading">
+        <el-descriptions v-if="syncStatusData" :column="1" border>
+          <el-descriptions-item label="申请编号">{{ syncStatusData.applyNo }}</el-descriptions-item>
+          <el-descriptions-item label="外部申请号">{{ syncStatusData.externalApplyNo || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="版权中心">{{ syncStatusData.centerName }}</el-descriptions-item>
+          <el-descriptions-item label="当前状态">
+            <el-tag :type="statusType(syncStatusData.status)" size="small">
+              {{ syncStatusData.statusDesc || statusLabel(syncStatusData.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="提交时间">{{ syncStatusData.submitTime }}</el-descriptions-item>
+          <el-descriptions-item label="最后同步时间">{{ syncStatusData.lastSyncTime }}</el-descriptions-item>
+          <el-descriptions-item v-if="syncStatusData.progress" label="审核进度">
+            {{ syncStatusData.progress }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="syncStatusData.estimatedTime" label="预计完成时间">
+            {{ syncStatusData.estimatedTime }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="syncStatusData.remark" label="备注">
+            {{ syncStatusData.remark }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="syncStatusVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 提交到版权中心对话框 -->
+    <el-dialog v-model="submitDialogVisible" title="选择版权中心" width="500px">
+      <el-form :model="submitForm" label-width="100px">
+        <el-form-item label="选择版权中心" required>
+          <el-select
+            v-model="submitForm.configId"
+            placeholder="请选择版权中心"
+            style="width: 100%"
+            :loading="loadingCenters"
+          >
+            <el-option
+              v-for="center in availableCenters"
+              :key="center.configId"
+              :label="center.centerName"
+              :value="center.configId"
+            >
+              <div style="display: flex; justify-content: space-between">
+                <span>{{ center.centerName }}</span>
+                <el-tag size="small" type="success">可用</el-tag>
+              </div>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-alert
+          title="提示"
+          type="info"
+          :closable="false"
+          style="margin-top: 10px"
+        >
+          <template #default>
+            <div style="font-size: 13px">
+              选择版权中心后，申请将被分配到该版权中心的待处理列表，您可以在版权中心配置页进一步提交到第三方API。
+            </div>
+          </template>
+        </el-alert>
+      </el-form>
+      <template #footer>
+        <el-button @click="submitDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="confirmSubmitToCenter">
+          确定提交
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量提交到版权中心对话框 -->
+    <el-dialog v-model="batchSubmitDialogVisible" title="批量提交到版权中心" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="选择版权中心" required>
+          <el-select
+            v-model="batchSubmitConfigId"
+            placeholder="请选择版权中心"
+            style="width: 100%"
+            :loading="loadingCenters"
+          >
+            <el-option
+              v-for="center in availableCenters"
+              :key="center.configId"
+              :label="center.centerName"
+              :value="center.configId"
+            >
+              <div style="display: flex; justify-content: space-between">
+                <span>{{ center.centerName }}</span>
+                <el-tag size="small" type="success">可用</el-tag>
+              </div>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-alert
+          :title="`即将提交 ${selectedRows.filter(row => row.status === 'approved').length} 条申请`"
+          type="info"
+          :closable="false"
+          style="margin-top: 10px"
+        >
+          <template #default>
+            <div style="font-size: 13px">
+              所有选中的已审核通过申请将被分配到该版权中心的待处理列表
+            </div>
+          </template>
+        </el-alert>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchSubmitDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchSubmitting" @click="confirmBatchSubmit">
+          确定提交
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增/编辑对话框 -->
+    
+    <!-- 版权中心配置信息对话框 -->
+    <el-dialog v-model="centerInfoVisible" title="已配置的版权中心" width="700px">
+      <div v-loading="loadingCenters">
+        <el-alert 
+          type="info" 
+          :closable="false" 
+          style="margin-bottom: 16px;"
+        >
+          <template #title>
+            当前系统中已配置的版权登记中心，申请提交时会自动选择可用的版权中心
+          </template>
+        </el-alert>
+        
+        <el-table :data="availableCenters" border>
+          <el-table-column prop="centerCode" label="中心代码" width="120" />
+          <el-table-column prop="centerName" label="中心名称" width="180" />
+          <el-table-column prop="apiUrl" label="API地址" show-overflow-tooltip />
+          <el-table-column prop="priority" label="优先级" width="80" align="center" />
+          <el-table-column label="状态" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'enabled' ? 'success' : 'info'" size="small">
+                {{ row.status === 'enabled' ? '启用' : '停用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <el-empty v-if="!loadingCenters && availableCenters.length === 0" description="暂无可用的版权中心配置" />
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="centerInfoVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+  </PageContainer>
+</template>
+
+<script setup>
+import { ref, reactive, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Document, 
+  User, 
+  Reading, 
+  FolderOpened, 
+  Download,
+  Picture,
+  View,
+  ChatLineSquare,
+  Clock,
+  CircleCheck,
+  CircleClose,
+  Warning,
+  QuestionFilled
+} from '@element-plus/icons-vue'
+import PageContainer from '@/components/PageContainer.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import TableCard from '@/components/TableCard.vue'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
+import {
+  getCopyrightApplicationList,
+  getCopyrightApplicationDetail,
+  syncCopyrightApplication,
+  reviewCopyrightApplication,
+  submitCopyrightApplicationToCenter,
+  submitApplicationToThirdParty,
+  batchSubmitCopyrightApplicationToCenter,
+  batchSyncCopyrightStatus,
+  syncCopyrightApplicationStatus,
+  getAvailableCopyrightCenters
+} from '@/api/copyright'
+import { resolveMediaUrl } from '@/utils/request'
+
+const loading = ref(false)
+const applications = ref([])
+const total = ref(0)
+const emptyText = ref('暂无数据')
+const syncingId = ref(null)
+const batchSyncing = ref(false)
+
+// 文件预览
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewName = ref('')
+const selectedRows = ref([])
+const syncStatusVisible = ref(false)
+const syncStatusLoading = ref(false)
+const syncStatusData = ref(null)
+
+const query = reactive({
+  pageNo: 1,
+  pageSize: 10,
+  status: '',
+  copyrightCenter: '',
+  applyNo: ''
+})
+
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const currentRecord = ref(null)
+
+const reviewDialogVisible = ref(false)
+const reviewSubmitting = ref(false)
+const reviewForm = reactive({
+  applyId: null,
+  action: '', // 'approve' 或 'reject'
+  reason: ''
+})
+
+const loadApplications = async () => {
+  loading.value = true
+  try {
+    const params = { ...query }
+    if (params.status === 'reviewing_group') {
+      params.status = undefined
+      params.statusList = 'pending,approved,submitted,reviewing'
+    }
+    const res = await getCopyrightApplicationList(params)
+    applications.value = res.rows || []
+    total.value = res.total || 0
+    emptyText.value = '暂无数据'
+  } catch (error) {
+    applications.value = []
+    total.value = 0
+    emptyText.value = '加载失败'
+    ElMessage.error('加载数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleQuery = () => {
+  query.pageNo = 1
+  loadApplications()
+}
+
+const handleReset = () => {
+  query.status = ''
+  query.copyrightCenter = ''
+  query.applyNo = ''
+  handleQuery()
+}
+
+const handleDetail = async (row) => {
+  detailVisible.value = true
+  detailLoading.value = true
+  try {
+    const res = await getCopyrightApplicationDetail(row.applyId)
+    console.log('详情响应数据:', res)
+    // 兼容不同的响应格式
+    currentRecord.value = res.data || res || null
+    if (!currentRecord.value) {
+      ElMessage.warning('暂无详情数据')
+    }
+  } catch (error) {
+    console.error('加载详情失败:', error)
+    ElMessage.error('加载详情失败')
+    detailVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const handleSync = async (row) => {
+  syncingId.value = row.applyId
+  syncStatusLoading.value = true
+  try {
+    await syncCopyrightApplicationStatus(row.applyId)
+    
+    // 重新加载列表以获取最新状态
+    await loadApplications()
+    
+    // 从刷新后的列表中找到该申请，显示详细信息
+    const updatedRow = applications.value.find(app => app.applyId === row.applyId)
+    if (updatedRow) {
+      // 准备状态详情数据
+      syncStatusData.value = {
+        applyNo: updatedRow.applyNo,
+        externalApplyNo: updatedRow.externalApplyNo || '—',
+        status: updatedRow.status,
+        statusDesc: getStatusDescription(updatedRow.status),
+        centerName: centerLabel(updatedRow.copyrightCenter),
+        submitTime: updatedRow.submitTime || '—',
+        lastSyncTime: new Date().toLocaleString(),
+        progress: getProgressDescription(updatedRow.status, updatedRow.externalApplyNo)
+      }
+      syncStatusVisible.value = true
+    }
+    
+    ElMessage.success('状态查询成功')
+  } catch (error) {
+    console.error('状态查询失败:', error)
+    ElMessage.error(error.msg || '状态查询失败，请稍后重试')
+  } finally {
+    syncingId.value = null
+    syncStatusLoading.value = false
+  }
+}
+
+// 获取状态描述
+const getStatusDescription = (status) => {
+  const map = {
+    pending: '审核中（历史单只读）',
+    approved: '审核中（历史单只读）',
+    submitted: '审核中 / 若已付款且无外部号可补推第三方',
+    reviewing: '审核中 - 已提交到第三方版权中心，等待审核',
+    need_supplement: '待补正 - 第三方要求补充材料（不重交官费）',
+    supplement_overdue: '逾期待驳回 - 补正已超时',
+    certificated: '已发证 - 版权登记成功',
+    rejected: '已驳回（用户需重新缴费申请）'
+  }
+  return map[status] || status
+}
+
+const getProgressDescription = (status, externalApplyNo) => {
+  if (status === 'pending' || status === 'approved') {
+    return '历史流程单据，仅可查看与状态查询，不可平台审核干预'
+  }
+  if (status === 'submitted' && !externalApplyNo) {
+    return '可能为付款成功后提交第三方失败，符合条件时可补推'
+  }
+  const map = {
+    reviewing: '已提交到第三方版权中心，正在审核中，请耐心等待',
+    need_supplement: '请通知用户在截止日前于 App 提交补正材料',
+    supplement_overdue: '补正已超时，最终结果以版权中心为准',
+    certificated: '版权证书已发放，可在详情中查看证书信息',
+    rejected: '申请被第三方驳回，请查看驳回原因'
+  }
+  return map[status] || '处理中'
+}
+
+/** 已付款但提交第三方失败才可补推 */
+const canRetryThirdParty = (row) => {
+  return !!row
+    && row.status === 'submitted'
+    && !!row.payOrderId
+    && !row.externalApplyNo
+}
+
+const canQueryStatus = (row) => {
+  if (!row) return false
+  const s = row.status
+  return s === 'pending'
+    || s === 'approved'
+    || s === 'submitted'
+    || s === 'reviewing'
+    || s === 'need_supplement'
+    || s === 'supplement_overdue'
+}
+
+const handleRetryThirdParty = async (row) => {
+  if (!canRetryThirdParty(row)) {
+    ElMessage.warning('当前申请不可补推（仅已付款且第三方提交失败时可操作）')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认将申请「${row.applyNo}」补推到第三方吗？仅用于付款成功但提交第三方失败的补偿，不会改变正常审核流程。`,
+      '补推确认',
+      { type: 'warning', confirmButtonText: '确定补推', cancelButtonText: '取消' }
+    )
+    await submitApplicationToThirdParty(row.applyId)
+    ElMessage.success('补推成功')
+    await loadApplications()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.msg || error.message || '补推失败')
+    }
+  }
+}
+
+// 表格选择变化
+const handleSelectionChange = (selection) => {
+  selectedRows.value = selection
+}
+
+// 审核对话框
+const rejectDialogVisible = ref(false)
+const rejectSubmitting = ref(false)
+const rejectForm = reactive({
+  applyId: null,
+  reason: ''
+})
+
+// 打开审核对话框
+const handleReview = (row) => {
+  reviewForm.applyId = row.applyId
+  reviewForm.action = ''
+  reviewForm.reason = ''
+  reviewDialogVisible.value = true
+}
+
+// 确认审核
+const confirmReview = async () => {
+  if (!reviewForm.action) {
+    ElMessage.warning('请选择审核操作')
+    return
+  }
+  
+  if (reviewForm.action === 'reject' && !reviewForm.reason.trim()) {
+    ElMessage.warning('驳回操作必须填写驳回原因')
+    return
+  }
+  
+  reviewSubmitting.value = true
+  try {
+    await reviewCopyrightApplication(reviewForm.applyId, {
+      action: reviewForm.action,
+      rejectReason: reviewForm.reason
+    })
+    const actionText = reviewForm.action === 'approve' ? '审核通过' : '驳回'
+    ElMessage.success(`${actionText}成功`)
+    reviewDialogVisible.value = false
+    loadApplications()
+  } catch (error) {
+    ElMessage.error('操作失败')
+  } finally {
+    reviewSubmitting.value = false
+  }
+}
+
+// 提交到版权中心
+const submitDialogVisible = ref(false)
+const submitForm = reactive({
+  applyId: null,
+  configId: null
+})
+const submitting = ref(false)
+
+const handleSubmitToCenter = async (row) => {
+  // 加载可用的版权中心列表
+  loadingCenters.value = true
+  try {
+    const res = await getAvailableCopyrightCenters()
+    // unwrapRuoYiResponse 已经解包，res 直接就是数组
+    availableCenters.value = Array.isArray(res) ? res : []
+    
+    if (availableCenters.value.length === 0) {
+      ElMessage.warning('暂无可用的版权中心，请先在版权中心配置页启用版权中心')
+      return
+    }
+    
+    // 打开选择对话框
+    submitForm.applyId = row.applyId
+    submitForm.configId = null
+    submitDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error('获取版权中心列表失败')
+  } finally {
+    loadingCenters.value = false
+  }
+}
+
+// 确认提交到版权中心
+const confirmSubmitToCenter = async () => {
+  if (!submitForm.configId) {
+    ElMessage.warning('请选择版权中心')
+    return
+  }
+  
+  submitting.value = true
+  try {
+    await submitCopyrightApplicationToCenter(submitForm.applyId, submitForm.configId)
+    ElMessage.success('提交成功')
+    submitDialogVisible.value = false
+    loadApplications()
+  } catch (error) {
+    console.error('提交失败:', error)
+    const errorMsg = error.response?.data?.msg || error.message || '提交失败'
+    ElMessage.error(errorMsg)
+  } finally {
+    submitting.value = false
+  }
+}
+
+// 批量提交
+const batchSubmitDialogVisible = ref(false)
+const batchSubmitConfigId = ref(null)
+const batchSubmitting = ref(false)
+
+const handleBatchSubmit = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请选择要提交的申请')
+    return
+  }
+  
+  const approvedRows = selectedRows.value.filter(row => row.status === 'approved')
+  if (approvedRows.length === 0) {
+    ElMessage.warning('请选择状态为"已通过"的申请')
+    return
+  }
+  
+  // 加载可用的版权中心列表
+  loadingCenters.value = true
+  try {
+    const res = await getAvailableCopyrightCenters()
+    // unwrapRuoYiResponse 已经解包，res 直接就是数组
+    availableCenters.value = Array.isArray(res) ? res : []
+    
+    if (availableCenters.value.length === 0) {
+      ElMessage.warning('暂无可用的版权中心，请先在版权中心配置页启用版权中心')
+      return
+    }
+    
+    // 打开批量提交对话框
+    batchSubmitConfigId.value = null
+    batchSubmitDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error('获取版权中心列表失败')
+  } finally {
+    loadingCenters.value = false
+  }
+}
+
+// 确认批量提交
+const confirmBatchSubmit = async () => {
+  if (!batchSubmitConfigId.value) {
+    ElMessage.warning('请选择版权中心')
+    return
+  }
+  
+  const approvedRows = selectedRows.value.filter(row => row.status === 'approved')
+  
+  batchSubmitting.value = true
+  try {
+    // 逐个提交到选中的版权中心
+    for (const row of approvedRows) {
+      await submitCopyrightApplicationToCenter(row.applyId, batchSubmitConfigId.value)
+    }
+    ElMessage.success(`成功提交 ${approvedRows.length} 条申请`)
+    batchSubmitDialogVisible.value = false
+    loadApplications()
+  } catch (error) {
+    console.error('批量提交失败:', error)
+    const errorMsg = error.response?.data?.msg || error.message || '批量提交失败'
+    ElMessage.error(errorMsg)
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
+const centerLabel = (center) => {
+  const map = {
+    national: '国家版权中心',
+    local: '地方版权中心'
+  }
+  return map[center] || center
+}
+
+const statusLabel = (status) => {
+  const map = {
+    pending: '审核中',
+    approved: '审核中',
+    submitted: '审核中',
+    reviewing: '审核中',
+    need_supplement: '待补正',
+    supplement_overdue: '逾期待驳回',
+    rejected: '已驳回',
+    certificated: '已发证'
+  }
+  return map[status] || status
+}
+
+const statusType = (status) => {
+  const map = {
+    pending: 'primary',
+    approved: 'primary',
+    submitted: 'primary',
+    reviewing: 'primary',
+    need_supplement: 'warning',
+    supplement_overdue: 'danger',
+    rejected: 'danger',
+    certificated: 'success'
+  }
+  return map[status] || 'info'
+}
+
+const idDocTypeLabel = (type) => {
+  const map = {
+    id_card: '居民身份证',
+    passport: '护照',
+    hk_macau_pass: '港澳居民来往内地通行证',
+    taiwan_pass: '台湾居民来往大陆通行证',
+    other: '其他'
+  }
+  return map[type] || type || '—'
+}
+
+const supplementStatusLabel = (status) => {
+  const map = {
+    open: '待用户提交',
+    submitted: '已提交',
+    overdue: '已逾期',
+    closed: '已关闭'
+  }
+  return map[status] || status || '—'
+}
+
+// 解析URL字符串（支持逗号分隔、JSON字符串数组、JSON对象数组格式）
+/** 解析材料字段为 { url, filename }[]，兼容 JSON 对象数组 / 字符串数组 / 逗号分隔 */
+const parseMaterials = (urlString) => {
+  if (!urlString) return []
+
+  const toItem = (url, filename) => {
+    const trimmed = String(url || '').trim()
+    if (!trimmed) return null
+    const name = (filename && String(filename).trim()) || getFileName(trimmed)
+    return { url: trimmed, filename: name }
+  }
+
+  try {
+    const parsed = JSON.parse(urlString)
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => {
+        if (typeof item === 'object' && item !== null && item.url) {
+          return toItem(item.url, item.filename || item.name)
+        }
+        if (typeof item === 'string') {
+          return toItem(item)
+        }
+        return null
+      }).filter(Boolean)
+    }
+  } catch (e) {
+    // 不是 JSON，按逗号分隔
+  }
+
+  return String(urlString)
+    .split(',')
+    .map((url) => toItem(url))
+    .filter(Boolean)
+}
+
+// 判断是否有任何申请材料
+const hasAnyMaterials = (record) => {
+  return record.workFileUrl ||
+         record.attachmentUrl ||
+         record.originalityProofUrls ||
+         record.authorIdentityDocUrls ||
+         record.creationProcessUrls ||
+         record.otherProofUrls
+}
+
+const extractFileExt = (value) => {
+  if (!value) return ''
+  const clean = String(value).split('?')[0].split('#')[0].toLowerCase()
+  const match = clean.match(/\.([a-z0-9]+)$/)
+  return match ? match[1] : ''
+}
+
+// 判断是否为图片文件
+const isImageFile = (url) => {
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extractFileExt(url))
+}
+
+// 判断是否为PDF文件
+const isPdfFile = (url) => extractFileExt(url) === 'pdf'
+
+// 根据文件类型获取图标
+const getFileIcon = (url) => {
+  if (isImageFile(url)) return Picture
+  if (isPdfFile(url)) return Document
+  return Document
+}
+
+// 获取状态颜色
+const getStatusColor = (status) => {
+  const colorMap = {
+    pending: '#E6A23C',
+    approved: '#409EFF',
+    submitted: '#409EFF',
+    reviewing: '#909399',
+    certificated: '#67C23A',
+    rejected: '#F56C6C'
+  }
+  return colorMap[status] || '#909399'
+}
+
+// 获取状态图标组件
+const getStatusIconComponent = (status) => {
+  const iconMap = {
+    pending: Clock,
+    approved: CircleCheck,
+    submitted: CircleCheck,
+    reviewing: Clock,
+    certificated: CircleCheck,
+    rejected: CircleClose
+  }
+  return iconMap[status] || QuestionFilled
+}
+
+// 作品类型标签
+const workTypeLabel = (type) => {
+  const map = {
+    novel: '小说',
+    script: '剧本',
+    video: '视频',
+    audio: '音频'
+  }
+  return map[type] || type
+}
+
+// 格式化时长
+const formatDuration = (seconds) => {
+  if (!seconds) return '—'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟`
+  }
+  return `${minutes}分钟`
+}
+
+// 从URL获取文件名
+const getFileName = (url) => {
+  if (!url) return '未命名文件'
+  try {
+    const parts = url.split('/')
+    return decodeURIComponent(parts[parts.length - 1])
+  } catch (e) {
+    return '文件'
+  }
+}
+
+// 下载文件
+const downloadFile = (url) => {
+  if (!url) return
+  const fullUrl = resolveMediaUrl(url)
+  window.open(fullUrl, '_blank')
+}
+
+// 预览作品文件
+const previewWorkFile = (url) => {
+  previewFile(url)
+}
+
+// 预览文件（须经 resolveMediaUrl，服务器环境走 /prod-api/profile/...）
+const previewFile = (url, filename = '') => {
+  if (!url) return
+  previewUrl.value = resolveMediaUrl(url)
+  previewName.value = filename || getFileName(url)
+  previewVisible.value = true
+}
+
+const handleBatchSync = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要同步的申请')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定同步选中的 ${selectedRows.value.length} 个申请的状态吗？`,
+      '批量同步确认',
+      { type: 'warning' }
+    )
+    
+    const applyIds = selectedRows.value.map(row => row.applyId)
+    await batchSyncCopyrightStatus(applyIds)
+    ElMessage.success('批量同步成功')
+    loadApplications()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量同步失败')
+    }
+  }
+}
+
+const centerInfoVisible = ref(false)
+const availableCenters = ref([])
+const loadingCenters = ref(false)
+
+const showCenterInfo = async () => {
+  centerInfoVisible.value = true
+  loadingCenters.value = true
+  
+  try {
+    const res = await getAvailableCopyrightCenters()
+    // unwrapRuoYiResponse 已经解包，res 直接就是数组
+    availableCenters.value = Array.isArray(res) ? res : []
+  } catch (error) {
+    ElMessage.error('获取版权中心信息失败')
+  } finally {
+    loadingCenters.value = false
+  }
+}
+
+loadApplications()
+</script>
+
+<style scoped>
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 详情页面样式 */
+.detail-content {
+  padding: 20px 0;
+}
+
+.detail-card {
+  margin-bottom: 20px;
+}
+
+.detail-card:last-child {
+  margin-bottom: 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.card-title .el-icon {
+  color: #409eff;
+}
+
+.material-tips {
+  font-size: 13px;
+  color: #909399;
+  margin-left: auto;
+}
+
+/* 作品展示 */
+.work-display {
+  display: flex;
+  gap: 24px;
+}
+
+.work-cover {
+  flex-shrink: 0;
+  width: 160px;
+  height: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.work-cover-img {
+  width: 100%;
+  height: 100%;
+}
+
+.img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  color: #909399;
+  gap: 8px;
+}
+
+.img-placeholder .el-icon {
+  font-size: 48px;
+}
+
+.work-info-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.work-title-text {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 16px 0;
+}
+
+.work-intro {
+  color: #606266;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 申请材料 */
+.materials-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.material-section {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.material-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.material-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 3px solid #409eff;
+}
+
+.material-files {
+  display: grid;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.file-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateX(4px);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: #409eff;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file-name {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.file-action .el-link {
+  font-size: 13px;
+}
+
+.file-action .el-divider {
+  margin: 0;
+  height: 14px;
+}
+
+/* 驳回原因 */
+.reject-reason {
+  color: #f56c6c;
+  line-height: 1.6;
+  padding: 8px;
+  background: #fef0f0;
+  border-radius: 4px;
+}
+
+/* 抽屉底部 */
+.drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #ebeef5;
+}
+
+/* 作品文件卡片 */
+.work-files-section {
+  margin-top: 16px;
+}
+
+.file-item-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fb;
+  border: 2px solid #e4e7ed;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.file-item-card:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.file-icon-large {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.file-info-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name-large {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* 文件预览 */
+.preview-container {
+  min-height: 400px;
+}
+
+.preview-image,
+.preview-pdf {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-download {
+  padding: 60px 0;
+}
+
+.work-date-range {
+  flex-wrap: wrap;
+}
+
+.work-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.work-summary {
+  color: #606266;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.work-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e7ed;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item .label {
+  color: #909399;
+  font-size: 12px;
+}
+
+.detail-item .value {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 申请人信息 */
+.user-item {
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.user-label {
+  color: #909399;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.user-value {
+  color: #303133;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* 申请材料 */
+.materials-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.material-section {
+  margin-bottom: 24px;
+}
+
+.material-section:last-child {
+  margin-bottom: 0;
+}
+
+.material-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 3px solid #409eff;
+}
+
+.material-files {
+  display: grid;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.file-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+  transform: translateX(4px);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: #409eff;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.file-name {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-action .el-link {
+  font-size: 13px;
+}
+
+.file-action .el-divider {
+  margin: 0;
+  height: 14px;
+}
+
+/* 备注信息 */
+.remark-content {
+  color: #606266;
+  line-height: 1.6;
+  padding: 12px;
+  background: #fff9e6;
+  border-left: 4px solid #e6a23c;
+  border-radius: 4px;
+}
+
+/* 文件预览 */
+.preview-image,
+.preview-pdf {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-download {
+  padding: 40px 0;
+}
+</style>

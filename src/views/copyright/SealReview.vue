@@ -37,10 +37,10 @@
       </template>
       <el-table-column prop="sealId" label="申请编号" width="100" />
       <el-table-column prop="sealName" label="印章名称" min-width="150" show-overflow-tooltip />
-      <el-table-column label="申请人" min-width="150">
+      <el-table-column label="用户信息" min-width="150">
         <template #default="{ row }">
-          <span>{{ row.userName || '—' }}</span>
-          <span v-if="row.userAccount" class="muted">（{{ row.userAccount }}）</span>
+          <div>{{ row.userName || '—' }}</div>
+          <div v-if="row.userId" class="muted">ID: {{ row.userId }}</div>
         </template>
       </el-table-column>
       <el-table-column label="审核状态" width="110">
@@ -52,17 +52,21 @@
       <el-table-column label="驳回原因" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ row.rejectReason || '—' }}</template>
       </el-table-column>
-      <el-table-column prop="createTime" label="申请时间" width="170" />
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="审核时间" width="170" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.reviewTime || '—' }}</template>
+      </el-table-column>
+      <el-table-column prop="createTime" label="申请时间" width="170" show-overflow-tooltip />
+      <el-table-column label="操作" width="340" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">查看材料</el-button>
-          <el-button v-if="row.reviewStatus === 'pending'" v-permission="'smartscript:copyright:seals:audit'" link type="primary" @click="openReview(row)">审核</el-button>
-          <el-button v-if="row.reviewStatus === 'approved' && row.sealStatus === 'abnormal'" v-permission="'smartscript:copyright:seals:status'" link type="warning" @click="openResolveAbnormal(row)">处理异常</el-button>
-          <el-button v-if="row.reviewStatus === 'approved' && ['disabled', 'enabled'].includes(row.sealStatus)" v-permission="'smartscript:copyright:seals:status'" class="seal-status-button" :type="row.sealStatus === 'enabled' ? 'danger' : 'success'" :loading="statusChangingSealId === row.sealId" :disabled="statusChangingSealId !== null && statusChangingSealId !== row.sealId" @click="changeStatus(row)">
-            {{ row.sealStatus === 'enabled' ? '停用' : '启用' }}
-          </el-button>
-          <!-- A3 联系用户入口（任务 27）：待印章申请关联真实 userId 后自动启用 -->
-          <el-button link type="primary" :disabled="!row.userId" @click="handleContactUser(row)">联系用户</el-button>
+          <div class="action-buttons">
+            <el-button link type="primary" @click="openDetail(row)">查看材料</el-button>
+            <el-button link type="primary" @click="openLogs(row)">审核记录</el-button>
+            <el-button v-if="row.reviewStatus === 'pending'" v-permission="'smartscript:copyright:seals:audit'" link type="primary" @click="openReview(row)">审核</el-button>
+            <el-button v-if="row.reviewStatus === 'approved' && row.sealStatus === 'abnormal'" v-permission="'smartscript:copyright:seals:status'" link type="warning" @click="openResolveAbnormal(row)">处理异常</el-button>
+            <el-button v-if="row.reviewStatus === 'approved' && ['disabled', 'enabled'].includes(row.sealStatus)" v-permission="'smartscript:copyright:seals:status'" :type="row.sealStatus === 'enabled' ? 'danger' : 'success'" link :loading="statusChangingSealId === row.sealId" :disabled="statusChangingSealId !== null && statusChangingSealId !== row.sealId" @click="changeStatus(row)">
+              {{ row.sealStatus === 'enabled' ? '停用' : '启用' }}
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </TableCard>
@@ -93,7 +97,11 @@
             <el-empty v-if="!materialLinks.length" description="未提供审核材料" :image-size="56" />
             <ul v-else class="material-list">
               <li v-for="(item, index) in materialLinks" :key="`${item.url}-${index}`">
-                <el-link :href="item.url" target="_blank" rel="noopener noreferrer" type="primary">{{ item.name }}</el-link>
+                <span class="material-name">{{ item.name }}</span>
+                <div class="material-actions">
+                  <el-button link type="primary" size="small" @click="previewMaterial(item)">在线预览</el-button>
+                  <el-button link type="primary" size="small" @click="downloadMaterial(item)">下载</el-button>
+                </div>
               </li>
             </ul>
           </section>
@@ -154,18 +162,66 @@
         <el-button type="primary" :loading="resolveSubmitting" @click="resolveAbnormal">确认处理</el-button>
       </template>
     </el-dialog>
+
+    <!-- 审核记录抽屉 -->
+    <el-drawer v-model="logsVisible" title="审核记录" size="700px" destroy-on-close>
+      <div v-loading="logsLoading" class="drawer-content">
+        <el-alert v-if="logsFailed" title="审核记录加载失败，请重试" type="error" :closable="false" show-icon>
+          <el-button link type="primary" @click="reloadLogs">重试</el-button>
+        </el-alert>
+        <el-empty v-else-if="!logsLoading && logs.length === 0" description="暂无审核记录" />
+        <el-timeline v-else>
+          <el-timeline-item
+            v-for="log in logs"
+            :key="log.logId"
+            :timestamp="log.createTime"
+            :type="logType(log.operationType)"
+            placement="top"
+          >
+            <el-card>
+              <template #header>
+                <div class="log-header">
+                  <div>
+                    <el-tag :type="logType(log.operationType)" size="small">{{ logActionLabel(log.operationType) }}</el-tag>
+                    <span class="operator"> by {{ log.operatorName || '系统' }}</span>
+                  </div>
+                  <span class="muted">{{ log.operateTime }}</span>
+                </div>
+              </template>
+              <div class="log-content">
+                <div v-if="log.fromStatus || log.toStatus">
+                  <strong>状态变化：</strong>
+                  <el-tag v-if="log.fromStatus" size="small">{{ stateLabel(log.fromStatus) }}</el-tag>
+                  <span v-if="log.fromStatus && log.toStatus"> → </span>
+                  <el-tag v-if="log.toStatus" :type="sealType(log.toStatus)" size="small">{{ stateLabel(log.toStatus) }}</el-tag>
+                </div>
+                <div v-if="log.reason"><strong>{{ log.operationType === 'review_reject' ? '驳回原因' : '说明' }}：</strong>{{ log.reason }}</div>
+              </div>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+    </el-drawer>
+
+    <!-- 材料预览对话框 -->
+    <MaterialPreviewDialog
+      v-model="previewVisible"
+      :material-url="currentMaterial.url"
+      :material-name="currentMaterial.name"
+    />
   </PageContainer>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useContactUser } from '@/composables/useContactUser'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import { getCopyrightSealList, getCopyrightSealDetail, getCopyrightSealLogs, reviewCopyrightSeal, updateCopyrightSealStatus, resolveAbnormalCopyrightSeal } from '@/api/copyright'
+import { resolveMediaUrl } from '@/utils/request'
 
 
 defineOptions({ name: 'CopyrightSealReview' })
@@ -182,6 +238,8 @@ const detail = ref(null)
 const logs = ref([])
 const logsLoading = ref(false)
 const logsFailed = ref(false)
+const logsVisible = ref(false)
+const currentSealId = ref(null)
 const reviewVisible = ref(false)
 const reviewSubmitting = ref(false)
 const resolveVisible = ref(false)
@@ -189,6 +247,8 @@ const resolveSubmitting = ref(false)
 const statusChangingSealId = ref(null)
 const resolveReason = ref('')
 const reviewForm = ref({ sealId: null, action: 'approve', reason: '' })
+const previewVisible = ref(false)
+const currentMaterial = ref({ url: '', name: '' })
 let selectedSealId = null
 let listRequest = 0
 let detailRequest = 0
@@ -204,16 +264,19 @@ const materialLinks = computed(() => {
     values = String(source).split(',').map(value => value.trim()).filter(Boolean)
   }
   return values.map((item, index) => {
-    const url = safeUrl(typeof item === 'string' ? item : item?.url)
-    if (!url) return null
-    return { url, name: typeof item === 'object' && item?.name ? item.name : `审核材料 ${index + 1}` }
+    const rawUrl = typeof item === 'string' ? item : item?.url
+    if (!rawUrl) return null
+    const url = resolveMediaUrl(rawUrl)
+    const name = typeof item === 'object' && (item?.name || item?.filename)
+      ? (item.name || item.filename)
+      : `审核材料 ${index + 1}`
+    return { url, name }
   }).filter(Boolean)
 })
 
 function safeUrl(value) {
   if (typeof value !== 'string') return ''
-  const url = value.trim()
-  return url.startsWith('/') && !url.startsWith('//') || /^https:\/\//i.test(url) ? url : ''
+  return resolveMediaUrl(value)
 }
 
 function reviewLabel(status) {
@@ -232,7 +295,13 @@ function sealType(status) {
   return ({ disabled: 'info', enabled: 'success', abnormal: 'danger' })[status] || 'info'
 }
 function operationLabel(type) {
-  return ({ review_approve: '审核通过', review_reject: '审核驳回', enable: '启用', disable: '停用', resolve_abnormal: '异常处理' })[type] || type || '—'
+  return ({ review_approve: '审核通过', review_reject: '审核驳回', enable: '启用', disable: '停用', resolve_abnormal: '异常处理', submit: '提交审核' })[type] || type || '—'
+}
+function logActionLabel(type) {
+  return operationLabel(type)
+}
+function logType(type) {
+  return ({ submit: 'primary', review_approve: 'success', review_reject: 'danger', enable: 'success', disable: 'warning', resolve_abnormal: 'info' })[type] || 'primary'
 }
 
 async function loadRows() {
@@ -312,19 +381,29 @@ async function loadLogs() {
   }
 }
 
+async function openLogs(row) {
+  currentSealId.value = row.sealId
+  logsVisible.value = true
+  logs.value = []
+  logsLoading.value = true
+  logsFailed.value = false
+  try {
+    const history = await getCopyrightSealLogs(row.sealId)
+    if (!Array.isArray(history)) throw new Error('印章操作记录响应无效')
+    logs.value = history
+  } catch {
+    logsFailed.value = true
+    logs.value = []
+    ElMessage.error('加载审核记录失败')
+  } finally {
+    logsLoading.value = false
+  }
+}
+
 function openReview(row) {
   reviewForm.value = { sealId: row.sealId, action: 'approve', reason: '' }
   reviewVisible.value = true
 }
-
-// A3 联系用户（任务 27）：复用公共 composable 创建会话并跳转聊天详情
-const { handleContactUser } = useContactUser({
-  businessType: 'SEAL',
-  extractUserId: (row) => row.userId,
-  extractBusinessId: (row) => row.sealId,
-  extractBusinessName: (row) => row.sealName,
-  emptyMessage: '该印章申请暂未关联用户，无法发起沟通'
-})
 
 async function submitReview() {
   if (reviewSubmitting.value) return
@@ -394,6 +473,29 @@ async function resolveAbnormal() {
   }
 }
 
+function previewMaterial(material) {
+  currentMaterial.value = {
+    url: material.url,
+    name: material.name
+  }
+  previewVisible.value = true
+}
+
+function downloadMaterial(material) {
+  if (!material.url) {
+    ElMessage.warning('文件地址无效')
+    return
+  }
+  
+  const link = document.createElement('a')
+  link.href = material.url
+  link.download = material.name || 'material'
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 onMounted(loadRows)
 </script>
 
@@ -403,8 +505,19 @@ onMounted(loadRows)
 .material-block { margin-top: 24px; }
 .material-block h3 { margin: 0 0 12px; color: #303133; font-size: 14px; }
 .seal-image { width: 100%; height: 220px; border: 1px solid #ebeef5; border-radius: 4px; }
-.material-list { margin: 0; padding-left: 20px; line-height: 2.2; }
+.material-list { margin: 0; padding: 0; list-style: none; }
+.material-list li { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f0f0f0; }
+.material-list li:last-child { border-bottom: none; }
+.material-name { flex: 1; color: #303133; font-size: 14px; }
+.material-actions { display: flex; gap: 8px; }
 .review-actions { margin-top: 20px; }
-:deep(.seal-status-button),
-:deep(.seal-status-button .el-button__text) { color: #fff !important; font-weight: 600; }
+.log-header { display: flex; justify-content: space-between; align-items: center; }
+.operator { color: #606266; font-size: 13px; }
+.log-content { margin-top: 8px; color: #606266; line-height: 1.6; }
+.log-content strong { color: #303133; margin-right: 4px; }
+.action-buttons { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.action-buttons .el-button { margin: 0; }
+:deep(.action-buttons .el-button + .el-button) { margin-left: 0; }
+:deep(.action-buttons .el-button--success.is-link),
+:deep(.action-buttons .el-button--danger.is-link) { color: #fff !important; font-weight: 600; }
 </style>

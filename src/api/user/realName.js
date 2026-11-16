@@ -1,7 +1,7 @@
-import request from '@/utils/request'
+import { adminV1Request as request } from '@/utils/request'
 
 /**
- * A4 实名审核 API（契约 §4 / §5.2）。
+ * A4 实名认证记录查询 API。
  *
  * 列表不返回材料引用；详情才按详情权限返回短时引用。
  */
@@ -16,14 +16,6 @@ export function listRealNameApplications(params) {
 /** 实名申请详情（需要 user:realname:query）。 */
 export function getRealNameApplication(applicationId) {
   return request({ url: `${PREFIX}/real-name-applications/${applicationId}`, method: 'get' })
-}
-
-/**
- * 审核决定。data: { decision: 'APPROVE'|'REJECT', rejectReason?, expectedStatus: 'PENDING' }
- * 驳回时 rejectReason 必填，通过时必须为空。
- */
-export function decideRealNameApplication(applicationId, data) {
-  return request({ url: `${PREFIX}/real-name-applications/${applicationId}/decision`, method: 'put', data })
 }
 
 /**
@@ -51,7 +43,9 @@ export async function downloadMaterialContent(accessUrl, fileName) {
     url: accessUrl,
     method: 'get',
     responseType: 'blob',
-    headers: { isToken: true }
+    headers: { isToken: true },
+    // 身份证原图可达数 MB，默认 15 秒在慢网络下会中断；单次下载放宽到 60 秒。
+    timeout: 60000
   })
   const raw = res instanceof Blob ? res : new Blob([res])
   // 强制为不可执行的通用类型，杜绝浏览器按 HTML/SVG 解析
@@ -65,4 +59,8 @@ export async function downloadMaterialContent(accessUrl, fileName) {
   a.click()
   document.body.removeChild(a)
   window.URL.revokeObjectURL(url)
+}
+
+export function decideRealNameApplication(applicationId, data) {
+  return request({ url: `${PREFIX}/real-name-applications/${applicationId}/decision`, method: 'put', data })
 }

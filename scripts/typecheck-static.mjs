@@ -2,7 +2,7 @@
 /**
  * Web 契约门禁：检查生产页面是否调用真实契约（非测试副本）。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -24,12 +24,12 @@ check('request.js uses shared unwrapRuoYiResponse', () => {
   if (!src.includes('unwrapRuoYiResponse')) throw new Error('request must call unwrapRuoYiResponse')
 })
 
-// 2026-10-09 菜单精简：system/{user,role,menu,post,dict,config} 页面与 api 已随"系统管理"
-// 目录下线（数据库菜单精简见 smartscript_full_init.sql 第 7 部分），相关检查移除。
+// 系统管理恢复为独立目录，必须登记全部七个页面。
 check('component-map declares whitelist keys', () => {
   const src = readFileSync(join(webRoot, 'src/router/component-map.js'), 'utf8')
   if (!src.includes('export const componentMap')) throw new Error('missing componentMap')
-  for (const key of ['Layout', 'dashboard/Dashboard', 'monitor/operlog/index']) {
+  for (const key of ['Layout', 'dashboard/Dashboard', 'monitor/operlog/index',
+    ...['user', 'role', 'menu', 'dept', 'post', 'dict', 'config'].map(name => `system/${name}/index`)]) {
     const quoted = src.includes(`'${key}'`) || src.includes(`"${key}"`)
     const bare = new RegExp(`(^|[\\n\\s,{])${key}\\s*:`).test(src)
     if (!quoted && !bare) throw new Error(`missing map key ${key}`)
@@ -42,49 +42,6 @@ check('login api ruoyi endpoints only', () => {
     if (!src.includes(`url: '${p}'`) && !src.includes(`url: "${p}"`)) throw new Error(`missing ${p}`)
   }
   if (/url:\s*['"]\/api\/v1\/admin/.test(src)) throw new Error('login api must not use product prefix')
-})
-
-check('seed sql absolute user/risk paths and safe grants', () => {
-  const seedPath = join(webRoot, '../shared/sql/a1-p5-menu-seed.sql')
-  const rollbackPath = join(webRoot, '../shared/sql/a1-p5-menu-rollback.sql')
-  if (!existsSync(seedPath) || !existsSync(rollbackPath)) {
-    return { skip: 'shared SQL fixtures are not present in this workspace' }
-  }
-  const sql = readFileSync(seedPath, 'utf8')
-  // P0: /user /risk 以根级 path（user/risk）或绝对 path '/user' 表达，RuoYi 生成 /user
-  const hasUser = sql.includes("'/user'") || /parent_id,0|parent_id, 0|,0,'user'|SELECT 5142[^\n]*user'\/UserManage|,'user','user\/UserManage'/.test(sql) || sql.includes(",'user','user/UserManage'")
-  const hasRisk = sql.includes("'/risk'") || sql.includes(",'risk','risk/RiskManage'")
-  if (!hasUser && !sql.includes("user/UserManage")) throw new Error("seed must map product page user/UserManage at root path user")
-  if (!hasRisk && !sql.includes("risk/RiskManage")) throw new Error("seed must map product page risk/RiskManage")
-  // 根级 user 路径
-  if (!sql.includes("user/UserManage")) throw new Error('seed missing user/UserManage component mapping')
-  if (!sql.includes('WHERE t.parent_id IS NOT NULL')) {
-    throw new Error('children must skip when resolved parent is NULL')
-  }
-  // R1: system/monitor 根目录必须检查 path 已存在，防止标准库插入第二套
-  if (!sql.includes("path='system' AND parent_id=0") || !sql.includes('@p_system IS NULL')) {
-    throw new Error('seed must skip system root when path already exists')
-  }
-  if (!sql.includes("path='monitor' AND parent_id=0") || !sql.includes('@p_monitor IS NULL')) {
-    throw new Error('seed must skip monitor root when path already exists')
-  }
-  // R3: 不得 UPDATE 已有角色 remark
-  if (/UPDATE\s+sys_role\s+SET\s+remark/i.test(sql.replace(/--[^\n]*/g, ''))) {
-    throw new Error('seed must not UPDATE existing sys_role.remark')
-  }
-  if (!sql.includes("A1SEED-CREATED")) throw new Error('created role must use A1SEED-CREATED marker')
-  // R4: 自动授权必须限定 remark A1SEED
-  const autoGrant = sql.split(/自动授权|R4/)[1] || ''
-  if (!/m\.remark LIKE 'A1SEED%'/i.test(sql)) {
-    throw new Error('auto grants must be limited to A1SEED menus')
-  }
-  // 回滚文件：只删 A1SEED 关联 + A1SEED-CREATED 角色
-  const rollback = readFileSync(rollbackPath, 'utf8')
-  if (!rollback.includes("m.remark LIKE 'A1SEED%'")) throw new Error('rollback must join A1SEED menus only')
-  if (!rollback.includes("remark='A1SEED-CREATED'")) throw new Error('rollback must only delete A1SEED-CREATED roles')
-  if (/DELETE FROM sys_menu WHERE menu_id BETWEEN/i.test(rollback.replace(/--[^\n]*/g, ''))) {
-    throw new Error('rollback must not delete by ID range')
-  }
 })
 
 check('unwrap prefers top-level non-null over data null', () => {

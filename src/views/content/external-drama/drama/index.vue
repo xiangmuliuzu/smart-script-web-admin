@@ -1,8 +1,14 @@
 <template>
   <PageContainer>
-    <PageHeader title="视频内容管理" description="管理外部视频内容及其剧集信息">
+    <PageHeader title="视频内容管理" description="管理外部视频内容，含剧集、关联剧本、上下架与播放数据">
       <template #actions>
         <BlackButton v-permission="['content:drama:add']" @click="openCreate">新增视频</BlackButton>
+        <BlackButton
+          v-permission="['content:dramastatus:edit']"
+          :disabled="selectedIds.length === 0"
+          :loading="syncing"
+          @click="handleBatchSync"
+        >批量同步</BlackButton>
       </template>
     </PageHeader>
 
@@ -49,9 +55,12 @@
       :loading="loading"
       :total="total"
       empty-text="暂无视频数据"
+      row-key="dramaId"
       @page-change="loadList"
       @size-change="loadList"
+      @selection-change="handleSelectionChange"
     >
+      <el-table-column type="selection" width="45" />
       <el-table-column prop="dramaId" label="视频ID" width="90" />
       <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
       <el-table-column prop="channelId" label="渠道ID" width="90" />
@@ -61,15 +70,34 @@
       <el-table-column label="授权状态" width="120">
         <template #default="{ row }">{{ contentEnumLabel(DRAMA_AUTH_STATUS, row.authorizationStatus) }}</template>
       </el-table-column>
-      <el-table-column prop="syncStatus" label="同步状态" width="120" />
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">{{ contentEnumLabel(DRAMA_SHELF_STATUS, row.status) }}</template>
+      <el-table-column label="同步状态" width="120">
+        <template #default="{ row }">
+          <el-tag :type="syncTagType(row.syncStatus)" size="small">{{ row.syncStatus || '—' }}</el-tag>
+        </template>
       </el-table-column>
-      <el-table-column prop="externalUrl" label="外部地址" min-width="200" show-overflow-tooltip />
+      <el-table-column label="上下架" width="110">
+        <template #default="{ row }">
+          <el-switch
+            v-if="isShelfStatus(row.status)"
+            v-permission="['content:dramastatus:edit']"
+            v-model="row.status"
+            active-value="on_shelf"
+            inactive-value="off_shelf"
+            @change="() => handleStatusChange(row)"
+          />
+          <el-tag v-else type="info" size="small">{{ row.status || '—' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="关联剧本" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.relatedWorkId">{{ row.relatedWorkTitle || `#${row.relatedWorkId}` }}</span>
+          <el-tag v-else type="info" size="small">未关联</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="创建时间" width="170">
         <template #default="{ row }">{{ row.createTime || '—' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
           <el-button
             v-permission="['content:drama:query']"
@@ -85,42 +113,137 @@
             type="primary"
             @click="openEdit(row)"
           >编辑</el-button>
+          <el-button
+            v-permission="['content:dramastatus:edit']"
+            size="small"
+            link
+            type="primary"
+            :loading="syncingId === row.dramaId"
+            @click="handleSingleSync(row)"
+          >同步</el-button>
         </template>
       </el-table-column>
     </TableCard>
 
-    <!-- 详情弹窗：视频字段 + 剧集明细 -->
-    <el-dialog v-model="detailDialog.visible" title="视频详情" width="780px">
-      <el-descriptions v-loading="detailDialog.loading" :column="2" border>
-        <el-descriptions-item label="视频ID">{{ detail.dramaId || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="渠道ID">{{ detail.channelId || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="标题" :span="2">{{ detail.title || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="外部内容ID">{{ detail.externalContentId || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="来源类型">{{ contentEnumLabel(DRAMA_SOURCE_TYPE, detail.sourceType) }}</el-descriptions-item>
-        <el-descriptions-item label="授权状态">{{ contentEnumLabel(DRAMA_AUTH_STATUS, detail.authorizationStatus) }}</el-descriptions-item>
-        <el-descriptions-item label="同步状态">{{ detail.syncStatus || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ contentEnumLabel(DRAMA_SHELF_STATUS, detail.status) }}</el-descriptions-item>
-        <el-descriptions-item label="封面文件ID">{{ detail.coverFileId ?? '—' }}</el-descriptions-item>
-        <el-descriptions-item label="外部地址" :span="2">{{ detail.externalUrl || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="版权说明" :span="2">{{ detail.copyrightNote || '—' }}</el-descriptions-item>
-      </el-descriptions>
-      <div class="ep-title">剧集列表</div>
-      <el-table :data="detailEpisodes" border size="small" max-height="320" empty-text="暂无剧集数据">
-        <el-table-column prop="episodeNo" label="集数" width="80" />
-        <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="playCount" label="播放量" width="100" />
-        <el-table-column prop="duration" label="时长" width="90" />
-        <el-table-column label="是否免费" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.isFree === 1 ? 'success' : 'info'" size="small">
-              {{ row.isFree === 1 ? '是' : '否' }}
-            </el-tag>
+    <!-- 详情弹窗：基本信息 / 关联剧本 / 播放数据 -->
+    <el-dialog v-model="detailDialog.visible" title="视频详情" width="900px">
+      <el-tabs v-model="detailTab">
+        <el-tab-pane label="基本信息" name="info">
+          <el-descriptions v-loading="detailDialog.loading" :column="2" border>
+            <el-descriptions-item label="视频ID">{{ detail.dramaId || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="渠道ID">{{ detail.channelId || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="标题" :span="2">{{ detail.title || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="外部内容ID">{{ detail.externalContentId || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="来源类型">{{ contentEnumLabel(DRAMA_SOURCE_TYPE, detail.sourceType) }}</el-descriptions-item>
+            <el-descriptions-item label="授权状态">{{ contentEnumLabel(DRAMA_AUTH_STATUS, detail.authorizationStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="同步状态">{{ detail.syncStatus || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="状态">{{ contentEnumLabel(DRAMA_SHELF_STATUS, detail.status) }}</el-descriptions-item>
+            <el-descriptions-item label="封面文件ID">{{ detail.coverFileId ?? '—' }}</el-descriptions-item>
+            <el-descriptions-item label="外部地址" :span="2">{{ detail.externalUrl || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="版权说明" :span="2">{{ detail.copyrightNote || '—' }}</el-descriptions-item>
+          </el-descriptions>
+        </el-tab-pane>
+
+        <el-tab-pane label="关联剧本" name="bind">
+          <el-descriptions v-loading="detailDialog.loading" :column="1" border>
+            <el-descriptions-item label="关联剧本ID">{{ detail.relatedWorkId || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="关联剧本标题">{{ detail.relatedWorkTitle || '—' }}</el-descriptions-item>
+          </el-descriptions>
+          <div class="section-actions">
+            <el-button
+              v-if="!detail.relatedWorkId"
+              v-permission="['content:dramabind:edit']"
+              type="primary"
+              @click="openBind"
+            >关联剧本</el-button>
+            <el-button
+              v-else
+              v-permission="['content:dramabind:edit']"
+              type="danger"
+              @click="handleUnbind"
+            >解除关联</el-button>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="播放数据" name="stats">
+          <template v-if="detail.relatedWorkId">
+            <el-descriptions v-loading="statsLoading" :column="3" border>
+              <el-descriptions-item label="剧本标题">{{ stats.workTitle || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="剧集数">{{ stats.episodeCount ?? '—' }}</el-descriptions-item>
+              <el-descriptions-item label="总播放量">{{ stats.totalPlayCount ?? '—' }}</el-descriptions-item>
+              <el-descriptions-item label="追更数">{{ stats.subscribeCount ?? '—' }}</el-descriptions-item>
+              <el-descriptions-item label="剧本ID">{{ detail.relatedWorkId }}</el-descriptions-item>
+              <el-descriptions-item label="渠道ID">{{ detail.channelId || '—' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <div class="section-title">剧集明细</div>
+            <el-table :data="statsEpisodes" border size="small" max-height="240" empty-text="暂无剧集数据">
+              <el-table-column prop="episodeNo" label="集数" width="80" />
+              <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="playCount" label="播放量" width="100" />
+              <el-table-column prop="likeCount" label="点赞数" width="90" />
+              <el-table-column prop="commentCount" label="评论数" width="90" />
+              <el-table-column label="完播率" width="100">
+                <template #default="{ row }">{{ formatRate(row.completionRate) }}</template>
+              </el-table-column>
+            </el-table>
+
+            <div class="section-title">播放历史</div>
+            <el-table
+              v-loading="historyLoading"
+              :data="historyList"
+              border
+              size="small"
+              max-height="240"
+              empty-text="暂无播放历史"
+            >
+              <el-table-column prop="episodeTitle" label="剧集标题" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="userId" label="用户ID" width="120" />
+              <el-table-column label="播放时间" width="170">
+                <template #default="{ row }">{{ row.playTime || '—' }}</template>
+              </el-table-column>
+            </el-table>
+            <div class="history-pager">
+              <el-pagination
+                background
+                layout="total, prev, pager, next"
+                :total="historyTotal"
+                :current-page="historyQuery.pageNum"
+                :page-size="historyQuery.pageSize"
+                @current-change="onHistoryPageChange"
+              />
+            </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="90" />
-      </el-table>
+          <el-empty v-else description="该视频未关联剧本，暂无播放数据" :image-size="72" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="detailDialog.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 关联剧本弹窗 -->
+    <el-dialog v-model="bindDialog.visible" title="关联剧本" width="420px" @closed="handleBindClosed">
+      <el-form ref="bindFormRef" :model="bindForm" :rules="bindRules" label-width="100px">
+        <el-form-item label="视频ID">
+          <span>{{ bindForm.dramaId }}</span>
+        </el-form-item>
+        <el-form-item label="视频标题">
+          <span>{{ bindForm.dramaTitle || '—' }}</span>
+        </el-form-item>
+        <el-form-item label="剧本ID" prop="relatedWorkId">
+          <el-input-number
+            v-model="bindForm.relatedWorkId"
+            :min="1"
+            controls-position="right"
+            style="width: 200px"
+            placeholder="请输入剧本ID"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="bindDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="bindSubmitting" @click="handleBindSubmit">确定</el-button>
       </template>
     </el-dialog>
 
@@ -179,17 +302,24 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import BlackButton from '@/components/BlackButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
+import { useUserStore } from '@/stores/user'
 import {
   listDrama,
   getDrama,
   addDrama,
-  updateDrama
+  updateDrama,
+  bindDrama,
+  unbindDrama,
+  getDramaStats,
+  listDramaHistory,
+  changeDramaStatus,
+  syncDrama
 } from '@/api/content'
 import {
   DRAMA_SOURCE_TYPE,
@@ -199,6 +329,8 @@ import {
 } from '@/constants/contentEnum'
 
 defineOptions({ name: 'ExternalDramaContent' })
+
+const userStore = useUserStore()
 
 const loading = ref(false)
 const list = ref([])
@@ -254,24 +386,248 @@ function handleReset() {
   handleQuery()
 }
 
+/** 同步状态标签颜色：成功 success，失败/异常 danger，其余 info */
+function syncTagType(status) {
+  if (!status) return 'info'
+  const s = String(status).toLowerCase()
+  if (s.includes('success') || s.includes('done') || s.includes('ok')) return 'success'
+  if (s.includes('fail') || s.includes('error') || s.includes('pending')) return 'danger'
+  return 'info'
+}
+
+/** 仅当 status 是约定的 on_shelf/off_shelf 时才渲染开关，避免异常值触发误操作 */
+function isShelfStatus(status) {
+  return status === 'on_shelf' || status === 'off_shelf'
+}
+
+// ---- 上下架 / 同步 ----
+const selectedIds = ref([])
+const syncing = ref(false)
+const syncingId = ref(null)
+
+function handleSelectionChange(rows) {
+  selectedIds.value = rows.map((r) => r.dramaId)
+}
+
+async function handleStatusChange(row) {
+  const targetStatus = row.status
+  const actionText = targetStatus === 'on_shelf' ? '上架' : '下架'
+  try {
+    await ElMessageBox.confirm(`确认${actionText}视频「${row.title}」？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    row.status = targetStatus === 'on_shelf' ? 'off_shelf' : 'on_shelf'
+    return
+  }
+  try {
+    await changeDramaStatus({ dramaId: row.dramaId, status: targetStatus })
+    ElMessage.success(`${actionText}成功`)
+  } catch {
+    row.status = targetStatus === 'on_shelf' ? 'off_shelf' : 'on_shelf'
+  }
+}
+
+async function handleSingleSync(row) {
+  try {
+    await ElMessageBox.confirm(`确认同步视频「${row.title}」？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  syncingId.value = row.dramaId
+  try {
+    await syncDrama([row.dramaId])
+    ElMessage.success('同步已触发')
+    loadList()
+  } catch {
+    // 错误信息已由 request 拦截器统一提示
+  } finally {
+    syncingId.value = null
+  }
+}
+
+async function handleBatchSync() {
+  if (selectedIds.value.length === 0) {
+    ElMessage.warning('请先勾选要同步的视频')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确认同步选中的 ${selectedIds.value.length} 条视频？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  syncing.value = true
+  try {
+    await syncDrama(selectedIds.value)
+    ElMessage.success('同步已触发')
+    loadList()
+  } catch {
+    // 错误信息已由 request 拦截器统一提示
+  } finally {
+    syncing.value = false
+  }
+}
+
 // ---- 详情弹窗 ----
 const detailDialog = reactive({ visible: false, loading: false })
+const detailTab = ref('info')
 const detail = reactive({})
-const detailEpisodes = ref([])
+const stats = reactive({})
+const statsEpisodes = ref([])
+const statsLoading = ref(false)
+
+// ---- 播放历史（带分页） ----
+const historyLoading = ref(false)
+const historyList = ref([])
+const historyTotal = ref(0)
+const historyQuery = reactive({ pageNum: 1, pageSize: 5 })
+
+function formatRate(rate) {
+  if (rate === null || rate === undefined || rate === '') return '—'
+  const n = Number(rate)
+  if (!Number.isFinite(n)) return '—'
+  // 若已是 0~1 小数则按百分比展示，否则原样展示
+  if (n >= 0 && n <= 1) return `${(n * 100).toFixed(1)}%`
+  return `${n}%`
+}
+
 async function openDetail(row) {
   detailDialog.visible = true
+  detailTab.value = 'info'
+  await reloadDetail(row.dramaId)
+}
+
+/** 拉取视频详情，并（有权限且已关联剧本时）联动拉取统计与播放历史 */
+async function reloadDetail(dramaId) {
   detailDialog.loading = true
   Object.keys(detail).forEach((k) => delete detail[k])
-  detailEpisodes.value = []
+  Object.keys(stats).forEach((k) => delete stats[k])
+  statsEpisodes.value = []
+  historyList.value = []
+  historyTotal.value = 0
+  historyQuery.pageNum = 1
   try {
-    const res = await getDrama(row.dramaId)
+    const res = await getDrama(dramaId)
     const data = res?.data || res || {}
     Object.assign(detail, data)
-    detailEpisodes.value = Array.isArray(data.episodes) ? data.episodes : []
   } catch {
     // 错误信息已由 request 拦截器统一提示
   } finally {
     detailDialog.loading = false
+  }
+  const workId = detail.relatedWorkId
+  if (workId) {
+    await loadStats(workId)
+    await loadHistory(workId)
+  }
+}
+
+async function loadStats(workId) {
+  if (!userStore.hasPermission('content:dramastats:query')) return
+  statsLoading.value = true
+  try {
+    const res = await getDramaStats(workId)
+    const data = res?.data || res || {}
+    Object.assign(stats, data)
+    statsEpisodes.value = Array.isArray(data.episodes) ? data.episodes : []
+  } catch {
+    statsEpisodes.value = []
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+async function loadHistory(workId) {
+  if (!workId) return
+  if (!userStore.hasPermission('content:dramastats:list')) return
+  historyLoading.value = true
+  try {
+    const res = await listDramaHistory({
+      workId,
+      pageNum: historyQuery.pageNum,
+      pageSize: historyQuery.pageSize
+    })
+    historyList.value = res?.rows || []
+    historyTotal.value = Number(res?.total || 0)
+  } catch {
+    historyList.value = []
+    historyTotal.value = 0
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function onHistoryPageChange(val) {
+  historyQuery.pageNum = val
+  if (detail.relatedWorkId) loadHistory(detail.relatedWorkId)
+}
+
+// ---- 关联剧本弹窗 ----
+const bindDialog = reactive({ visible: false })
+const bindSubmitting = ref(false)
+const bindFormRef = ref()
+const bindForm = reactive({ dramaId: null, dramaTitle: '', relatedWorkId: null })
+const bindRules = {
+  relatedWorkId: [{ required: true, message: '请输入剧本ID', trigger: 'blur' }]
+}
+
+function openBind() {
+  bindForm.dramaId = detail.dramaId
+  bindForm.dramaTitle = detail.title || ''
+  bindForm.relatedWorkId = null
+  bindDialog.visible = true
+}
+
+function handleBindClosed() {
+  bindFormRef.value?.clearValidate()
+}
+
+async function handleBindSubmit() {
+  if (!bindFormRef.value) return
+  await bindFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    bindSubmitting.value = true
+    try {
+      await bindDrama({ dramaId: bindForm.dramaId, relatedWorkId: bindForm.relatedWorkId })
+      ElMessage.success('关联成功')
+      bindDialog.visible = false
+      await reloadDetail(bindForm.dramaId)
+      loadList()
+    } catch {
+      // 错误信息已由 request 拦截器统一提示
+    } finally {
+      bindSubmitting.value = false
+    }
+  })
+}
+
+async function handleUnbind() {
+  try {
+    await ElMessageBox.confirm(
+      `确认解除视频「${detail.title}」与剧本「${detail.relatedWorkTitle || detail.relatedWorkId}」的关联？`,
+      '提示',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await unbindDrama({ dramaId: detail.dramaId })
+    ElMessage.success('解除成功')
+    await reloadDetail(detail.dramaId)
+    loadList()
+  } catch {
+    // 错误信息已由 request 拦截器统一提示
   }
 }
 
@@ -392,8 +748,16 @@ onMounted(loadList)
 </script>
 
 <style scoped>
-.ep-title {
+.section-title {
   margin: 16px 0 8px;
   font-weight: 600;
+}
+.section-actions {
+  margin-top: 16px;
+}
+.history-pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 </style>

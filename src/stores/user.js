@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { logout as logoutApi, getInfo } from '@/api/login'
-import { getToken, setToken, removeToken, setAccountType } from '@/utils/auth'
+import { getToken, setToken, removeToken } from '@/utils/auth'
 import { usePermissionStore } from '@/stores/permission'
 
 export const useUserStore = defineStore('user', {
@@ -19,11 +19,10 @@ export const useUserStore = defineStore('user', {
   },
 
   actions: {
-    /** 统一登录成功后写入管理端会话；token 为若依管理端令牌（服务端已确认 user_type=00） */
+    /** 若依登录成功后写入管理端会话；token 为若依管理端令牌（服务端已确认 user_type=00） */
     adoptAdminToken(token) {
       this.token = token
       setToken(token)
-      setAccountType('00')
     },
 
     async fetchUserInfo() {

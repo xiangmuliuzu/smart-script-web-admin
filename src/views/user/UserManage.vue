@@ -10,20 +10,21 @@
     <el-card class="filter-card">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item>
-          <el-select v-model="filterForm.roleCode" placeholder="全部角色" style="width: 140px" clearable>
-            <el-option label="全部角色" value="" />
-            <el-option v-for="r in grantableRoles" :key="r.roleId" :label="r.roleName" :value="r.roleKey" />
+          <el-select v-model="filterForm.authorCapability" placeholder="全部作者能力" style="width: 150px" clearable @change="handleSearch">
+            <el-option label="全部作者能力" value="" />
+            <el-option label="已开通" :value="true" />
+            <el-option label="未开通" :value="false" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 140px" clearable>
+          <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 140px" clearable @change="handleSearch">
             <el-option label="全部状态" value="" />
             <el-option label="正常" value="0" />
             <el-option label="停用" value="1" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="filterForm.realNameStatus" placeholder="全部实名状态" style="width: 150px" clearable>
+          <el-select v-model="filterForm.realNameStatus" placeholder="全部实名状态" style="width: 150px" clearable @change="handleSearch">
             <el-option label="全部实名状态" value="" />
             <el-option label="待审核" value="PENDING" />
             <el-option label="已通过" value="APPROVED" />
@@ -33,9 +34,11 @@
         <el-form-item>
           <el-input
             v-model="filterForm.keyword"
-            placeholder="昵称/账号/手机号"
+            placeholder="手机号"
             style="width: 200px"
             clearable
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
           />
         </el-form-item>
         <el-form-item>
@@ -50,19 +53,18 @@
       <el-table :data="userList" style="width: 100%" v-loading="loading">
         <el-table-column prop="userId" label="ID" width="90" />
         <el-table-column prop="nickname" label="昵称" min-width="150" show-overflow-tooltip />
+        <el-table-column label="用户角色" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.authorCapability ? 'success' : 'info'" size="small">
+              {{ row.authorCapability ? '创作者' : '收购方' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="phoneMasked" label="手机号" width="130">
           <template #default="{ row }">{{ row.phoneMasked || '—' }}</template>
         </el-table-column>
-        <el-table-column label="账号类型" width="110">
-          <template #default="{ row }">
-            <el-tag size="small">{{ userTypeLabel(row.userType) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="角色" min-width="150">
-          <template #default="{ row }">
-            <span v-if="row.roleCodes && row.roleCodes.length">{{ row.roleCodes.join('、') }}</span>
-            <span v-else>—</span>
-          </template>
+        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.email || '—' }}</template>
         </el-table-column>
         <el-table-column label="实名" width="100">
           <template #default="{ row }">
@@ -72,19 +74,18 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="作者能力" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.authorCapability ? 'success' : 'info'" size="small">
-              {{ row.authorCapability ? '已开通' : '未开通' }}
-            </el-tag>
-          </template>
-        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === '0' ? 'success' : 'danger'" size="small">
               {{ row.status === '0' ? '正常' : '停用' }}
             </el-tag>
           </template>
+        </el-table-column>
+        <el-table-column prop="operatorName" label="操作人" width="120">
+          <template #default="{ row }">{{ row.operatorName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="更新时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
@@ -95,10 +96,13 @@
                 @click="handleDetail(row)"
               >详情</el-button>
               <el-button
-                v-permission="['user:app:grant']"
+                v-permission="['user:creator:update']"
                 size="small"
-                @click="openRoleDialog(row)"
-              >授权</el-button>
+                :loading="creatorBusyId === row.userId"
+                :disabled="!row.authorCapability && row.creatorApplicationStatus === 'REJECTED'"
+                :title="row.creatorApplicationStatus === 'REJECTED' ? '申请已驳回，请用户重新提交申请' : ''"
+                @click="openCapabilityDialog(row)"
+              >{{ row.authorCapability ? '关闭' : row.creatorApplicationStatus === 'REJECTED' ? '已驳回' : '开通' }}</el-button>
               <el-button
                 v-permission="['user:app:status']"
                 :type="row.status === '0' ? 'danger' : 'success'"
@@ -130,78 +134,15 @@
       </div>
     </el-card>
 
-    <!-- 创作者资质与权限配置：真实接口 -->
-    <el-card class="table-card">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">创作者资质与权限配置</span>
-        </div>
-      </template>
-      <el-table :data="creatorList" style="width: 100%" v-loading="creatorLoading">
-        <el-table-column prop="userId" label="ID" width="90" />
-        <el-table-column prop="nickname" label="创作者" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="phoneMasked" label="手机号" width="130">
-          <template #default="{ row }">{{ row.phoneMasked || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="作者能力" width="110">
-          <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-              {{ row.enabled ? '已开通' : '未开通' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="reason" label="变更原因" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.reason || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="operatorName" label="操作人" width="120">
-          <template #default="{ row }">{{ row.operatorName || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-permission="['user:creator:update']"
-              size="small"
-              :loading="creatorBusyId === row.userId"
-              @click="openCapabilityDialog(row)"
-            >
-              {{ row.enabled ? '关闭' : '开通' }}
-            </el-button>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <div class="empty-state">
-            <span v-if="creatorError">{{ creatorError }}</span>
-            <span v-else>暂无数据</span>
-            <el-button v-if="creatorError" size="small" type="primary" link @click="loadCreators">重试</el-button>
-          </div>
-        </template>
-      </el-table>
-      <div class="pager-wrap">
-        <el-pagination
-          layout="total, prev, pager, next"
-          :total="creatorTotal"
-          :page-size="creatorQuery.pageSize"
-          :current-page="creatorQuery.pageNum"
-          @current-change="onCreatorPageChange"
-        />
-      </div>
-    </el-card>
-
     <!-- 用户详情 -->
     <el-dialog v-model="detailVisible" title="用户详情" width="560px">
       <el-descriptions v-if="detail" :column="1" border>
         <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
         <el-descriptions-item label="昵称">{{ detail.nickname }}</el-descriptions-item>
+        <el-descriptions-item label="用户角色">{{ detail.authorCapability ? '创作者' : '收购方' }}</el-descriptions-item>
         <el-descriptions-item label="手机号">{{ detail.phoneMasked || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="账号类型">{{ userTypeLabel(detail.userType) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           {{ detail.status === '0' ? '正常' : '停用' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="角色">
-          {{ (detail.roleCodes && detail.roleCodes.length) ? detail.roleCodes.join('、') : '—' }}
         </el-descriptions-item>
         <el-descriptions-item label="实名状态">
           {{ detail.realNameStatus ? realNameLabel(detail.realNameStatus) : '—' }}
@@ -217,35 +158,8 @@
       </template>
     </el-dialog>
 
-    <!-- 角色授权 -->
-    <el-dialog v-model="roleDialogVisible" title="角色授权" width="480px">
-      <el-form label-width="80px">
-        <el-form-item label="用户">
-          {{ roleTarget ? `${roleTarget.nickname}（ID ${roleTarget.userId}）` : '' }}
-        </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="roleForm.roleIds" multiple placeholder="请选择角色" style="width: 100%">
-            <el-option
-              v-for="r in grantableRoles"
-              :key="r.roleId"
-              :label="r.roleName"
-              :value="r.roleId"
-            />
-          </el-select>
-          <div class="form-hint">仅可选择标记为可授予 App 用户的角色</div>
-        </el-form-item>
-        <el-form-item label="原因" required>
-          <el-input v-model="roleForm.reason" type="textarea" :rows="2" placeholder="必填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitRoles">确定</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 作者能力变更 -->
-    <el-dialog v-model="capabilityDialogVisible" title="作者能力变更" width="480px">
+    <el-dialog v-model="capabilityDialogVisible" title="作者能力变更" width="480px" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving">
       <el-form label-width="80px">
         <el-form-item label="用户">
           {{ capabilityTarget ? `${capabilityTarget.nickname}（ID ${capabilityTarget.userId}）` : '' }}
@@ -254,11 +168,11 @@
           {{ capabilityForm.enabled ? '开通作者能力' : '关闭作者能力' }}
         </el-form-item>
         <el-form-item label="原因" required>
-          <el-input v-model="capabilityForm.reason" type="textarea" :rows="2" placeholder="必填" />
+          <el-input v-model="capabilityForm.reason" type="textarea" :rows="2" placeholder="请填写变更原因" maxlength="255" show-word-limit :disabled="saving" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="capabilityDialogVisible = false">取消</el-button>
+        <el-button :disabled="saving" @click="capabilityDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submitCapability">确定</el-button>
       </template>
     </el-dialog>
@@ -271,11 +185,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listAppUsers,
   getAppUser,
-  listGrantableRoles,
-  changeAppUserStatus,
-  grantAppUserRoles
+  changeAppUserStatus
 } from '@/api/user/appUser'
-import { listAuthorCapabilities, updateAuthorCapability } from '@/api/user/author'
+import { updateAuthorCapability } from '@/api/user/author'
 
 /* ---------------- 用户列表 ---------------- */
 const loading = ref(false)
@@ -284,48 +196,31 @@ const userList = ref([])
 const total = ref(0)
 const errorText = ref('')
 const statusBusyId = ref(null)
+let loadRequestId = 0
 const query = reactive({
   pageNum: 1,
   pageSize: 10,
   keyword: '',
   status: '',
   realNameStatus: '',
-  roleCode: ''
+  authorCapability: ''
 })
 const filterForm = reactive({
   keyword: '',
   status: '',
   realNameStatus: '',
-  roleCode: ''
+  authorCapability: ''
 })
 
-/* ---------------- 可授权角色 ---------------- */
-const grantableRoles = ref([])
-
 /* ---------------- 创作者能力 ---------------- */
-const creatorLoading = ref(false)
-const creatorList = ref([])
-const creatorTotal = ref(0)
-const creatorError = ref('')
 const creatorBusyId = ref(null)
-const creatorQuery = reactive({ pageNum: 1, pageSize: 10, keyword: '', enabled: '' })
 
 /* ---------------- 弹窗状态 ---------------- */
 const detailVisible = ref(false)
 const detail = ref(null)
-const roleDialogVisible = ref(false)
-const roleTarget = ref(null)
-const roleForm = reactive({ roleIds: [], reason: '' })
 const capabilityDialogVisible = ref(false)
 const capabilityTarget = ref(null)
 const capabilityForm = reactive({ enabled: true, reason: '' })
-
-function userTypeLabel(type) {
-  if (type === '01') return '普通用户'
-  if (type === '02') return '创作者'
-  if (type === '03') return '甲方'
-  return type || '—'
-}
 
 function realNameLabel(status) {
   if (status === 'PENDING') return '待审核'
@@ -349,6 +244,7 @@ function formatTime(value) {
 }
 
 async function loadUsers() {
+  const requestId = ++loadRequestId
   loading.value = true
   errorText.value = ''
   try {
@@ -358,55 +254,26 @@ async function loadUsers() {
       keyword: query.keyword || undefined,
       status: query.status || undefined,
       realNameStatus: query.realNameStatus || undefined,
-      roleCode: query.roleCode || undefined
+      authorCapability: query.authorCapability === '' ? undefined : query.authorCapability
     })
+    if (requestId !== loadRequestId) return
     userList.value = res?.rows || []
     total.value = Number(res?.total || 0)
   } catch (e) {
+    if (requestId !== loadRequestId) return
     userList.value = []
     total.value = 0
     errorText.value = e?.message || '加载失败，请重试'
   } finally {
-    loading.value = false
-  }
-}
-
-async function loadGrantableRoles() {
-  try {
-    const res = await listGrantableRoles()
-    grantableRoles.value = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
-  } catch {
-    // 无授权权限时静默降级：角色筛选与授权下拉为空，不阻断页面
-    grantableRoles.value = []
-  }
-}
-
-async function loadCreators() {
-  creatorLoading.value = true
-  creatorError.value = ''
-  try {
-    const res = await listAuthorCapabilities({
-      pageNum: creatorQuery.pageNum,
-      pageSize: creatorQuery.pageSize,
-      keyword: creatorQuery.keyword || undefined,
-      enabled: creatorQuery.enabled === '' ? undefined : creatorQuery.enabled
-    })
-    creatorList.value = res?.rows || []
-    creatorTotal.value = Number(res?.total || 0)
-  } catch (e) {
-    creatorList.value = []
-    creatorTotal.value = 0
-    creatorError.value = e?.message || '加载失败，请重试'
-  } finally {
-    creatorLoading.value = false
+    if (requestId === loadRequestId) loading.value = false
   }
 }
 
 function handleSearch() {
-  query.keyword = filterForm.keyword
+  query.keyword = filterForm.keyword.trim()
   query.status = filterForm.status
   query.realNameStatus = filterForm.realNameStatus
-  query.roleCode = filterForm.roleCode
+  query.authorCapability = filterForm.authorCapability ?? ''
   query.pageNum = 1
   loadUsers()
 }
@@ -415,18 +282,13 @@ function handleReset() {
   filterForm.keyword = ''
   filterForm.status = ''
   filterForm.realNameStatus = ''
-  filterForm.roleCode = ''
+  filterForm.authorCapability = ''
   handleSearch()
 }
 
 function onPageChange(page) {
   query.pageNum = page
   loadUsers()
-}
-
-function onCreatorPageChange(page) {
-  creatorQuery.pageNum = page
-  loadCreators()
 }
 
 async function handleDetail(row) {
@@ -472,52 +334,26 @@ async function handleToggleStatus(row) {
   }
 }
 
-function openRoleDialog(row) {
-  roleTarget.value = row
-  roleForm.roleIds = []
-  roleForm.reason = ''
-  roleDialogVisible.value = true
-}
-
-async function submitRoles() {
-  if (!roleForm.reason.trim()) {
-    ElMessage.warning('原因必填')
-    return
-  }
-  if (!roleForm.roleIds.length) {
-    ElMessage.warning('请至少选择一个角色')
-    return
-  }
-  saving.value = true
-  try {
-    const res = await grantAppUserRoles(roleTarget.value.userId, {
-      roleIds: roleForm.roleIds,
-      reason: roleForm.reason.trim()
-    })
-    const changed = res?.data?.changed
-    ElMessage.success(changed === false ? '角色未变化，无重复变更' : '角色授权成功')
-    roleDialogVisible.value = false
-    await loadUsers()
-  } catch (e) {
-    ElMessage.error(e?.message || '授权失败')
-  } finally {
-    saving.value = false
-  }
-}
-
 function openCapabilityDialog(row) {
+  if (saving.value) return
+  if (!row.authorCapability && row.creatorApplicationStatus === 'REJECTED') {
+    ElMessage.warning('申请已驳回，请用户重新提交申请')
+    return
+  }
   capabilityTarget.value = row
-  capabilityForm.enabled = !row.enabled
+  capabilityForm.enabled = !row.authorCapability
   capabilityForm.reason = ''
   capabilityDialogVisible.value = true
 }
 
 async function submitCapability() {
+  if (saving.value) return
   if (!capabilityForm.reason.trim()) {
     ElMessage.warning('原因必填')
     return
   }
   saving.value = true
+  creatorBusyId.value = capabilityTarget.value.userId
   try {
     const res = await updateAuthorCapability(capabilityTarget.value.userId, {
       enabled: capabilityForm.enabled,
@@ -526,19 +362,16 @@ async function submitCapability() {
     const changed = res?.data?.changed
     ElMessage.success(changed === false ? '状态未变化，无重复变更' : '作者能力已更新')
     capabilityDialogVisible.value = false
-    await Promise.all([loadCreators(), loadUsers()])
+    await loadUsers()
   } catch (e) {
     ElMessage.error(e?.message || '操作失败')
   } finally {
     saving.value = false
+    creatorBusyId.value = null
   }
 }
 
-onMounted(() => {
-  loadUsers()
-  loadCreators()
-  loadGrantableRoles()
-})
+onMounted(loadUsers)
 </script>
 
 <style scoped>
@@ -562,11 +395,6 @@ onMounted(() => {
   margin: 0;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
 /* 筛选卡片 */
 .filter-card {
   margin-bottom: 20px;
@@ -583,7 +411,7 @@ onMounted(() => {
 }
 
 .filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
+  margin-bottom: 8px;
   margin-right: 12px;
 }
 
@@ -598,26 +426,8 @@ onMounted(() => {
   border: 1px solid #e4e7ed;
 }
 
-.table-card :deep(.el-card__header) {
-  padding: 18px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
-}
-
 .table-card :deep(.el-card__body) {
   padding: 0;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-title {
-  font-size: 14px;
-  color: #1f2329;
-  font-weight: 600;
 }
 
 /* 操作按钮容器 */
@@ -643,12 +453,6 @@ onMounted(() => {
   padding: 18px 0;
   color: #8c8c8c;
   font-size: 13px;
-}
-
-.form-hint {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #8c8c8c;
 }
 
 /* 黑色主按钮 */

@@ -5,7 +5,6 @@
       <h2 class="page-title">作品审核工作台</h2>
       <div class="header-actions">
         <el-button size="default" @click="handleExportReport">导出报告</el-button>
-        <el-button type="primary" size="default" class="black-button" @click="handleBatchAssign">批量分配</el-button>
       </div>
     </div>
 
@@ -53,25 +52,16 @@
         <el-form-item>
           <el-select v-model="filterForm.type" placeholder="全部类型" style="width: 140px">
             <el-option label="全部类型" value="" />
-            <el-option label="电影剧本" value="movie" />
-            <el-option label="电视剧剧本" value="tv" />
-            <el-option label="短剧剧本" value="short" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-select v-model="filterForm.genre" placeholder="全部题材" style="width: 140px">
-            <el-option label="全部题材" value="" />
-            <el-option label="都市" value="urban" />
-            <el-option label="古装" value="ancient" />
-            <el-option label="科幻" value="scifi" />
-            <el-option label="悬疑" value="suspense" />
+            <el-option label="剧本" value="script" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-date-picker
             v-model="filterForm.startDate"
             type="date"
+            value-format="YYYY-MM-DD"
             placeholder="开始日期"
+            :disabled-date="disabledStartDate"
             style="width: 160px"
           />
         </el-form-item>
@@ -79,7 +69,9 @@
           <el-date-picker
             v-model="filterForm.endDate"
             type="date"
+            value-format="YYYY-MM-DD"
             placeholder="结束日期"
+            :disabled-date="disabledEndDate"
             style="width: 160px"
           />
         </el-form-item>
@@ -94,13 +86,14 @@
       <el-table
         :data="worksList"
         style="width: 100%"
-        @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="50" />
         <el-table-column prop="reviewId" label="编号" width="100" />
         <el-table-column prop="workTitle" label="作品名称" min-width="180" />
-        <el-table-column prop="workType" label="类型" width="120" />
-        <el-table-column prop="genreName" label="题材" width="100" />
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            {{ getTypeText(row.workType) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="authorName" label="作者" width="120" />
         <el-table-column prop="createTime" label="提交时间" width="160" />
         <el-table-column label="AI评分" width="100">
@@ -165,11 +158,16 @@
       <el-descriptions :column="2" border>
         <el-descriptions-item label="作品名称">{{ currentReview.workTitle }}</el-descriptions-item>
         <el-descriptions-item label="作者">{{ currentReview.authorName }}</el-descriptions-item>
-        <el-descriptions-item label="类型">{{ currentReview.workType }}</el-descriptions-item>
-        <el-descriptions-item label="题材">{{ currentReview.genreName }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ getTypeText(currentReview.workType) }}</el-descriptions-item>
         <el-descriptions-item label="AI评分">{{ currentReview.aiScore != null ? currentReview.aiScore + '分' : '-' }}</el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentReview.createTime }}</el-descriptions-item>
       </el-descriptions>
+      <ReviewWorkContentPanel
+        :content="reviewContent"
+        :ai-info="reviewAiInfo"
+        :issues="reviewIssues"
+        :loading="reviewContentLoading"
+      />
       <el-form :model="reviewForm" label-width="80px" style="margin-top: 20px">
         <el-form-item label="审核结果">
           <el-radio-group v-model="reviewForm.action">
@@ -201,9 +199,21 @@
       <el-descriptions :column="2" border>
         <el-descriptions-item label="作品名称">{{ currentDetail.workTitle }}</el-descriptions-item>
         <el-descriptions-item label="作者">{{ currentDetail.authorName }}</el-descriptions-item>
-        <el-descriptions-item label="类型">{{ currentDetail.workType }}</el-descriptions-item>
-        <el-descriptions-item label="题材">{{ currentDetail.genreName }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ getTypeText(currentDetail.workType) }}</el-descriptions-item>
         <el-descriptions-item label="AI评分">{{ currentDetail.aiScore != null ? currentDetail.aiScore + '分' : '-' }}</el-descriptions-item>
+        <el-descriptions-item label="AI风险等级">
+          <el-tag :type="getRiskLevelType(aiResultOf(currentDetail).level)" size="small">
+            {{ getRiskLevelText(aiResultOf(currentDetail).level) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="AI驳回原因" v-if="currentDetail.status === 'rejected'">
+          <template v-if="aiKeywordsOf(currentDetail).length">
+            <el-tag v-for="kw in aiKeywordsOf(currentDetail)" :key="kw" type="danger" size="small" style="margin-right: 4px">
+              {{ kw }}
+            </el-tag>
+          </template>
+          <span v-else>AI 评分 {{ currentDetail.aiScore }} 分，低于规则阈值自动驳回</span>
+        </el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ currentDetail.createTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentDetail.status)" size="small">
@@ -211,75 +221,47 @@
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
+      <ReviewWorkContentPanel
+        :content="detailContent"
+        :ai-info="detailAiInfo"
+        :issues="detailIssues"
+        :loading="detailContentLoading"
+      />
       <template #footer>
-        <!-- A3 联系用户入口（任务 25）：待作品关联真实 userId 后自动启用 -->
-        <el-button type="primary" plain :disabled="!currentDetail.userId" @click="handleContactUser(currentDetail)">联系用户</el-button>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
-    <!-- 批量分配弹窗 -->
-    <el-dialog
-      v-model="assignDialogVisible"
-      title="批量分配审核任务"
-      width="500px"
-    >
-      <el-alert
-        v-if="selectedWorks.length === 0"
-        title="请先在列表中选择需要分配的作品（勾选左侧复选框）"
-        type="warning"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 16px"
-      />
-      <el-form :model="assignForm" label-width="100px">
-        <el-form-item label="待分配数量">
-          <span>{{ selectedWorks.length }} 个作品</span>
-        </el-form-item>
-        <el-form-item label="分配审核人">
-          <el-select v-model="assignForm.reviewerId" placeholder="请选择审核人" style="width: 100%">
-            <el-option label="审核员一" :value="1" />
-            <el-option label="审核员二" :value="2" />
-            <el-option label="审核员三" :value="3" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="assignDialogVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="selectedWorks.length === 0" @click="handleSubmitAssign">确认分配</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useContactUser } from '@/composables/useContactUser'
-
-// A3 联系用户（任务 25）：复用公共 composable 创建会话并跳转聊天详情
-const { handleContactUser } = useContactUser({
-  businessType: 'WORK',
-  extractUserId: (row) => row.userId,
-  extractBusinessId: (row) => row.workId || row.reviewId,
-  extractBusinessName: (row) => row.name || row.workName,
-  emptyMessage: '该作品暂未关联用户，无法发起沟通'
-})
+import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
 
 // 筛选表单
 const filterForm = ref({
   status: '',
   type: '',
-  genre: '',
   startDate: '',
   endDate: ''
 })
 
+// 类型映射（sys_work.work_type 枚举）
+const getTypeText = (type) => {
+  const typeMap = {
+    script: '剧本',
+    novel: '小说',
+    movie: '电影剧本',
+    tv: '电视剧剧本',
+    short: '短剧剧本'
+  }
+  return typeMap[type] || type || '-'
+}
+
 // 加载状态
 const loading = ref(false)
-
-// 选中的作品
-const selectedWorks = ref([])
 
 // 统计数据
 const statistics = ref({
@@ -292,6 +274,8 @@ const statistics = ref({
 // 审核详情弹窗
 const reviewDialogVisible = ref(false)
 const currentReview = ref({})
+const reviewContent = ref(null)
+const reviewContentLoading = ref(false)
 const reviewForm = ref({
   action: 'approve',
   remark: ''
@@ -343,7 +327,7 @@ const getStatusType = (status) => {
   const typeMap = {
     pending: 'warning',
     manual_review: 'warning',
-    ai_reviewing: '',
+    ai_reviewing: 'info',
     approved: 'success',
     rejected: 'danger'
   }
@@ -362,6 +346,33 @@ const getStatusText = (status) => {
   return textMap[status] || status
 }
 
+// 解析 AI 审核结果（aiResult 为 JSON 字符串：{score, level, keywords, prompt}）
+const parseAiResult = (row) => {
+  try {
+    if (!row || !row.aiResult) return { score: null, level: '', keywords: [] }
+    const obj = typeof row.aiResult === 'string' ? JSON.parse(row.aiResult) : row.aiResult
+    return {
+      score: obj.score != null ? obj.score : null,
+      level: obj.level || '',
+      keywords: Array.isArray(obj.keywords) ? obj.keywords : []
+    }
+  } catch (e) {
+    return { score: null, level: '', keywords: [] }
+  }
+}
+const aiResultOf = (row) => parseAiResult(row)
+const aiKeywordsOf = (row) => parseAiResult(row).keywords
+
+// 获取AI风险等级样式与文案
+const getRiskLevelType = (level) => {
+  const typeMap = { low: 'success', medium: 'warning', high: 'danger' }
+  return typeMap[level] || 'info'
+}
+const getRiskLevelText = (level) => {
+  const textMap = { low: '低风险', medium: '中风险', high: '高风险' }
+  return textMap[level] || level || '-'
+}
+
 // 获取操作类型
 const getActionType = (action) => {
   if (action === '通过') return 'success'
@@ -371,20 +382,66 @@ const getActionType = (action) => {
 
 // 处理搜索
 const handleSearch = () => {
-  ElMessage.success('搜索条件已应用')
+  loadWorks(buildQuery())
 }
 
-// 处理选择变化
-const handleSelectionChange = (selection) => {
-  selectedWorks.value = selection
+// 构建筛选参数
+const buildQuery = () => {
+  const q = {}
+  if (filterForm.value.status) q.status = filterForm.value.status
+  if (filterForm.value.type) q.workType = filterForm.value.type
+  if (filterForm.value.startDate) q.beginTime = filterForm.value.startDate
+  if (filterForm.value.endDate) q.endTime = filterForm.value.endDate + ' 23:59:59'
+  return q
+}
+
+// 日期归一到本地零点（el-date-picker 传入的 date 可能是 UTC，直接比较会错 8 小时）
+const dayZero = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+const todayZeroMs = () => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+// 开始日期：不能晚于结束日期，不能选未来
+const disabledStartDate = (date) => {
+  const t = dayZero(date)
+  if (filterForm.value.endDate) {
+    return t > dayZero(new Date(filterForm.value.endDate)) || t > todayZeroMs()
+  }
+  return t > todayZeroMs()
+}
+
+// 结束日期：不能早于开始日期，不能选未来
+const disabledEndDate = (date) => {
+  const t = dayZero(date)
+  if (filterForm.value.startDate) {
+    return t < dayZero(new Date(filterForm.value.startDate)) || t > todayZeroMs()
+  }
+  return t > todayZeroMs()
 }
 
 // 处理审核
-const handleReview = (row) => {
+// 加载审核作品完整内容（简介/设定/章节正文）
+const loadReviewContent = async (reviewId) => {
+  try {
+    const res = await adminFetch(`/api/v1/admin/review/content/${reviewId}`)
+    const data = await res.json()
+    if (data.code === 200) return data.data
+  } catch (e) {
+    console.error('加载作品内容失败:', e)
+  }
+  return null
+}
+
+const handleReview = async (row) => {
   currentReview.value = row
   reviewForm.value.action = 'approve'
   reviewForm.value.remark = ''
+  reviewContent.value = null
   reviewDialogVisible.value = true
+  reviewContentLoading.value = true
+  reviewContent.value = await loadReviewContent(row.reviewId)
+  reviewContentLoading.value = false
 }
 
 // 提交审核结果
@@ -418,53 +475,21 @@ const handleSubmitReview = async () => {
 // 详情弹窗
 const detailDialogVisible = ref(false)
 const currentDetail = ref({})
+const detailContent = ref(null)
+const detailContentLoading = ref(false)
+const detailAiInfo = computed(() => (detailContent.value && detailContent.value.aiInfo) || null)
+const detailIssues = computed(() => (detailContent.value && detailContent.value.issues) || null)
+const reviewAiInfo = computed(() => (reviewContent.value && reviewContent.value.aiInfo) || null)
+const reviewIssues = computed(() => (reviewContent.value && reviewContent.value.issues) || null)
 
 // 处理详情
-const handleDetail = (row) => {
+const handleDetail = async (row) => {
   currentDetail.value = row
+  detailContent.value = null
   detailDialogVisible.value = true
-}
-
-// 批量分配弹窗
-const assignDialogVisible = ref(false)
-const assignForm = ref({
-  reviewerId: 1
-})
-
-// 打开批量分配弹窗
-const handleBatchAssign = () => {
-  if (selectedWorks.value.length === 0) {
-    ElMessage.warning('请先勾选需要分配的作品')
-    return
-  }
-  assignForm.value.reviewerId = 1
-  assignDialogVisible.value = true
-}
-
-// 提交批量分配
-const handleSubmitAssign = async () => {
-  try {
-    const ids = selectedWorks.value.map(item => item.id)
-    const res = await adminFetch('/api/v1/admin/review/batch-assign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        reviewIds: ids,
-        reviewerId: assignForm.value.reviewerId
-      })
-    })
-    const data = await res.json()
-    if (data.code === 200) {
-      ElMessage.success('批量分配成功')
-      assignDialogVisible.value = false
-      // 刷新列表
-      await loadWorks()
-    } else {
-      ElMessage.error(data.msg || '批量分配失败')
-    }
-  } catch (e) {
-    ElMessage.error('批量分配失败，请检查后端服务')
-  }
+  detailContentLoading.value = true
+  detailContent.value = await loadReviewContent(row.reviewId)
+  detailContentLoading.value = false
 }
 
 // 导出审核报告
@@ -502,9 +527,11 @@ const handleExportLogs = async () => {
 }
 
 // 加载作品列表
-const loadWorks = async () => {
+const loadWorks = async (query = {}) => {
   try {
-    const res = await adminFetch('/api/v1/admin/review/list?page=1&pageSize=10')
+    const params = new URLSearchParams(query).toString()
+    const url = '/api/v1/admin/review/list?page=1&pageSize=100' + (params ? '&' + params : '')
+    const res = await adminFetch(url)
     const data = await res.json()
     if (data.code === 200) {
       worksList.value = data.rows || []

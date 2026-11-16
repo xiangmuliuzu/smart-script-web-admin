@@ -13,14 +13,14 @@
     <el-card class="filter-card">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item>
-          <el-select v-model="filterForm.type" placeholder="全部类型" style="width: 140px">
+          <el-select v-model="filterForm.type" placeholder="全部类型" style="width: 140px" @change="handleSearch">
             <el-option label="全部类型" value="" />
             <el-option label="内容安全" value="content_safety" />
             <el-option label="版权保护" value="copyright" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 140px">
+          <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 140px" @change="handleSearch">
             <el-option label="全部状态" value="" />
             <el-option label="启用" value="enabled" />
             <el-option label="停用" value="disabled" />
@@ -32,12 +32,46 @@
             placeholder="规则名称搜索"
             style="width: 200px"
             clearable
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
           />
         </el-form-item>
         <el-form-item>
+          <el-button type="primary" class="black-button" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
+    </el-card>
+
+    <!-- 准确率统计卡片 -->
+    <el-card class="accuracy-card">
+      <template #header>
+        <div class="table-header">
+          <span class="table-title">AI审核准确率统计</span>
+        </div>
+      </template>
+      <div class="accuracy-grid">
+        <div class="accuracy-item">
+          <div class="accuracy-value">{{ accuracy.total }}</div>
+          <div class="accuracy-label">已人工终审数</div>
+        </div>
+        <div class="accuracy-item">
+          <div class="accuracy-value">{{ accuracy.aiPass }}</div>
+          <div class="accuracy-label">AI建议通过</div>
+        </div>
+        <div class="accuracy-item">
+          <div class="accuracy-value">{{ accuracy.aiReject }}</div>
+          <div class="accuracy-label">AI建议驳回</div>
+        </div>
+        <div class="accuracy-item">
+          <div class="accuracy-value primary">{{ accuracy.consistent }}</div>
+          <div class="accuracy-label">与人工一致数</div>
+        </div>
+        <div class="accuracy-item">
+          <div class="accuracy-value highlight">{{ accuracy.accuracy }}%</div>
+          <div class="accuracy-label">准确率</div>
+        </div>
+      </div>
     </el-card>
 
     <!-- 审核规则列表 -->
@@ -56,6 +90,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="threshold" label="阈值" width="120" />
+        <el-table-column label="违禁词词库" min-width="150">
+          <template #default="{ row }">
+            <el-tag v-if="getWordCount(row) > 0" type="info" size="small">{{ getWordCount(row) }} 个违禁词</el-tag>
+            <span v-else class="no-words">走AI判断</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="action" label="处理方式" width="120" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -81,7 +121,7 @@
     <el-dialog
       v-model="ruleDialogVisible"
       :title="dialogMode === 'add' ? '新增规则' : '编辑规则'"
-      width="500px"
+      width="560px"
     >
       <el-form :model="currentRule" label-width="80px">
         <el-form-item label="规则名称">
@@ -95,6 +135,14 @@
         </el-form-item>
         <el-form-item label="阈值">
           <el-input v-model="currentRule.threshold" placeholder="例如：≥80分" />
+        </el-form-item>
+        <el-form-item label="违禁词词库">
+          <el-input
+            v-model="currentRule.words"
+            type="textarea"
+            :rows="6"
+            placeholder="每行一个违禁词，或用逗号分隔。命中词库中的词即扣分；留空表示该规则不走词库（如版权查重），交由AI综合判断"
+          />
         </el-form-item>
         <el-form-item label="处理方式">
           <el-select v-model="currentRule.action" placeholder="请选择处理方式" style="width: 100%">
@@ -137,6 +185,7 @@ const currentRule = ref({
   name: '',
   type: '',
   threshold: '',
+  words: '',
   action: '',
   status: 'enabled'
 })
@@ -147,13 +196,34 @@ const loading = ref(false)
 // 审核规则列表数据
 const rulesList = ref([])
 
+// 准确率统计数据
+const accuracy = ref({
+  total: 0,
+  aiPass: 0,
+  aiReject: 0,
+  consistent: 0,
+  accuracy: 0
+})
+
 // 页面加载时获取数据
 import { onMounted } from 'vue'
 import adminFetch from '@/utils/adminFetch'
 
 onMounted(async () => {
   try {
-    const res = await adminFetch('/api/v1/admin/review/ai-rule/list?page=1&pageSize=10')
+    await loadRules()
+    await loadAccuracy()
+  } catch (e) {
+    console.error('获取AI审核规则失败:', e)
+  }
+})
+
+// 加载规则列表
+const loadRules = async (query = {}) => {
+  try {
+    const params = new URLSearchParams(query).toString()
+    const url = '/api/v1/admin/review/ai-rule/list?page=1&pageSize=100' + (params ? '&' + params : '')
+    const res = await adminFetch(url)
     const data = await res.json()
     if (data.code === 200) {
       rulesList.value = data.rows || []
@@ -161,7 +231,35 @@ onMounted(async () => {
   } catch (e) {
     console.error('获取AI审核规则失败:', e)
   }
-})
+}
+
+// 加载准确率统计
+const loadAccuracy = async () => {
+  try {
+    const res = await adminFetch('/api/v1/admin/review/ai-rule/statistics')
+    const data = await res.json()
+    if (data.code === 200) {
+      accuracy.value = {
+        total: data.total || 0,
+        aiPass: data.aiPass || 0,
+        aiReject: data.aiReject || 0,
+        consistent: data.consistent || 0,
+        accuracy: data.accuracy || 0
+      }
+    }
+  } catch (e) {
+    console.error('获取准确率统计失败:', e)
+  }
+}
+
+// 处理搜索
+const handleSearch = () => {
+  const q = {}
+  if (filterForm.value.type) q.ruleType = filterForm.value.type
+  if (filterForm.value.status) q.status = filterForm.value.status
+  if (filterForm.value.ruleName) q.ruleName = filterForm.value.ruleName
+  loadRules(q)
+}
 
 // 获取类型文本
 const getTypeText = (type) => {
@@ -172,6 +270,24 @@ const getTypeText = (type) => {
   return typeMap[type] || type
 }
 
+// 解析规则的违禁词词库（rule_value JSON {"words":[...]}）
+const parseWords = (ruleValue) => {
+  if (!ruleValue) return []
+  try {
+    const parsed = JSON.parse(ruleValue)
+    if (Array.isArray(parsed.words)) return parsed.words
+  } catch (e) {
+    // 非JSON时按分隔符切
+  }
+  return String(ruleValue).split(/[,，;；|\n]+/).map((s) => s.trim()).filter(Boolean)
+}
+
+// 词库词数
+const getWordCount = (row) => {
+  const words = parseWords(row.ruleValue)
+  return words.length
+}
+
 // 处理重置
 const handleReset = () => {
   filterForm.value = {
@@ -180,6 +296,7 @@ const handleReset = () => {
     ruleName: ''
   }
   ElMessage.success('已重置筛选条件')
+  loadRules()
 }
 
 // 处理编辑
@@ -190,6 +307,7 @@ const handleEdit = (row) => {
     name: row.ruleName,
     type: row.ruleType,
     threshold: row.threshold,
+    words: parseWords(row.ruleValue).join('\n'),
     action: row.action,
     status: row.status || 'enabled'
   }
@@ -204,6 +322,7 @@ const handleAdd = () => {
     name: '',
     type: '',
     threshold: '',
+    words: '',
     action: '',
     status: 'enabled'
   }
@@ -213,31 +332,33 @@ const handleAdd = () => {
 // 提交规则
 const handleSubmitRule = async () => {
   try {
+    // 违禁词词库：按换行/逗号/顿号/分号/竖线切分，组装为 {"words":[...]}
+    const words = String(currentRule.value.words || '')
+      .split(/[\n,，;；|]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const ruleValue = JSON.stringify({ words })
+    const payload = {
+      ruleName: currentRule.value.name,
+      ruleType: currentRule.value.type,
+      threshold: currentRule.value.threshold,
+      ruleValue,
+      action: currentRule.value.action,
+      status: currentRule.value.status
+    }
     if (dialogMode.value === 'add') {
       await adminFetch('/api/v1/admin/review/ai-rule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ruleName: currentRule.value.name,
-          ruleType: currentRule.value.type,
-          threshold: currentRule.value.threshold,
-          action: currentRule.value.action,
-          status: currentRule.value.status
-        })
+        body: JSON.stringify(payload)
       })
       ElMessage.success('新增规则成功')
     } else {
+      payload.ruleId = currentRule.value.id
       await adminFetch('/api/v1/admin/review/ai-rule', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ruleId: currentRule.value.id,
-          ruleName: currentRule.value.name,
-          ruleType: currentRule.value.type,
-          threshold: currentRule.value.threshold,
-          action: currentRule.value.action,
-          status: currentRule.value.status
-        })
+        body: JSON.stringify(payload)
       })
       ElMessage.success('更新规则成功')
     }
@@ -351,6 +472,53 @@ const handleDelete = async (row) => {
 .table-card {
   border-radius: 8px;
   border: 1px solid #e4e7ed;
+}
+
+/* 准确率统计卡片 */
+.accuracy-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.accuracy-card :deep(.el-card__header) {
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.accuracy-card :deep(.el-card__body) {
+  padding: 20px;
+}
+
+.accuracy-grid {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.accuracy-item {
+  text-align: center;
+}
+
+.accuracy-value {
+  font-size: 26px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.accuracy-value.primary {
+  color: #1f2329;
+}
+
+.accuracy-value.highlight {
+  color: #d48806;
+}
+
+.accuracy-label {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 6px;
 }
 
 .table-card :deep(.el-card__header) {
@@ -490,6 +658,24 @@ const handleDelete = async (row) => {
 
 :deep(.el-input__inner::placeholder) {
   color: #bfbfbf;
+}
+
+/* 无词库规则提示 */
+.no-words {
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+:deep(.el-textarea__inner) {
+  font-size: 12px;
+  color: #262626;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+:deep(.el-textarea__inner::placeholder) {
+  color: #bfbfbf;
+  font-size: 12px;
 }
 </style>
 

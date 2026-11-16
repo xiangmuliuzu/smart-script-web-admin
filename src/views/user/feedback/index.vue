@@ -14,9 +14,7 @@
         <el-form-item>
           <el-select v-model="filterForm.category" placeholder="全部分类" style="width: 140px" clearable>
             <el-option label="全部分类" value="" />
-            <el-option label="缺陷" value="BUG" />
-            <el-option label="建议" value="SUGGESTION" />
-            <el-option label="其他" value="OTHER" />
+            <el-option v-for="(label, value) in feedbackCategories" :key="value" :label="label" :value="value" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -89,7 +87,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="反馈详情" width="560px">
+    <el-dialog v-model="detailVisible" @closed="materialPreview?.clear()" title="反馈详情" width="560px">
       <el-descriptions v-if="detail" :column="1" border>
         <el-descriptions-item label="反馈 ID">{{ detail.feedbackId }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ detail.userId }}</el-descriptions-item>
@@ -145,19 +143,21 @@
         <el-button type="primary" :loading="saving" @click="submitHandle">确定</el-button>
       </template>
     </el-dialog>
+    <MaterialPreview ref="materialPreview" />
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
+import MaterialPreview from '@/components/MaterialPreview.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listFeedback,
   getFeedback,
-  handleFeedback,
-  redeemMaterialToken,
-  downloadMaterialContent
+  handleFeedback
 } from '@/api/user/feedback'
+
+const feedbackCategories = { FEATURE: '功能建议', EXPERIENCE: '体验问题', BUG: '缺陷报告', COMPLAINT: '投诉', OTHER: '其他' }
 
 const loading = ref(false)
 const saving = ref(false)
@@ -170,24 +170,28 @@ const filterForm = reactive({ status: '', category: '', keyword: '' })
 const detailVisible = ref(false)
 const detail = ref(null)
 const materialBusy = ref('')
+const materialPreview = ref(null)
 
 /**
  * 查看附件：短时令牌 → 一次性访问链接 → 真实内容。
- * 令牌一次性，查看后需重新打开详情获取新的引用。
+ * 令牌一次性，查看后自动刷新详情获取新的引用。
  */
 async function viewAttachment(token) {
+  if (materialBusy.value) return
   materialBusy.value = token
   try {
-    const res = await redeemMaterialToken(token)
-    const accessUrl = res?.data?.accessUrl
-    if (!accessUrl) {
-      ElMessage.error('附件访问链接获取失败')
-      return
-    }
-    await downloadMaterialContent(accessUrl, 'attachment')
+    await materialPreview.value.open(token)
   } catch (e) {
-    ElMessage.error(e?.message || '附件查看失败，请重新打开详情获取新的引用')
+    ElMessage.error(e?.message || '材料查看失败，请重新打开详情重试')
   } finally {
+    // 一次性令牌使用后刷新引用，支持在同一详情中再次查看。
+    if (detailVisible.value && detail.value) {
+      const id = detail.value.feedbackId
+      try {
+        const result = await getFeedback(id)
+        if (detailVisible.value && detail.value?.feedbackId === id) detail.value = result?.data || result
+      } catch { /* 原详情仍可查看；重新打开可重试。 */ }
+    }
     materialBusy.value = ''
   }
 }
@@ -220,10 +224,7 @@ function statusTagType(status) {
 }
 
 function categoryLabel(category) {
-  if (category === 'BUG') return '缺陷'
-  if (category === 'SUGGESTION') return '建议'
-  if (category === 'OTHER') return '其他'
-  return category || '—'
+  return feedbackCategories[category] || (category === 'SUGGESTION' ? '功能建议' : '其他')
 }
 
 function actionLabel(action) {

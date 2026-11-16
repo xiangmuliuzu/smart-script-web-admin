@@ -11,11 +11,14 @@
         </div>
 
         <div class="login-head">
-          <h1 class="login-title">欢迎回来</h1>
-          <p class="login-desc">智能剧本创作平台，请使用平台账号登录</p>
+          <h1 class="login-title">{{ isRecovery ? '找回登录密码' : '欢迎回来' }}</h1>
+          <p class="login-desc">
+            {{ isRecovery ? '通过账号绑定的手机号接收短信验证码，重置运维管理员登录密码' : '智能剧本创作平台，请使用运维管理员账号登录' }}
+          </p>
         </div>
 
         <el-form
+          v-if="!isRecovery"
           ref="formRef"
           :model="loginForm"
           :rules="rules"
@@ -62,14 +65,16 @@
             </div>
           </el-form-item>
 
+          <el-button v-if="!captchaReady" text @click="refreshCaptcha">验证码加载失败，点击重试</el-button>
           <div class="form-options">
-            <el-checkbox v-model="rememberUsername">记住账号</el-checkbox>
+            <el-checkbox v-model="rememberPassword">记住密码</el-checkbox>
             <a class="forgot-link" @click.prevent="handleForgot">忘记密码？</a>
           </div>
 
           <el-button
             type="primary"
             :loading="loading"
+            :disabled="!captchaReady"
             class="login-button"
             @click="handleLogin"
           >
@@ -77,23 +82,23 @@
           </el-button>
         </el-form>
 
-        <div class="login-footer">
-          账号由平台统一维护，如需开通或找回密码请联系管理员
-        </div>
+        <PasswordRecoveryPanel v-else @back="mode = 'login'" />
       </div>
     </div>
 
     <!-- 右侧：品牌视觉面板 -->
     <div class="login-right">
       <div class="visual-bg"></div>
-      <img
-        v-if="!imageFailed"
-        :src="visualImage"
-        class="visual-img"
-        alt="品牌视觉图"
-        @error="imageFailed = true"
-      />
-      <div class="visual-overlay"></div>
+      <picture v-if="!imageFailed">
+        <source :srcset="visualImage" type="image/webp" media="(min-width: 992px)" />
+        <img
+          src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+          class="visual-img"
+          width="1254" height="1254" fetchpriority="high" decoding="async"
+          alt="运维人员监控平台运行、审核剧本内容与管理安全的卡通插画"
+          @error="imageFailed = true"
+        />
+      </picture>
       <div class="visual-caption">
         <p class="visual-slogan">让每一个好故事，从这里开始</p>
         <p class="visual-sub">剧云策 · AI 驱动的智能剧本创作平台</p>
@@ -103,33 +108,37 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import visualImage from '@/assets/images/login-operations-v2.webp'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { usePcUserStore } from '@/stores/pcUser'
 import { usePermissionStore } from '@/stores/permission'
-import { getCodeImg, unifiedLogin } from '@/api/login'
-import { isUserType, safePortalRedirect } from '@/utils/account'
+import { getCodeImg, login } from '@/api/login'
+import { safeRedirectPath } from '@/utils/ruoyi-response'
 import { ElMessage } from 'element-plus'
 import { Document, User, Lock } from '@element-plus/icons-vue'
+import PasswordRecoveryPanel from '@/components/PasswordRecoveryPanel.vue'
 
-const REMEMBER_KEY = 'login-remember-username'
+// 记住密码：勾选后把账号和密码一起写进本机 localStorage，取消勾选立即清除。
+const REMEMBER_KEY = 'login-remember-credential'
+// 兼容早期只保存账号的键，读到后迁移为账号+密码结构。
+const LEGACY_REMEMBER_KEY = 'login-remember-username'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-const pcUserStore = usePcUserStore()
 const permissionStore = usePermissionStore()
 const formRef = ref(null)
 const loading = ref(false)
-const captchaEnabled = ref(false)
+// login=账号密码登录；recovery=同一张卡片内切换为手机号找回密码
+const mode = ref('login')
+const isRecovery = computed(() => mode.value === 'recovery')
+const captchaEnabled = ref(true)
+const captchaReady = ref(false)
 const codeUrl = ref('')
 const uuid = ref('')
-const rememberUsername = ref(false)
+const rememberPassword = ref(false)
 const imageFailed = ref(false)
-// Unsplash 公开图片，加载失败时自动隐藏并回退为渐变视觉面板
-const visualImage =
-  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1600&q=80'
 
 const loginForm = reactive({
   username: '',
@@ -146,15 +155,12 @@ const rules = {
   ]
 }
 
-function safeRedirectPath(accountType) {
-  // 统一分流规则：站内路径 + 不跨账号域（见 utils/account.js）
-  return safePortalRedirect(route.query?.redirect, accountType)
-}
 
 async function refreshCaptcha() {
   try {
     const data = await getCodeImg()
-    captchaEnabled.value = data?.captchaEnabled !== false && !!data?.img
+    captchaReady.value = data?.captchaEnabled === false || !!(data?.img && data?.uuid)
+    captchaEnabled.value = data?.captchaEnabled !== false
     uuid.value = data?.uuid || ''
     codeUrl.value = data?.img
       ? (data.img.startsWith('data:') ? data.img : `data:image/gif;base64,${data.img}`)
@@ -163,35 +169,42 @@ async function refreshCaptcha() {
       loginForm.code = ''
     }
   } catch (error) {
-    captchaEnabled.value = false
+    captchaReady.value = false
     codeUrl.value = ''
     uuid.value = ''
   }
 }
 
 function handleForgot() {
-  ElMessage.info('请联系系统管理员重置密码')
+  mode.value = 'recovery'
 }
 
-function loadRememberedUsername() {
-  try {
-    const saved = localStorage.getItem(REMEMBER_KEY)
-    if (saved) {
-      loginForm.username = saved
-      rememberUsername.value = true
-    }
-  } catch (error) {
-    /* localStorage 不可用时忽略 */
+function loadRememberedCredential() {
+  let raw = ''
+  try { raw = localStorage.getItem(REMEMBER_KEY) || '' } catch { return }
+  if (!raw) {
+    try {
+      const legacy = localStorage.getItem(LEGACY_REMEMBER_KEY)
+      if (legacy) {
+        loginForm.username = legacy
+        rememberPassword.value = true
+      }
+    } catch { /* localStorage 不可用时忽略 */ }
+    return
   }
+  try {
+    const saved = JSON.parse(raw) || {}
+    loginForm.username = saved.username || ''
+    loginForm.password = saved.password || ''
+    rememberPassword.value = Boolean(saved.username || saved.password)
+  } catch { /* 结构损坏时按未记住处理 */ }
 }
 
-watch(rememberUsername, (val) => {
+watch(rememberPassword, (val) => {
+  if (val) return
   try {
-    if (val && loginForm.username) {
-      localStorage.setItem(REMEMBER_KEY, loginForm.username)
-    } else if (!val) {
-      localStorage.removeItem(REMEMBER_KEY)
-    }
+    localStorage.removeItem(REMEMBER_KEY)
+    localStorage.removeItem(LEGACY_REMEMBER_KEY)
   } catch (error) {
     /* localStorage 不可用时忽略 */
   }
@@ -199,73 +212,59 @@ watch(rememberUsername, (val) => {
 
 onMounted(() => {
   refreshCaptcha()
-  loadRememberedUsername()
+  loadRememberedCredential()
 })
 
 const handleLogin = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
+  if (!formRef.value || loading.value || !captchaReady.value) return
+  loading.value = true
+  try {
+    const valid = await formRef.value.validate().catch(() => false)
     if (!valid) return
     if (captchaEnabled.value && !loginForm.code) {
       ElMessage.warning('请输入验证码')
       return
     }
-    loading.value = true
-    try {
-      // 切换账号前全量清理旧会话（含另一账号域的令牌与动态路由）
-      userStore.resetSession()
-      pcUserStore.resetSession()
-      const result = await unifiedLogin({
-        username: loginForm.username,
-        password: loginForm.password,
-        code: loginForm.code,
-        uuid: uuid.value
-      })
-      const accountType = result?.accountType
-      if (isUserType(accountType)) {
-        // 01/02/03：App 凭证域令牌，进入 PC 用户门户
-        pcUserStore.setSession(result.session, accountType)
-        // 登录接口返回的 user 可能不含 authorCapability，补一次 /auth/me 确保能力字段就绪（否则“我的作品”菜单不显示）
-        try { await pcUserStore.fetchMe() } catch (e) { /* 网络瞬断忽略，刷新后由路由守卫重试 */ }
-        persistRememberedUsername()
-        ElMessage.success('登录成功')
-        await router.replace(safeRedirectPath(accountType))
-        return
-      }
-      if (accountType === '00') {
-        // 管理员：若依管理端令牌，维持原有动态路由初始化流程
-        userStore.adoptAdminToken(result.token)
-        await userStore.fetchUserInfo()
-        // 登录后先注册动态路由，再进入目标页，避免 /dashboard 未匹配
-        await permissionStore.generateRoutes({ force: true })
-        persistRememberedUsername()
-        ElMessage.success('登录成功')
-        const target = safeRedirectPath(accountType)
-        await router.replace(target)
-        if (router.currentRoute.value.path === '/404' || router.currentRoute.value.path === '/login') {
-          const first = permissionStore.sidebarRoutes?.[0]
-          const firstLeaf = first?.children?.[0]?.path || first?.path || '/'
-          await router.replace(firstLeaf)
-        }
-        return
-      }
-      throw new Error('登录返回的账号类型无法识别')
-    } catch (error) {
-      ElMessage.error(error?.message || '登录失败')
-      await refreshCaptcha()
-      loginForm.code = ''
-    } finally {
-      loading.value = false
+    // 清理旧管理员会话，再使用若依原生登录接口
+    userStore.resetSession()
+    const result = await login({
+      username: loginForm.username,
+      password: loginForm.password,
+      code: loginForm.code,
+      uuid: uuid.value
+    })
+    if (!result?.token) throw new Error('登录响应缺少令牌')
+    // 管理员：若依管理端令牌，维持原有动态路由初始化流程
+    userStore.adoptAdminToken(result.token)
+    await userStore.fetchUserInfo()
+    // 登录后先注册动态路由，再进入目标页，避免 /dashboard 未匹配
+    await permissionStore.generateRoutes({ force: true })
+    persistRememberedCredential()
+    ElMessage.success('登录成功')
+    const target = safeRedirectPath(route.query?.redirect)
+    await router.replace(target)
+    if (router.currentRoute.value.path === '/404' || router.currentRoute.value.path === '/login') {
+      const first = permissionStore.sidebarRoutes?.[0]
+      const firstLeaf = first?.children?.[0]?.path || first?.path || '/'
+      await router.replace(firstLeaf)
     }
-  })
+  } catch (error) {
+    userStore.resetSession()
+    ElMessage.error(error?.message || '登录失败')
+    await refreshCaptcha()
+    loginForm.code = ''
+  } finally {
+    loading.value = false
+  }
 }
 
-function persistRememberedUsername() {
+function persistRememberedCredential() {
   try {
-    if (rememberUsername.value) {
-      localStorage.setItem(REMEMBER_KEY, loginForm.username)
+    if (rememberPassword.value) {
+      localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username: loginForm.username, password: loginForm.password }))
     } else {
       localStorage.removeItem(REMEMBER_KEY)
+      localStorage.removeItem(LEGACY_REMEMBER_KEY)
     }
   } catch (error) {
     /* localStorage 不可用时忽略 */
@@ -294,6 +293,7 @@ function persistRememberedUsername() {
   display: none;
   width: 50%;
   overflow: hidden;
+  border-left: 1px solid #e5e5e5;
 }
 
 @media (min-width: 992px) {
@@ -477,36 +477,22 @@ function persistRememberedUsername() {
   transform: scale(0.99);
 }
 
-.login-footer {
-  margin-top: 40px;
-  text-align: center;
-  font-size: 12px;
-  color: #bfbfbf;
-  line-height: 1.5;
-}
-
 /* ==================== 右侧视觉面板 ==================== */
 .visual-bg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(80% 60% at 20% 10%, rgba(255, 255, 255, 0.14) 0%, transparent 60%),
-    radial-gradient(60% 50% at 85% 90%, rgba(255, 255, 255, 0.1) 0%, transparent 55%),
-    linear-gradient(150deg, #2b3038 0%, #1f2329 55%, #12151a 100%);
+  background: #ffffff;
 }
 
 .visual-img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.visual-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.08) 45%, rgba(0, 0, 0, 0.12) 100%);
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  width: 99.36%;
+  height: 69%;
+  max-width: 772.8px;
+  object-fit: contain;
 }
 
 .visual-caption {
@@ -514,7 +500,7 @@ function persistRememberedUsername() {
   left: 48px;
   right: 48px;
   bottom: 48px;
-  color: #ffffff;
+  color: #1f2329;
 }
 
 .visual-slogan {
@@ -522,23 +508,20 @@ function persistRememberedUsername() {
   font-weight: 600;
   letter-spacing: 2px;
   margin: 0 0 10px 0;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
 
 .visual-sub {
   font-size: 14px;
-  opacity: 0.82;
+  color: #737373;
   letter-spacing: 1px;
   margin: 0;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ==================== 入场动画 ==================== */
 @media (prefers-reduced-motion: no-preference) {
   .brand-row,
   .login-head,
-  .login-form,
-  .login-footer {
+  .login-form {
     animation: fade-up 0.5s ease both;
   }
 
@@ -548,10 +531,6 @@ function persistRememberedUsername() {
 
   .login-form {
     animation-delay: 0.16s;
-  }
-
-  .login-footer {
-    animation-delay: 0.24s;
   }
 
   .visual-caption {

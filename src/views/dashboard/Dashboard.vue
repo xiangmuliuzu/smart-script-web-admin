@@ -1,657 +1,893 @@
 <template>
-  <div class="dashboard-container">
-    <!-- 顶部统计卡片 -->
-    <el-row :gutter="20" class="stats-row">
-      <el-col :span="6" v-for="(stat, index) in statsData" :key="index">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-content">
-            <div class="stat-info">
-              <div class="stat-title">{{ stat.title }}</div>
-              <div class="stat-value">{{ stat.value }}</div>
-            </div>
-            <div class="stat-trend" :class="stat.trend > 0 ? 'trend-up' : 'trend-down'">
-              <span class="trend-icon">{{ stat.trend > 0 ? '↑' : '↓' }}</span>
-              <span class="trend-value">{{ Math.abs(stat.trend) }}%</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+  <div v-loading="loading" class="dashboard">
+    <header class="head">
+      <div>
+        <h1>数据总览</h1>
+        <p>平台经营核心指标</p>
+      </div>
+      <div class="head-actions">
+        <span v-if="updatedAt">{{ updatedAt }}</span>
+        <el-button :loading="loading" @click="refreshAll">刷新</el-button>
+      </div>
+    </header>
 
-    <!-- 快捷入口卡片 -->
-    <el-row :gutter="20" class="quick-access-row">
-      <el-col :span="6" v-for="(item, index) in quickAccessData" :key="index">
-        <el-card class="quick-card" shadow="hover" @click="handleQuickAccess(item.route)">
-          <div class="quick-content">
-            <el-icon :size="40" class="quick-icon">
-              <component :is="item.icon" />
-            </el-icon>
-            <div class="quick-title">{{ item.title }}</div>
-            <div class="quick-count">{{ item.count }}件{{ item.label }}</div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 核心指标 -->
+    <section class="kpi-row">
+      <article v-for="m in metrics" :key="m.key" class="kpi">
+        <div class="kpi-label">
+          <el-icon :size="16"><component :is="m.icon" /></el-icon>
+          <span>{{ m.label }}</span>
+        </div>
+        <div class="kpi-value">{{ m.value }}</div>
+        <div v-if="m.parts?.length" class="kpi-parts">
+          <span v-for="p in m.parts" :key="p.label">
+            <i :style="{ background: p.color }" />{{ p.label }} {{ p.value }}
+          </span>
+        </div>
+        <p v-else class="kpi-desc">{{ m.desc }}</p>
+      </article>
+    </section>
 
-    <!-- 图表区域 -->
-    <el-row :gutter="20" class="charts-row">
-      <!-- 交易趋势 -->
-      <el-col :span="14">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="chart-header">
-              <span class="chart-title">交易趋势</span>
-              <el-radio-group v-model="trendPeriod" size="small" @change="fetchTrend">
-                <el-radio-button label="week">周</el-radio-button>
-                <el-radio-button label="month">月</el-radio-button>
-                <el-radio-button label="year">年</el-radio-button>
-              </el-radio-group>
-            </div>
-          </template>
-          <div class="trend-chart">
-            <div class="trend-axis">
-              <span v-for="item in trendData" :key="item.label">{{ item.label }}</span>
-            </div>
-            <div class="trend-bars">
-              <div v-for="item in trendData" :key="item.label" class="trend-column">
-                <div class="trend-bar" :style="{ height: `${item.value}%` }">
-                  <span>{{ item.amount }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="chart-caption">
-              <el-icon><TrendCharts /></el-icon>
-              <span>交易额趋势 · {{ trendPeriod === 'week' ? '近 7 日' : trendPeriod === 'month' ? '近 30 日' : '年度' }}</span>
-            </div>
+    <!-- 运营关注 + 待办 -->
+    <section class="mid-row">
+      <div class="card">
+        <div class="card-head">
+          <h2>运营关注</h2>
+          <span>较上期</span>
+        </div>
+        <div class="focus-grid">
+          <div v-for="item in focusStats" :key="item.title" class="focus-item">
+            <span class="focus-label">{{ item.title }}</span>
+            <strong>{{ item.value }}</strong>
+            <em :class="trendClass(item.trend)">{{ formatTrend(item.trend) }}</em>
           </div>
-        </el-card>
-      </el-col>
+        </div>
+      </div>
 
-      <!-- 作品状态分布 -->
-      <el-col :span="10">
-        <el-card class="chart-card">
-          <template #header>
-            <span class="chart-title">作品状态分布</span>
-          </template>
-          <div class="status-chart">
-            <div class="status-item" v-for="item in statusData" :key="item.name">
-              <div class="status-bar">
-                <div class="status-label">{{ item.name }}</div>
-                <div class="status-progress">
-                  <div 
-                    class="status-fill" 
-                    :style="{ width: item.percent + '%', backgroundColor: item.color }"
-                  ></div>
-                </div>
-                <div class="status-value">{{ item.value }}</div>
-              </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>待办入口</h2>
+          <span>审核队列</span>
+        </div>
+        <div class="todo-grid">
+          <button
+            v-for="item in quickItems"
+            :key="item.route"
+            type="button"
+            class="todo-item"
+            @click="goQuick(item.route)"
+          >
+            <div>
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.label || '待审核' }}</span>
             </div>
+            <b :class="{ hot: Number(item.count) > 0 }">{{ item.count }}</b>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图表 -->
+    <section class="chart-row">
+      <div class="card trend-card">
+        <div class="card-head">
+          <div>
+            <h2>成交趋势</h2>
+            <p>已完成订单 · 单位万元</p>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <el-radio-group v-model="trendPeriod" size="small" @change="fetchTrend">
+            <el-radio-button value="week">7日</el-radio-button>
+            <el-radio-button value="month">30日</el-radio-button>
+            <el-radio-button value="year">12月</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="trend-stats">
+          <div><span>合计</span><strong>{{ trendSum }}</strong></div>
+          <div><span>均值</span><strong>{{ trendAvg }}</strong></div>
+          <div><span>峰值</span><strong>{{ trendMax }}</strong></div>
+        </div>
+        <div ref="trendChartRef" class="chart h320" />
+      </div>
 
-    <!-- 最近审核列表 -->
-    <el-row class="recent-row">
-      <el-col :span="24">
-        <el-card class="recent-card">
-          <template #header>
-            <div class="recent-header">
-              <span class="chart-title">最近审核</span>
-              <el-link type="primary" :underline="false" @click="handleViewAll">查看全部</el-link>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>作品状态</h2>
+            <p>在库结构分布</p>
+          </div>
+        </div>
+        <div ref="statusChartRef" class="chart h240" />
+        <ul class="legend">
+          <li v-for="item in statusDist" :key="item.name">
+            <i :style="{ background: item.color }" />
+            <span>{{ item.name }}</span>
+            <b>{{ item.value }}</b>
+            <em>{{ item.percent }}%</em>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="bottom-row">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>用户与作品</h2>
+            <p>构成对比</p>
+          </div>
+        </div>
+        <div ref="mixChartRef" class="chart h280" />
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>最近审核</h2>
+            <p>最新提审</p>
+          </div>
+          <el-button link type="primary" @click="goQuick('/copyright/ai-review/review')">工作台</el-button>
+        </div>
+        <div class="review-list">
+          <button
+            v-for="(row, idx) in recentReviews"
+            :key="idx"
+            type="button"
+            class="review-item"
+            @click="goQuick('/copyright/ai-review/review')"
+          >
+            <div>
+              <strong>{{ row.name || '未命名作品' }}</strong>
+              <span>{{ row.author || '—' }} · {{ row.submitTime || '—' }}</span>
             </div>
-          </template>
-          <el-table :data="recentReviews" style="width: 100%">
-            <el-table-column prop="name" label="作品名称" min-width="200" />
-            <el-table-column prop="author" label="作者" width="120" />
-            <el-table-column prop="submitTime" label="提交时间" width="180" />
-            <el-table-column label="状态" width="120">
-              <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
-                  {{ row.status }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
-              <template #default="{ row }">
-                <el-button 
-                  v-if="row.status === '待审核'" 
-                  type="primary" 
-                  size="small" 
-                  link
-                  @click="handleReview(row)"
-                >
-                  审核
-                </el-button>
-                <el-button type="primary" size="small" link @click="handleDetail(row)">
-                  详情
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-col>
-    </el-row>
+            <el-tag size="small" :type="reviewTagType(row.status)" effect="plain">
+              {{ reviewStatusText(row.status) }}
+            </el-tag>
+          </button>
+          <el-empty v-if="!recentReviews.length" description="暂无审核记录" :image-size="56" />
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  Document, 
-  DocumentCopy, 
-  User, 
-  WarningFilled,
-  TrendCharts
-} from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
+import { Document, Money, Notebook, Sell, User, Wallet } from '@element-plus/icons-vue'
 import adminFetch from '@/utils/adminFetch'
 
-const router = useRouter()
+defineOptions({ name: 'Dashboard' })
+
 const DASHBOARD_PREFIX = '/api/v1/admin/dashboard'
+const router = useRouter()
 
-// 统计数据（真实接口）
-const statsData = ref([])
-
-// 快捷入口数据（真实接口）
-const quickAccessData = ref([])
-
-// 图标映射：后端只返回路由，图标由前端匹配
-const ICON_MAP = {
-  '/copyright/ai-review/review': Document,
-  '/trade/orders': DocumentCopy,
-  '/user': User,
-  '/risk': WarningFilled
+const C = {
+  blue: '#3b82f6',
+  teal: '#14b8a6',
+  orange: '#f59e0b',
+  slate: '#64748b',
+  sky: '#0ea5e9',
+  amber: '#d97706',
+  green: '#22c55e',
+  red: '#ef4444'
 }
 
-// 图表周期
-const trendPeriod = ref('week')
-
-const trendData = ref([])
-
-// 作品状态分布数据（真实接口）
-const statusData = ref([])
-
-// 状态中文映射
-const STATUS_TEXT = {
-  pending: '待审核',
-  approved: '已通过',
-  on_shelf: '已上架',
-  off_shelf: '已下架',
-  draft: '草稿'
+const STATUS_COLORS = {
+  待审核: C.orange,
+  已通过: C.green,
+  已上架: C.blue,
+  已下架: C.slate,
+  草稿: '#94a3b8'
 }
 
-// 最近审核数据（真实接口）
+const AUDIT_QUICK_DEFAULTS = [
+  { title: '作品审核', label: '待审核', route: '/copyright/ai-review/review', count: 0 },
+  { title: '印章审核', label: '待审核', route: '/copyright/seals', count: 0 },
+  { title: '提现审核', label: '待审核', route: '/copyright/withdraw-review', count: 0 },
+  { title: '实名审核', label: '待审核', route: '/appuser/realname', count: 0 },
+  { title: '创作者审核', label: '待审核', route: '/appuser/creator-apply', count: 0 }
+]
+
+const loading = ref(false)
+const updatedAt = ref('')
+const focusStats = ref([])
+const quickItems = ref(AUDIT_QUICK_DEFAULTS.map((item) => ({ ...item })))
+const statusDist = ref([])
+const barChart = ref([])
+const overviewBiz = ref({})
 const recentReviews = ref([])
+const trendPeriod = ref('week')
+const trendRows = ref([])
 
-const fetchOverview = async () => {
-  try {
-    const res = await adminFetch(`${DASHBOARD_PREFIX}/overview`)
-    const data = await res.json()
-    if (data.code === 200 && data.data) {
-      statsData.value = data.data.stats || []
-      quickAccessData.value = (data.data.quick || []).map(item => ({
-        ...item,
-        icon: ICON_MAP[item.route] || Document
-      }))
-      statusData.value = data.data.statusDist || []
+const trendChartRef = ref(null)
+const statusChartRef = ref(null)
+const mixChartRef = ref(null)
+let trendChart
+let statusChart
+let mixChart
+
+const fmtAmount = (yuan) => {
+  const n = Number(yuan) || 0
+  const wan = n / 10000
+  if (wan >= 1) return wan % 1 === 0 ? `${wan}万` : `${wan.toFixed(1)}万`
+  return `${Math.round(n)}`
+}
+
+const metrics = computed(() => {
+  const d = overviewBiz.value
+  const users = d.users || {}
+  const works = d.works || {}
+  const orders = d.orders || {}
+  const contracts = d.contracts || {}
+  const trade = d.trade || {}
+  return [
+    {
+      key: 'users',
+      label: '用户',
+      value: users.total ?? 0,
+      icon: User,
+      parts: [{ label: '创作者', value: users.creators ?? 0, color: C.teal }]
+    },
+    {
+      key: 'works',
+      label: '作品',
+      value: works.total ?? 0,
+      icon: Document,
+      parts: [
+        { label: '上架', value: works.onShelf ?? 0, color: C.blue },
+        { label: '下架', value: works.offShelf ?? 0, color: C.slate },
+        { label: '审核', value: works.reviewing ?? 0, color: C.orange }
+      ]
+    },
+    {
+      key: 'orders',
+      label: '订单',
+      value: orders.total ?? 0,
+      icon: Sell,
+      parts: [
+        { label: '完成', value: orders.completed ?? 0, color: C.green },
+        { label: '未完成', value: orders.unfinished ?? 0, color: C.red }
+      ]
+    },
+    {
+      key: 'contracts',
+      label: '合同',
+      value: contracts.total ?? 0,
+      icon: Notebook,
+      desc: '累计签署'
+    },
+    {
+      key: 'trade',
+      label: '交易额',
+      value: fmtAmount(trade.totalAmount ?? 0),
+      icon: Money,
+      parts: [{ label: '已成交', value: fmtAmount(trade.completedAmount ?? 0), color: C.sky }]
+    },
+    {
+      key: 'fee',
+      label: '平台收成',
+      value: fmtAmount(trade.platformFee ?? 0),
+      icon: Wallet,
+      desc: '订单分成合计'
     }
+  ]
+})
+
+const trendValues = computed(() => trendRows.value.map((r) => Number(r.value) || 0))
+const trendSum = computed(() => Number(trendValues.value.reduce((a, b) => a + b, 0).toFixed(1)))
+const trendAvg = computed(() => {
+  if (!trendValues.value.length) return 0
+  return Number((trendSum.value / trendValues.value.length).toFixed(1))
+})
+const trendMax = computed(() => {
+  if (!trendValues.value.length) return 0
+  return Number(Math.max(...trendValues.value).toFixed(1))
+})
+
+function formatTrend(trend) {
+  const n = Number(trend) || 0
+  if (n === 0) return '持平'
+  return `${n > 0 ? '+' : ''}${n}%`
+}
+
+function trendClass(trend) {
+  const n = Number(trend) || 0
+  if (n > 0) return 'up'
+  if (n < 0) return 'down'
+  return 'flat'
+}
+
+function reviewStatusText(status) {
+  const map = {
+    pending: '待审核',
+    ai_reviewing: 'AI审核中',
+    manual_review: '待复核',
+    approved: '已通过',
+    rejected: '已驳回',
+    on_shelf: '已上架',
+    off_shelf: '已下架'
+  }
+  return map[status] || status || '—'
+}
+
+function reviewTagType(status) {
+  if (status === 'approved' || status === 'on_shelf') return 'success'
+  if (status === 'rejected') return 'danger'
+  if (status === 'pending' || status === 'manual_review') return 'warning'
+  return 'info'
+}
+
+function goQuick(route) {
+  if (!route) return
+  router.push(route).catch(() => {})
+}
+
+function ensureChart(el, existing) {
+  if (!el) return existing
+  return existing || echarts.init(el)
+}
+
+function renderTrendChart() {
+  trendChart = ensureChart(trendChartRef.value, trendChart)
+  if (!trendChart) return
+  const labels = trendRows.value.map((r) => r.label)
+  const values = trendValues.value
+  trendChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15,23,42,.9)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      valueFormatter: (v) => `${v} 万`
+    },
+    grid: { left: 42, right: 16, top: 20, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: labels,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#94a3b8', fontSize: 11, hideOverlap: true }
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#94a3b8', fontSize: 11 }
+    },
+    series: [{
+      type: 'line',
+      smooth: 0.3,
+      symbol: values.length <= 14 ? 'circle' : 'none',
+      symbolSize: 6,
+      lineStyle: { width: 2.5, color: C.sky },
+      itemStyle: { color: C.sky, borderColor: '#fff', borderWidth: 2 },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(14,165,233,.18)' },
+          { offset: 1, color: 'rgba(14,165,233,0)' }
+        ])
+      },
+      data: values
+    }]
+  }, true)
+}
+
+function renderStatusChart() {
+  statusChart = ensureChart(statusChartRef.value, statusChart)
+  if (!statusChart) return
+  const items = statusDist.value
+  const total = items.reduce((s, i) => s + Number(i.value || 0), 0)
+  statusChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    series: [{
+      type: 'pie',
+      radius: ['52%', '74%'],
+      center: ['50%', '48%'],
+      itemStyle: { borderColor: '#fff', borderWidth: 3, borderRadius: 4 },
+      label: { show: false },
+      data: items.map((i) => ({
+        name: i.name,
+        value: i.value,
+        itemStyle: { color: i.color }
+      }))
+    }],
+    graphic: total ? [
+      {
+        type: 'text',
+        left: 'center',
+        top: '42%',
+        style: { text: String(total), fill: '#0f172a', fontSize: 22, fontWeight: 700, textAlign: 'center' }
+      },
+      {
+        type: 'text',
+        left: 'center',
+        top: '54%',
+        style: { text: '合计', fill: '#94a3b8', fontSize: 12, textAlign: 'center' }
+      }
+    ] : []
+  }, true)
+}
+
+function renderMixChart() {
+  mixChart = ensureChart(mixChartRef.value, mixChart)
+  if (!mixChart) return
+  const items = barChart.value || []
+  const colors = [C.blue, C.teal, C.sky, C.slate, C.orange]
+  mixChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 48, right: 16, top: 24, bottom: 36 },
+    xAxis: {
+      type: 'category',
+      data: items.map((i) => i.name),
+      axisTick: { show: false },
+      axisLine: { show: false },
+      axisLabel: { color: '#64748b', fontSize: 12 }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#94a3b8' }
+    },
+    series: [{
+      type: 'bar',
+      barWidth: 26,
+      data: items.map((i, idx) => ({
+        value: i.value,
+        itemStyle: {
+          color: colors[idx % colors.length],
+          borderRadius: [8, 8, 0, 0]
+        }
+      })),
+      label: {
+        show: true,
+        position: 'top',
+        color: '#334155',
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }]
+  }, true)
+}
+
+async function fetchOverview() {
+  const res = await adminFetch(`${DASHBOARD_PREFIX}/overview`)
+  const data = await res.json()
+  if (data.code !== 200 || !data.data) throw new Error(data.msg || 'overview failed')
+  const d = data.data
+  focusStats.value = d.stats || []
+  // 五项审核入口始终展示；接口无数据时显示灰色 0
+  const countByRoute = new Map(
+    (d.quick || []).map((item) => [String(item?.route || ''), Number(item?.count) || 0])
+  )
+  quickItems.value = AUDIT_QUICK_DEFAULTS.map((item) => ({
+    ...item,
+    count: countByRoute.has(item.route) ? countByRoute.get(item.route) : 0
+  }))
+  statusDist.value = (d.statusDist || []).map((item) => ({
+    ...item,
+    color: STATUS_COLORS[item.name] || item.color
+  }))
+  barChart.value = d.barChart || []
+  overviewBiz.value = {
+    users: d.users || {},
+    works: d.works || {},
+    orders: d.orders || {},
+    contracts: d.contracts || {},
+    trade: d.trade || {}
+  }
+}
+
+async function fetchTrend() {
+  const res = await adminFetch(`${DASHBOARD_PREFIX}/trend?period=${trendPeriod.value}`)
+  const data = await res.json()
+  if (data.code !== 200) throw new Error(data.msg || 'trend failed')
+  trendRows.value = data.rows || []
+  await nextTick()
+  renderTrendChart()
+}
+
+async function fetchRecentReviews() {
+  const res = await adminFetch(`${DASHBOARD_PREFIX}/recent-reviews?limit=6`)
+  const data = await res.json()
+  if (data.code !== 200) throw new Error(data.msg || 'recent failed')
+  recentReviews.value = data.rows || []
+}
+
+async function refreshAll() {
+  loading.value = true
+  try {
+    await Promise.all([fetchOverview(), fetchTrend(), fetchRecentReviews()])
+    updatedAt.value = new Date().toLocaleString('zh-CN', { hour12: false })
+    await nextTick()
+    renderStatusChart()
+    renderMixChart()
+    renderTrendChart()
   } catch (e) {
+    console.error(e)
     ElMessage.error('获取数据总览失败')
+  } finally {
+    loading.value = false
   }
 }
 
-const fetchTrend = async () => {
-  try {
-    const res = await adminFetch(`${DASHBOARD_PREFIX}/trend?period=${trendPeriod.value}`)
-    const data = await res.json()
-    if (data.code === 200) {
-      const rows = data.rows || []
-      const max = Math.max(...rows.map(r => Number(r.value) || 0), 1)
-      trendData.value = rows.map(r => ({
-        label: r.label,
-        value: Math.round((Number(r.value) || 0) / max * 100),
-        amount: (Number(r.value) || 0) + '万'
-      }))
-    }
-  } catch (e) {
-    ElMessage.error('获取交易趋势失败')
-  }
-}
-
-const fetchRecent = async () => {
-  try {
-    const res = await adminFetch(`${DASHBOARD_PREFIX}/recent-reviews?limit=10`)
-    const data = await res.json()
-    if (data.code === 200) {
-      recentReviews.value = (data.rows || []).map(r => ({
-        name: r.name,
-        author: r.author,
-        submitTime: r.submitTime,
-        status: STATUS_TEXT[r.status] || r.status
-      }))
-    }
-  } catch (e) {
-    ElMessage.error('获取最近审核失败')
-  }
-}
-
-// 处理快捷入口点击
-const handleQuickAccess = (route) => {
-  router.push(route)
-}
-
-// 获取状态类型
-const getStatusType = (status) => {
-  const typeMap = {
-    '待审核': 'warning',
-    '已通过': 'success',
-    '已上架': 'info',
-    '已下架': 'info',
-    '草稿': 'danger'
-  }
-  return typeMap[status] || 'info'
-}
-
-// 处理审核
-const handleReview = (row) => {
-  router.push('/copyright/ai-review/review')
-}
-
-// 处理详情
-const handleDetail = (row) => {
-  router.push('/copyright/ai-review/review')
-}
-
-// 查看全部
-const handleViewAll = () => {
-  router.push('/copyright/ai-review/review')
+function handleResize() {
+  trendChart?.resize()
+  statusChart?.resize()
+  mixChart?.resize()
 }
 
 onMounted(() => {
-  fetchOverview()
-  fetchTrend()
-  fetchRecent()
+  refreshAll()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  trendChart?.dispose()
+  statusChart?.dispose()
+  mixChart?.dispose()
+  trendChart = statusChart = mixChart = null
 })
 </script>
 
 <style scoped>
-.dashboard-container {
-  padding: 20px;
-  background-color: #f7f8fa;
+.dashboard {
+  min-height: 100%;
+  padding: 22px 24px 32px;
+  background: #f7f8fa;
 }
 
-/* 统计卡片 */
-.stats-row {
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  background: #ffffff;
-  transition: all 0.3s;
-}
-
-.stat-card:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.stat-card :deep(.el-card__body) {
-  padding: 24px;
-}
-
-.stat-content {
+.head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
+  margin-bottom: 18px;
 }
 
-.stat-info {
-  flex: 1;
+.head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
-.stat-title {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 12px;
-  font-weight: 400;
+.head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #94a3b8;
 }
 
-.stat-value {
-  font-size: 32px;
-  font-weight: 600;
-  color: #1f2329;
-  letter-spacing: -0.5px;
-}
-
-.stat-trend {
+.head-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-
-.trend-up {
-  color: #52c41a;
-  background-color: transparent;
-}
-
-.trend-down {
-  color: #ff4d4f;
-  background-color: transparent;
-}
-
-.trend-icon {
+  gap: 12px;
+  color: #94a3b8;
   font-size: 12px;
-  font-weight: bold;
 }
 
-/* 快捷入口 */
-.quick-access-row {
-  margin-bottom: 20px;
-}
-
-.quick-card {
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid #e4e7ed;
-  background: #ffffff;
-}
-
-.quick-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-color: #d9d9d9;
-}
-
-.quick-card :deep(.el-card__body) {
-  padding: 32px 20px;
-}
-
-.quick-content {
-  text-align: center;
-}
-
-.quick-icon {
-  color: #1f2329;
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 14px;
 }
 
-.quick-title {
-  font-size: 14px;
-  color: #1f2329;
-  font-weight: 500;
-  margin-bottom: 8px;
+.kpi {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  padding: 16px;
+  min-height: 126px;
 }
 
-.quick-count {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-/* 图表区域 */
-.charts-row {
-  margin-bottom: 20px;
-}
-
-.chart-card {
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  background: #ffffff;
-}
-
-.chart-card :deep(.el-card__header) {
-  padding: 18px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
-}
-
-.chart-card :deep(.el-card__body) {
-  padding: 24px;
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.chart-title {
-  font-size: 14px;
-  color: #1f2329;
-  font-weight: 600;
-}
-
-/* 交易趋势图 */
-.trend-chart {
-  height: 320px;
-  padding: 20px 12px 8px;
-  background: #fafafa;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-}
-
-.trend-bars {
-  display: flex;
-  flex: 1;
-  align-items: flex-end;
-  justify-content: space-around;
-  gap: 14px;
-  padding: 0 10px 12px;
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.trend-column {
-  display: flex;
-  flex: 1;
-  height: 100%;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.trend-bar {
-  position: relative;
-  width: min(44px, 70%);
-  min-height: 16px;
-  border-radius: 3px 3px 0 0;
-  background: #303133;
-  transition: height 0.25s ease;
-}
-
-.trend-bar span {
-  position: absolute;
-  top: -22px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #606266;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.trend-axis {
-  display: flex;
-  justify-content: space-around;
-  padding: 10px 8px 0;
-  color: #909399;
-  font-size: 11px;
-}
-
-.chart-caption {
+.kpi-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-top: 14px;
-  color: #8c8c8c;
-  font-size: 12px;
+  font-size: 13px;
+  color: #64748b;
 }
 
-/* 作品状态图表 */
-.status-chart {
-  padding: 20px 0;
+.kpi-value {
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 720;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+  line-height: 1.1;
 }
 
-.status-item {
-  margin-bottom: 24px;
-}
-
-.status-item:last-child {
-  margin-bottom: 0;
-}
-
-.status-bar {
+.kpi-parts {
+  margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kpi-parts span {
+  display: inline-flex;
   align-items: center;
-  gap: 16px;
-}
-
-.status-label {
-  width: 60px;
+  gap: 5px;
   font-size: 12px;
-  color: #595959;
-  text-align: right;
-  font-weight: 400;
+  color: #64748b;
 }
 
-.status-progress {
-  flex: 1;
-  height: 20px;
-  background-color: #f5f5f5;
-  border-radius: 2px;
+.kpi-parts i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.kpi-desc {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.mid-row,
+.chart-row,
+.bottom-row {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.mid-row {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.chart-row {
+  grid-template-columns: 1.55fr 1fr;
+}
+
+.bottom-row {
+  grid-template-columns: 1.15fr 1fr;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
   overflow: hidden;
 }
 
-.status-fill {
-  height: 100%;
-  transition: width 0.3s;
-  border-radius: 2px;
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px 0;
 }
 
-.status-value {
-  width: 70px;
-  font-size: 13px;
-  color: #1f2329;
-  font-weight: 600;
-  text-align: right;
+.card-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
-/* 最近审核 */
-.recent-card {
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  background: #ffffff;
+.card-head p,
+.card-head > span {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
-.recent-card :deep(.el-card__header) {
-  padding: 18px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+.focus-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px 16px 16px;
 }
 
-.recent-card :deep(.el-card__body) {
-  padding: 0;
+.focus-item {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.recent-header {
+.focus-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.focus-item strong {
+  font-size: 24px;
+  color: #0f172a;
+  font-weight: 720;
+}
+
+.focus-item em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 650;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.focus-item em.up {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.focus-item em.down {
+  color: #b45309;
+  background: #ffedd5;
+}
+
+.focus-item em.flat {
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.todo-grid {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+.todo-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, background .15s;
 }
 
-/* 表格样式优化 */
-.recent-card :deep(.el-table) {
-  font-size: 13px;
-  color: #262626;
+.todo-item:hover {
+  border-color: #e2e8f0;
+  background: #f8fafc;
 }
 
-.recent-card :deep(.el-table th) {
-  background-color: #fafafa;
-  color: #595959;
-  font-weight: 500;
+.todo-item strong {
+  display: block;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.todo-item span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.todo-item b {
+  font-size: 22px;
+  color: #94a3b8;
+  font-weight: 720;
+}
+
+.todo-item b.hot {
+  color: #ef4444;
+}
+
+.trend-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px 18px 0;
+}
+
+.trend-stats > div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.trend-stats span {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.trend-stats strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.chart {
+  width: 100%;
+}
+
+.h320 { height: 320px; }
+.h280 { height: 280px; }
+.h240 { height: 240px; }
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0 18px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.legend li {
+  display: grid;
+  grid-template-columns: 8px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
   font-size: 12px;
 }
 
-.recent-card :deep(.el-table td) {
-  padding: 14px 0;
-  border-bottom: 1px solid #f5f5f5;
+.legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
-.recent-card :deep(.el-table tr:hover > td) {
-  background-color: #fafafa !important;
+.legend span { color: #475569; }
+.legend b { color: #0f172a; }
+.legend em {
+  font-style: normal;
+  color: #94a3b8;
+  min-width: 40px;
+  text-align: right;
 }
 
-.recent-card :deep(.el-button) {
-  padding: 0;
-  height: auto;
-  font-size: 12px;
+.review-list {
+  padding: 10px 12px 14px;
+  display: grid;
+  gap: 4px;
 }
 
-.recent-card :deep(.el-button.is-link) {
-  color: #1f2329;
-}
-
-.recent-card :deep(.el-button.is-link:hover) {
-  color: #000000;
-}
-
-.recent-card :deep(.el-tag) {
-  border: none;
-  font-size: 11px;
-  padding: 4px 10px;
-}
-
-.recent-card :deep(.el-tag.el-tag--warning) {
-  background-color: #fff7e6;
-  color: #d48806;
-}
-
-.recent-card :deep(.el-tag.el-tag--success) {
-  background-color: #f6ffed;
-  color: #389e0d;
-}
-
-.recent-card :deep(.el-tag:not(.el-tag--warning):not(.el-tag--success):not(.el-tag--danger)) {
-  background-color: #fafafa;
-  color: #595959;
-}
-
-/* Radio 按钮组样式 */
-.chart-card :deep(.el-radio-button__inner) {
+.review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 10px;
   background: transparent;
-  border-color: #d9d9d9;
-  color: #595959;
+  cursor: pointer;
+  text-align: left;
+}
+
+.review-item:hover {
+  background: #f8fafc;
+}
+
+.review-item strong {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.review-item span {
+  display: block;
+  margin-top: 3px;
   font-size: 12px;
-  padding: 6px 12px;
+  color: #94a3b8;
 }
 
-.chart-card :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background-color: #1f2329;
-  border-color: #1f2329;
-  color: #ffffff;
-  box-shadow: none;
+@media (max-width: 1200px) {
+  .kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mid-row,
+  .chart-row,
+  .bottom-row { grid-template-columns: 1fr; }
 }
 
-.chart-card :deep(.el-radio-button:first-child .el-radio-button__inner) {
-  border-radius: 4px 0 0 4px;
-}
-
-.chart-card :deep(.el-radio-button:last-child .el-radio-button__inner) {
-  border-radius: 0 4px 4px 0;
-}
-
-/* 链接样式 */
-.recent-card :deep(.el-link) {
-  font-size: 12px;
-  color: #595959;
-}
-
-.recent-card :deep(.el-link:hover) {
-  color: #1f2329;
+@media (max-width: 720px) {
+  .dashboard { padding: 14px; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .focus-grid { grid-template-columns: 1fr; }
 }
 </style>

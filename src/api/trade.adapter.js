@@ -13,17 +13,7 @@
  * - 金额：后端为 BigDecimal（单位「元」），页面展示值统一格式化为 ¥ + 千分位两位小数。
  * - 幂等：所有映射使用 `页面字段 ?? 后端字段` 兜底，重复适配或字段已对齐时不会破坏数据。
  */
-import { enumLabel } from '@/constants/tradeEnum'
-
-/** 题材 ID → 名称（与 Demand.vue 发布表单内置题材选项保持一致；接口未返回题材名时兜底） */
-const GENRE_MAP = {
-  1: '都市情感',
-  2: '古装武侠',
-  3: '悬疑推理',
-  4: '科幻奇幻',
-  5: '家庭伦理',
-  99: '其他'
-}
+import { enumLabel, normalizeDemandTaskType } from '@/constants/tradeEnum'
 
 /** 金额格式化：后端 BigDecimal（元）→「¥50,000.00」 */
 function formatMoney(val) {
@@ -42,12 +32,6 @@ function mapRows(res, fn) {
   if (Array.isArray(res)) return res.map(fn)
   if (Array.isArray(res.rows)) return { ...res, rows: res.rows.map(fn) }
   return res
-}
-
-/* ==================== 交易作品（2.25）==================== */
-/** SysWork 字段与 TradeWorks.vue 已对齐（workId/title/authorName/tradeType/price/...），此处仅规范化透传 */
-export function adaptTradeWorks(res) {
-  return mapRows(res, (w) => ({ ...w }))
 }
 
 /* ==================== 授权订单（2.28 / 2.29）==================== */
@@ -71,11 +55,6 @@ function adaptStatusItem(log) {
     operator: log.operator || log.operatorName || log.operatorRole || '',
     remark: log.remark || ''
   }
-}
-
-/** 订单状态流转日志（独立端点 GET /trade/orders/{id}/status-log）→ { rows, total } */
-export function adaptOrderStatusLog(res) {
-  return mapRows(res, adaptStatusItem)
 }
 
 /**
@@ -102,54 +81,6 @@ export function adaptOrderDetail(detail, statusRows) {
       : { nickname: detail.sellerName ?? detail.creator ?? '' },
     statusHistory: history.map(adaptStatusItem)
   }
-}
-
-/* ==================== 合作方（2.35）==================== */
-/** SysPartner 字段与 Partners.vue 已对齐（partnerNo/partnerName/partnerType/contactPerson/...），规范化透传 */
-export function adaptPartners(res) {
-  return mapRows(res, (p) => ({ ...p }))
-}
-
-/* ==================== 商务跟进（2.38）==================== */
-/** SysBusinessFollow → FollowUp.vue：followTime→followUpAt, followType→method, nextFollowDate→nextFollowUpAt, followId→followUpId */
-export function adaptFollowUps(res) {
-  return mapRows(res, (f) => ({
-    ...f,
-    followUpId: f.followUpId ?? f.followId,
-    followUpAt: f.followUpAt ?? f.followTime,
-    method: f.method ?? f.followType,
-    nextFollowUpAt: f.nextFollowUpAt ?? f.nextFollowDate
-  }))
-}
-
-/**
- * FollowUp.vue 表单 → 新增商务跟进请求体（请求方向反向映射，修复 BIZ_FOLLOW_001）。
- * 页面字段 method/followUpAt/nextFollowUpAt 与后端 domain 的 followType/followTime/nextFollowDate 不一致，
- * 而 sys_business_follow.follow_type/follow_time 均 NOT NULL，直接透传会因字段名不匹配落 null 触发 SQL 异常。
- * 日期已由 el-date-picker 的 value-format 输出为 'YYYY-MM-DD HH:mm:ss'，与后端 @JsonFormat 一致，无需再转换。
- */
-export function toFollowPayload(form = {}) {
-  return {
-    ...form,
-    followType: form.followType ?? form.method,
-    followTime: form.followTime ?? form.followUpAt,
-    nextFollowDate: form.nextFollowDate ?? form.nextFollowUpAt
-  }
-}
-
-/* ==================== 合作记录（分工 15 线上合作意向 / 16 线下谈判）==================== */
-/**
- * SysOfflineCooperation → FollowUp.vue 合作记录只读视图。
- * 后端返回扁平原始字段（source/status/expectedAmount/nextFollowAt/negotiationPlace/contactPerson/contactValue/workTitle/partnerName），
- * 此处仅补中文 label 与金额文本，其余透传。
- */
-export function adaptCooperations(res) {
-  return mapRows(res, (c) => ({
-    ...c,
-    sourceLabel: c.sourceLabel || enumLabel('cooperationSource', c.source),
-    statusLabel: c.statusLabel || enumLabel('cooperationStatus', c.status),
-    expectedAmountText: c.expectedAmountText || formatMoney(c.expectedAmount)
-  }))
 }
 
 /* ==================== 询盘（缺口接口）==================== */
@@ -181,13 +112,15 @@ export function adaptQuotes(res) {
 }
 
 /* ==================== 征集项目（缺口接口）==================== */
-/** SysDemand → Demand.vue：clientName→client, genreId→genre, budget→budgetText */
+/** SysDemand → Demand.vue：clientName→client, tags→tags, budget→budgetText
+    托管/押金列已随后端退役（新单恒为 none），不再产出展示字段 */
 export function adaptDemands(res) {
   return mapRows(res, (d) => ({
     ...d,
     client: d.client ?? d.clientName,
-    genre: d.genre ?? GENRE_MAP[d.genreId] ?? (d.genreId != null ? String(d.genreId) : ''),
-    budgetText: d.budgetText || formatMoney(d.budget)
+    tags: d.tags || '',
+    budgetText: d.budgetText || formatMoney(d.budget),
+    taskTypeLabel: d.taskTypeLabel || enumLabel('demandTaskType', normalizeDemandTaskType(d.taskType))
   }))
 }
 

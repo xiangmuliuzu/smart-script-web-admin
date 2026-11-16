@@ -1,50 +1,45 @@
 import MainLayout from '@/layout/MainLayout.vue'
 import Dashboard from '@/views/dashboard/Dashboard.vue'
 import ModuleScaffold from '@/views/common/ModuleScaffold.vue'
-import ShortDrama from '@/views/operation/ShortDrama.vue'
-import OperationOverview from '@/views/statistics/OperationOverview.vue'
-import DetailQuery from '@/views/statistics/DetailQuery.vue'
 import ReviewWorkbench from '@/views/copyright/ReviewWorkbench.vue'
 import AiReviewRules from '@/views/copyright/AiReviewRules.vue'
-import CopyrightCenter from '@/views/copyright/CopyrightCenter.vue'
 import CopyrightAssets from '@/views/copyright/CopyrightAssets.vue'
 import CopyrightSealReview from '@/views/copyright/SealReview.vue'
 import WithdrawReview from '@/views/copyright/WithdrawReview.vue'
 import ContractManage from '@/views/copyright/ContractManage.vue'
 import SettlementManage from '@/views/copyright/SettlementManage.vue'
-import FinanceAbnormal from '@/views/copyright/FinanceAbnormal.vue'
+import SettlementWithdrawManage from '@/views/copyright/SettlementWithdrawManage.vue'
+import IncomeManage from '@/views/copyright/IncomeManage.vue'
 import CopyrightCertManage from '@/views/copyright/CopyrightCertManage.vue'
-import SealManage from '@/views/copyright/SealManage.vue'
-import ContentCategory from '@/views/content/category/index.vue'
+import CopyrightApplicationManage from '@/views/copyright/CopyrightApplicationManage.vue'
+import CopyrightCenterConfig from '@/views/copyright/CopyrightCenterConfig.vue'
 import ContentTag from '@/views/content/tag/index.vue'
 import ContentWork from '@/views/content/work/index.vue'
 import ContentBookstore from '@/views/content/bookstore/index.vue'
 import ContentRanking from '@/views/content/ranking/index.vue'
-import ContentBanner from '@/views/content/banner/index.vue'
-import ContentWorkfile from '@/views/content/workfile/index.vue'
+import ContentPromotion from '@/views/content/promotion/index.vue'
 import ExternalDramaChannel from '@/views/content/external-drama/channel/index.vue'
 import ExternalDramaContent from '@/views/content/external-drama/drama/index.vue'
-import ExternalDramaBind from '@/views/content/external-drama/bind/index.vue'
-import ExternalDramaStatus from '@/views/content/external-drama/status/index.vue'
-import ExternalDramaStats from '@/views/content/external-drama/stats/index.vue'
-import TradeWorks from '@/views/trade/TradeWorks.vue'
 import AuthOrders from '@/views/trade/AuthOrders.vue'
-import Partners from '@/views/trade/Partners.vue'
 import Inquiry from '@/views/trade/Inquiry.vue'
 import Quote from '@/views/trade/Quote.vue'
-import DemandTags from '@/views/trade/DemandTags.vue'
-import FollowUp from '@/views/trade/FollowUp.vue'
 import Demand from '@/views/trade/Demand.vue'
+import DemandDetail from '@/views/trade/DemandDetail.vue'
 import AdConfig from '@/views/operation/AdConfig.vue'
-import UserProfileRec from '@/views/operation/UserProfileRec.vue'
 import UserManageProduct from '@/views/user/UserManage.vue'
 import UserRealName from '@/views/user/realname/index.vue'
-import UserMessage from '@/views/user/message/index.vue'
+import UserCreatorApply from '@/views/user/creator-apply/index.vue'
 import MessagesAnnouncements from '@/views/support/MessagesAnnouncements.vue'
 import ReceivedAnnouncements from '@/views/support/ReceivedAnnouncements.vue'
 import UserFeedback from '@/views/user/feedback/index.vue'
-import RiskManage from '@/views/risk/RiskManage.vue'
 import AiOperations from '@/views/system/AiOperations.vue'
+import SystemUser from '@/views/system/user/index.vue'
+import SystemRole from '@/views/system/role/index.vue'
+import SystemMenu from '@/views/system/menu/index.vue'
+import SystemDept from '@/views/system/dept/index.vue'
+import SystemPost from '@/views/system/post/index.vue'
+import SystemDict from '@/views/system/dict/index.vue'
+import SystemConfig from '@/views/system/config/index.vue'
 import WelfarePoints from '@/views/welfare/WelfarePoints.vue'
 import MonitorOperlog from '@/views/monitor/operlog/index.vue'
 import MonitorLogininfor from '@/views/monitor/logininfor/index.vue'
@@ -61,57 +56,50 @@ export const componentMap = {
 
   'dashboard/Dashboard': Dashboard,
   'common/ModuleScaffold': ModuleScaffold,
-  'operation/ShortDrama': ShortDrama,
-  'statistics/OperationOverview': OperationOverview,
-  'statistics/DetailQuery': DetailQuery,
   'copyright/ReviewWorkbench': ReviewWorkbench,
   'copyright/AiReviewRules': AiReviewRules,
-  'copyright/CopyrightCenter': CopyrightCenter,
-  // 兼容后台历史菜单标识，避免版权中心页面被误判为未知组件。
-  'copyright/center-config': CopyrightCenter,
   'copyright/CopyrightAssets': CopyrightAssets,
   'copyright/SealReview': CopyrightSealReview,
   'copyright/WithdrawReview': WithdrawReview,
   'copyright/ContractManage': ContractManage,
   'copyright/SettlementManage': SettlementManage,
-  'copyright/FinanceAbnormal': FinanceAbnormal,
+  'copyright/SettlementWithdrawManage': SettlementWithdrawManage,
+  'copyright/IncomeManage': IncomeManage,
+  // 兼容未跑菜单迁移的旧 component 标识
+  'copyright/FinanceAbnormal': IncomeManage,
   'copyright/CopyrightCertManage': CopyrightCertManage,
-  'copyright/SealManage': SealManage,
-  'content/category/index': ContentCategory,
+  'copyright/CopyrightApplicationManage': CopyrightApplicationManage,
+  'copyright/CopyrightCenterConfig': CopyrightCenterConfig,
   'content/tag/index': ContentTag,
   'content/work/index': ContentWork,
   'content/bookstore/index': ContentBookstore,
   'content/ranking/index': ContentRanking,
-  'content/banner/index': ContentBanner,
-  'content/workfile/index': ContentWorkfile,
+  'content/promotion/index': ContentPromotion,
   'content/external-drama/channel/index': ExternalDramaChannel,
   'content/external-drama/drama/index': ExternalDramaContent,
-  'content/external-drama/bind/index': ExternalDramaBind,
-  'content/external-drama/status/index': ExternalDramaStatus,
-  'content/external-drama/stats/index': ExternalDramaStats,
-  'trade/TradeWorks': TradeWorks,
   'trade/AuthOrders': AuthOrders,
-  'trade/Partners': Partners,
   'trade/Inquiry': Inquiry,
   'trade/Quote': Quote,
-  'trade/DemandTags': DemandTags,
-  'trade/FollowUp': FollowUp,
   'trade/Demand': Demand,
+  'trade/DemandDetail': DemandDetail,
   'operation/AdConfig': AdConfig,
-  'operation/UserProfileRec': UserProfileRec,
   'user/UserManage': UserManageProduct,
   'user/realname/index': UserRealName,
-  'user/message/index': UserMessage,
+  'user/creator-apply/index': UserCreatorApply,
+  'user/message/index': MessagesAnnouncements,
   'support/MessagesAnnouncements': MessagesAnnouncements,
   'support/ReceivedAnnouncements': ReceivedAnnouncements,
   'user/feedback/index': UserFeedback,
-  'risk/RiskManage': RiskManage,
   'system/AiOperations': AiOperations,
   'welfare/WelfarePoints': WelfarePoints,
 
-  // 系统管理下的用户/角色/菜单/岗位/字典/参数页面已不再需要（2026-10-09 菜单精简，
-  // 数据库菜单见 smartscript_full_init.sql 第 7 部分）：用户管理由用户中心覆盖，
-  // 其余为开发自管配置。页面与 api 文件已删除，此处不得再登记对应映射。
+  'system/user/index': SystemUser,
+  'system/role/index': SystemRole,
+  'system/menu/index': SystemMenu,
+  'system/dept/index': SystemDept,
+  'system/post/index': SystemPost,
+  'system/dict/index': SystemDict,
+  'system/config/index': SystemConfig,
 
   'monitor/operlog/index': MonitorOperlog,
   'monitor/logininfor/index': MonitorLogininfor,
