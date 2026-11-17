@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="询盘管理" description="买方对交易作品发起的询盘；在报价管理接受报价即直接生成授权订单并置已达成（订单后续交 D 接手）">
+    <PageHeader title="询盘管理" description="买方对交易作品发起的询盘；该询盘的全部报价记录在行内「报价记录」查看，接受报价即直接生成授权订单（订单后续交 D 接手）">
 
     </PageHeader>
 
@@ -62,9 +62,10 @@
         </template>
       </el-table-column>
       <el-table-column prop="expireAt" label="询盘截止" width="150" />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="handleDetail(row)">详情</el-button>
+          <el-button size="small" @click="handleQuotes(row)">报价记录</el-button>
         </template>
       </el-table-column>
     </TableCard>
@@ -102,6 +103,43 @@
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 报价记录：原「报价管理」页并入本页，按询盘过滤，报价记录只读 -->
+    <el-dialog v-model="quotesVisible" :title="`报价记录 · ${quotesInquiry.inquiryNo || ''}`" width="960px">
+      <div class="quotes-head">
+        <span>{{ quotesInquiry.workTitle || '-' }}</span>
+        <span class="quotes-count">共 {{ quotesTotal }} 条报价</span>
+      </div>
+      <el-table v-loading="quotesLoading" :data="quotes" size="small" border max-height="420">
+        <el-table-column prop="quoteNo" label="报价编号" width="120" />
+        <el-table-column label="报价方" width="100">
+          <template #default="{ row }">
+            <StatusTag type="quoterRole" :status="row.quoterRole" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="quoterName" label="报价人" width="110" />
+        <el-table-column label="报价金额" width="110">
+          <template #default="{ row }">
+            <span class="price-text">{{ row.priceText }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="licenseTypeLabel" label="授权类型" width="110" />
+        <el-table-column prop="validDays" label="有效天数" width="90" />
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            <StatusTag type="quote" :status="row.status" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="expireAt" label="报价截止" width="150" />
+        <el-table-column prop="description" label="报价说明" min-width="160" show-overflow-tooltip />
+        <template #empty>
+          <span class="quotes-empty">该询盘暂无报价记录</span>
+        </template>
+      </el-table>
+      <template #footer>
+        <el-button @click="quotesVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </PageContainer>
 </template>
 
@@ -114,7 +152,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { enumOptions } from '@/constants/tradeEnum'
-import { getInquiryList, getInquiryDetail } from '@/api/trade'
+import { getInquiryList, getInquiryDetail, getQuoteList } from '@/api/trade'
 
 defineOptions({ name: 'Inquiry' })
 
@@ -130,6 +168,12 @@ const query = ref({ pageNo: 1, pageSize: 10, status: '', licenseType: '', keywor
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref({})
+
+const quotesVisible = ref(false)
+const quotesLoading = ref(false)
+const quotesInquiry = ref({})
+const quotes = ref([])
+const quotesTotal = ref(0)
 
 async function loadList() {
   loading.value = true
@@ -169,6 +213,24 @@ async function handleDetail(row) {
   }
 }
 
+// 报价按询盘取全量：单个询盘的报价条数是个位数级别，一次取回不分页
+async function handleQuotes(row) {
+  quotesVisible.value = true
+  quotesLoading.value = true
+  quotesInquiry.value = row
+  quotes.value = []
+  quotesTotal.value = 0
+  try {
+    const res = await getQuoteList({ inquiryId: row.inquiryId, pageNo: 1, pageSize: 100 })
+    quotes.value = res.rows || []
+    quotesTotal.value = res.total || 0
+  } catch {
+    ElMessage.error('加载报价记录失败')
+  } finally {
+    quotesLoading.value = false
+  }
+}
+
 onMounted(loadList)
 </script>
 
@@ -179,5 +241,21 @@ onMounted(loadList)
 }
 .deal-tip {
   margin-bottom: 12px;
+}
+.quotes-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 13px;
+}
+.quotes-count {
+  color: #1f2329;
+  font-weight: 600;
+}
+.quotes-empty {
+  color: #909399;
+  font-size: 13px;
 }
 </style>
