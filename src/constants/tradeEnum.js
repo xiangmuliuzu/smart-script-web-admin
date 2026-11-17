@@ -18,6 +18,8 @@ export const ORDER_STATUS = [
   { value: 'quoted', label: '已报价', tagType: 'warning' },
   { value: 'confirmed', label: '已确认', tagType: 'primary' },
   { value: 'contract_pending', label: '待签约', tagType: 'warning' },
+  // 合同双签完成后订单进 paying（等买方付款），与用户端/企业端/APP 同口径
+  { value: 'paying', label: '付款中', tagType: 'warning' },
   { value: 'escrow_pending', label: '待托管', tagType: 'warning' },
   { value: 'delivering', label: '交割中', tagType: 'primary' },
   { value: 'completed', label: '已完成', tagType: 'success' },
