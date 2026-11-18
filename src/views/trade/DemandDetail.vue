@@ -63,6 +63,14 @@
         <el-table-column label="轮次" width="70">
           <template #default="{ row }">第 {{ row.stageOrder }} 轮</template>
         </el-table-column>
+        <el-table-column label="关联作品上架状态" min-width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.workId" :type="row.workShelfStatus === 'on_shelf' ? 'success' : 'info'" size="small">
+              {{ row.workShelfStatus === 'on_shelf' ? '已上架' : '未上架' }}
+            </el-tag>
+            <span v-else class="text-muted">无关联作品</span>
+          </template>
+        </el-table-column>
         <el-table-column label="验收集数" width="90">
           <template #default="{ row }">至第 {{ row.episodeTo }} 集</template>
         </el-table-column>
@@ -307,7 +315,7 @@
       </el-form>
       <div class="text-muted">
         {{ reviewApproved
-          ? '通过后本轮款项生成结算单（创作者确认后入可提现），并激活下一轮计时；无下一轮则整单完成。'
+          ? '通过后本轮款项生成结算单（创作者确认后入可提现），并激活下一轮计时；无下一轮则整单完成。该操作只验收任务交付，不会改变关联作品的书城上架状态。'
           : '驳回后本轮恢复计时并顺延审核耗时，等待创作者修改重交。' }}
       </div>
       <template #footer>
@@ -466,7 +474,7 @@ async function submitReview() {
       approved: reviewApproved.value,
       rejectReason: reviewApproved.value ? null : rejectReason.value.trim()
     })
-    ElMessage.success(reviewApproved.value ? '本轮已通过验收并放款' : '已驳回，本轮恢复计时等待重交')
+    ElMessage.success(reviewApproved.value ? '本轮任务交付已验收并放款，关联作品不会自动上架' : '已驳回，本轮恢复计时等待重交')
     reviewVisible.value = false
     loadAll()
   } catch {

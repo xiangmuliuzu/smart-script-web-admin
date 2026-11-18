@@ -2,8 +2,12 @@
   <div class="review-workbench-container">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h2 class="page-title">作品审核工作台</h2>
+      <h2 class="page-title">{{ reviewTarget === 'storyboard' ? '分镜审核工作台' : '作品审核工作台' }}</h2>
       <div class="header-actions">
+        <el-radio-group v-model="reviewTarget" size="default" @change="switchReviewTarget">
+          <el-radio-button label="work">作品审核</el-radio-button>
+          <el-radio-button label="storyboard">分镜审核</el-radio-button>
+        </el-radio-group>
         <el-button size="default" @click="handleExportReport">导出报告</el-button>
       </div>
     </div>
@@ -53,6 +57,7 @@
           <el-select v-model="filterForm.type" placeholder="全部类型" style="width: 140px">
             <el-option label="全部类型" value="" />
             <el-option label="剧本" value="script" />
+            <el-option label="分镜" value="storyboard" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -152,7 +157,7 @@
     <!-- 审核详情弹窗 -->
     <el-dialog
       v-model="reviewDialogVisible"
-      title="作品审核"
+      :title="reviewTarget === 'storyboard' ? '分镜审核' : '作品审核'"
       width="600px"
     >
       <el-descriptions :column="2" border>
@@ -247,6 +252,7 @@ const filterForm = ref({
   startDate: '',
   endDate: ''
 })
+const reviewTarget = ref('work')
 
 // 类型映射（sys_work.work_type 枚举）
 const getTypeText = (type) => {
@@ -255,7 +261,8 @@ const getTypeText = (type) => {
     novel: '小说',
     movie: '电影剧本',
     tv: '电视剧剧本',
-    short: '短剧剧本'
+    short: '短剧剧本',
+    storyboard: '分镜'
   }
   return typeMap[type] || type || '-'
 }
@@ -382,6 +389,11 @@ const getActionType = (action) => {
 
 // 处理搜索
 const handleSearch = () => {
+  loadWorks(buildQuery())
+}
+
+const switchReviewTarget = (target) => {
+  filterForm.value.type = target === 'storyboard' ? 'storyboard' : ''
   loadWorks(buildQuery())
 }
 
@@ -527,7 +539,7 @@ const handleExportLogs = async () => {
 }
 
 // 加载作品列表
-const loadWorks = async (query = {}) => {
+const loadWorks = async (query = buildQuery()) => {
   try {
     const params = new URLSearchParams(query).toString()
     const url = '/api/v1/admin/review/list?page=1&pageSize=100' + (params ? '&' + params : '')

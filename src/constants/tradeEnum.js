@@ -154,7 +154,7 @@ export const DEMAND_STAGE_STATUS = [
   { value: 'pending', label: '未开始', tagType: 'info' },
   { value: 'ai_reviewing', label: 'AI审核中', tagType: 'warning' },
   { value: 'submitted', label: '待人工验收', tagType: 'warning' },
-  { value: 'approved', label: '已通过', tagType: 'success' },
+  { value: 'approved', label: '任务验收通过', tagType: 'success' },
   { value: 'rejected', label: '已驳回', tagType: 'danger' }
 ]
 

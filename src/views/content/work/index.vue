@@ -204,24 +204,79 @@
         </el-dialog>
       </el-tab-pane>
 
+      <!-- ============ 分镜管理 ============ -->
+      <el-tab-pane label="分镜管理" name="storyboard">
+        <PageHeader title="分镜管理" description="独立管理作品分镜成果；分镜与章节目录同级，支持查看、筛选和审核状态追踪" />
+        <FilterBar @query="handleStoryboardQuery" @reset="handleStoryboardReset">
+          <el-form-item><el-input v-model="storyboardQuery.title" placeholder="分镜标题" clearable style="width: 180px" @keyup.enter="handleStoryboardQuery" /></el-form-item>
+          <el-form-item><el-input v-model="storyboardQuery.workTitle" placeholder="关联作品" clearable style="width: 180px" @keyup.enter="handleStoryboardQuery" /></el-form-item>
+          <el-form-item><el-input v-model="storyboardQuery.authorName" placeholder="作者昵称" clearable style="width: 160px" @keyup.enter="handleStoryboardQuery" /></el-form-item>
+          <el-form-item><el-select v-model="storyboardQuery.status" placeholder="全部状态" clearable style="width: 140px"><el-option label="草稿" value="draft" /><el-option label="审核中" value="reviewing" /><el-option label="已通过" value="approved" /><el-option label="已发布" value="published" /><el-option label="已驳回" value="rejected" /></el-select></el-form-item>
+        </FilterBar>
+        <TableCard v-model:page="storyboardQuery.pageNum" v-model:pageSize="storyboardQuery.pageSize" :data="storyboardList" :loading="storyboardLoading" :total="storyboardTotal" empty-text="暂无分镜数据" row-key="storyboardId" @page-change="loadStoryboardList" @size-change="loadStoryboardList">
+          <el-table-column prop="storyboardId" label="编号" width="90" />
+          <el-table-column prop="title" label="分镜标题" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="workTitle" label="关联作品" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="authorName" label="作者" width="130" />
+          <el-table-column prop="chapterTitle" label="关联章节" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="shotCount" label="镜头数" width="90" />
+          <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag size="small">{{ storyboardStatusText(row.status) }}</el-tag></template></el-table-column>
+          <el-table-column label="操作" width="100" fixed="right"><template #default="{ row }"><el-button size="small" @click="openStoryboard(row)">详情</el-button></template></el-table-column>
+        </TableCard>
+        <el-dialog v-model="storyboardDialog.visible" title="分镜详情" width="760px">
+          <el-descriptions v-loading="storyboardDialog.loading" :column="2" border>
+            <el-descriptions-item label="分镜标题" :span="2">{{ storyboardDetail.title || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="关联作品">{{ storyboardDetail.workTitle || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="关联章节">{{ storyboardDetail.chapterTitle || '作品级分镜' }}</el-descriptions-item>
+            <el-descriptions-item label="作者">{{ storyboardDetail.authorName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="镜头数">{{ storyboardDetail.shotCount ?? '—' }}</el-descriptions-item>
+            <el-descriptions-item label="审核状态"><el-tag size="small">{{ storyboardStatusText(storyboardDetail.status) }}</el-tag></el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ storyboardDetail.updateTime || storyboardDetail.updatedAt || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="分镜说明" :span="2">{{ storyboardDetail.description || '暂无分镜说明' }}</el-descriptions-item>
+          </el-descriptions>
+          <template #footer><el-button @click="storyboardDialog.visible = false">关闭</el-button></template>
+        </el-dialog>
+      </el-tab-pane>
     </el-tabs>
   </PageContainer>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import CoverThumb from './cover-thumb.vue'
-import { listWork, getWork, listWorkChapters, listTag, changeBookstoreStatus } from '@/api/content'
+import { listWork, getWork, listWorkChapters, listTag, changeBookstoreStatus, listStoryboard, getStoryboard } from '@/api/content'
 import { TRADE_TYPE, contentEnumLabel } from '@/constants/contentEnum'
 
 defineOptions({ name: 'ContentWork' })
 
 const activeTab = ref('all')
+
+const storyboardLoading = ref(false)
+const storyboardList = ref([])
+const storyboardTotal = ref(0)
+const storyboardQuery = reactive({ pageNum: 1, pageSize: 10, title: '', workTitle: '', authorName: '', status: '' })
+const storyboardDialog = reactive({ visible: false, loading: false, id: null })
+const storyboardDetail = reactive({})
+const STORYBOARD_STATUS_LABEL = { draft: '草稿', reviewing: '审核中', approved: '已通过', published: '已发布', rejected: '已驳回' }
+function storyboardStatusText(status) { return STORYBOARD_STATUS_LABEL[status] || status || '待整理' }
+function buildStoryboardQuery() { return { ...storyboardQuery, title: storyboardQuery.title || undefined, workTitle: storyboardQuery.workTitle || undefined, authorName: storyboardQuery.authorName || undefined, status: storyboardQuery.status || undefined } }
+async function loadStoryboardList() {
+  storyboardLoading.value = true
+  try { const res = await listStoryboard(buildStoryboardQuery()); storyboardList.value = res?.rows || []; storyboardTotal.value = Number(res?.total || 0) }
+  catch { storyboardList.value = []; storyboardTotal.value = 0 }
+  finally { storyboardLoading.value = false }
+}
+function handleStoryboardQuery() { storyboardQuery.pageNum = 1; loadStoryboardList() }
+function handleStoryboardReset() { Object.assign(storyboardQuery, { title: '', workTitle: '', authorName: '', status: '', pageNum: 1 }); loadStoryboardList() }
+async function openStoryboard(row) {
+  storyboardDialog.visible = true; storyboardDialog.loading = true; storyboardDialog.id = row.storyboardId; Object.keys(storyboardDetail).forEach((key) => delete storyboardDetail[key])
+  try { const res = await getStoryboard(row.storyboardId); Object.assign(storyboardDetail, res?.data || res || row) } catch { Object.assign(storyboardDetail, row) } finally { storyboardDialog.loading = false }
+}
 
 // ============ 全部作品 ============
 const allLoading = ref(false)
@@ -380,6 +435,10 @@ function onChapterPageChange(pageNum) {
 }
 
 // ============ 切换 Tab ============
+watch(activeTab, (tab) => {
+  if (tab === 'storyboard' && !storyboardLoading.value) loadStoryboardList()
+})
+
 onMounted(() => {
   loadAllList()
   loadTagOptions()

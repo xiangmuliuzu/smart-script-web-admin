@@ -66,6 +66,17 @@ export function listWorkChapters(workId, query) {
   })
 }
 
+// ---------------- 分镜管理（与作品管理同级） ----------------
+// 分镜独立于章节目录，后端接入后按作品、作者、状态和审核状态分页返回。
+export function listStoryboard(query) {
+  // 分镜表与管理接口尚在接入中；静默处理 404，由页面展示空状态，避免管理员进入页面先看到错误提示。
+  return adminV1Request({ url: `${ADMIN_PREFIX}/storyboard/list`, method: 'get', params: query, silent: true })
+}
+
+export function getStoryboard(storyboardId) {
+  return adminV1Request({ url: `${ADMIN_PREFIX}/storyboard/${storyboardId}`, method: 'get', silent: true })
+}
+
 // ---------------- 书城作品管理 ----------------
 
 /** 书城作品分页列表（title 模糊，recommendStatus/status 精确） */
