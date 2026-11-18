@@ -22,7 +22,6 @@ import ExternalDramaChannel from '@/views/content/external-drama/channel/index.v
 import ExternalDramaContent from '@/views/content/external-drama/drama/index.vue'
 import AuthOrders from '@/views/trade/AuthOrders.vue'
 import Inquiry from '@/views/trade/Inquiry.vue'
-import Quote from '@/views/trade/Quote.vue'
 import Demand from '@/views/trade/Demand.vue'
 import DemandDetail from '@/views/trade/DemandDetail.vue'
 import AdConfig from '@/views/operation/AdConfig.vue'
@@ -79,7 +78,6 @@ export const componentMap = {
   'content/external-drama/drama/index': ExternalDramaContent,
   'trade/AuthOrders': AuthOrders,
   'trade/Inquiry': Inquiry,
-  'trade/Quote': Quote,
   'trade/Demand': Demand,
   'trade/DemandDetail': DemandDetail,
   'operation/AdConfig': AdConfig,

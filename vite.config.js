@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import { remoteMediaFallback } from './vite.media-fallback'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -11,7 +12,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/',
-    plugins: [vue()],
+    plugins: [
+      vue(),
+      // 本机 uploadPath 缺的媒体从远端存储回源（仅 dev server 生效）
+      remoteMediaFallback({
+        apiPrefix,
+        remoteBase: env.VITE_REMOTE_MEDIA_BASE,
+        localDir: env.VITE_LOCAL_PROFILE_DIR
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src')

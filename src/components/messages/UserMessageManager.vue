@@ -50,7 +50,7 @@ import { formatRegisteredTime as formatTime } from '@/utils/dateFormat'
 const userStore = useUserStore()
 const canSend = computed(() => userStore.hasPermission('user:message:add'))
 const canSelectUsers = computed(() => userStore.hasPermission('user:app:list'))
-const types = [{ value: 'SYSTEM', label: '系统' }, { value: 'REVIEW', label: '审核' }, { value: 'TRANSACTION', label: '交易' }, { value: 'BENEFIT', label: '权益' }]
+const types = [{ value: 'SYSTEM', label: '系统' }, { value: 'FOLLOW', label: '关注' }, { value: 'TRANSACTION', label: '交易' }, { value: 'BENEFIT', label: '权益' }]
 const typeLabel = value => types.find(item => item.value === value)?.label || value || '—'
 const filters = reactive({ type: '', createdBy: '', dates: [] }), query = reactive({ pageNum: 1, pageSize: 10 })
 const rows = ref([]), total = ref(0), loading = ref(false), error = ref('')

@@ -91,24 +91,26 @@
           <StatusTag type="demand" :status="row.status" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" fixed="right">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleViewDetail(row)">查看详情</el-button>
-          <el-button size="small" @click="handleOpenOperation(row)">运营详情</el-button>
-          <el-button
-            v-if="isEditable(row)"
-            v-hasPermi="['trade:demand:edit']"
-            size="small"
-            @click="openEdit(row)"
-          >编辑</el-button>
-          <el-button
-            v-if="isEditable(row)"
-            v-hasPermi="['trade:demand:edit']"
-            size="small"
-            type="danger"
-            plain
-            @click="handleClose(row)"
-          >关闭</el-button>
+          <div class="op-actions">
+            <el-button size="small" @click="handleViewDetail(row)">查看详情</el-button>
+            <el-button size="small" @click="handleOpenOperation(row)">运营详情</el-button>
+            <el-button
+              v-if="isEditable(row)"
+              v-hasPermi="['trade:demand:edit']"
+              size="small"
+              @click="openEdit(row)"
+            >编辑</el-button>
+            <el-button
+              v-if="isEditable(row)"
+              v-hasPermi="['trade:demand:edit']"
+              size="small"
+              type="danger"
+              plain
+              @click="handleClose(row)"
+            >关闭</el-button>
+          </div>
         </template>
       </el-table-column>
     </TableCard>
@@ -740,6 +742,18 @@ onMounted(() => { loadList() })
 .price-text {
   color: #1f2329;
   font-weight: 600;
+}
+
+/* 操作列固定两列：4 个按钮排成 2×2，2 个按钮排成 1×2，不再出现 3+1 的错行 */
+.op-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.op-actions :deep(.el-button) {
+  width: 100%;
+  margin-left: 0;
 }
 
 .text-muted {

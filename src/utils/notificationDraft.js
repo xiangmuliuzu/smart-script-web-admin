@@ -7,7 +7,7 @@ export function notificationPayload(form) {
   return payload
 }
 export function notificationError(payload) {
-  if (!['SYSTEM', 'REVIEW', 'TRANSACTION', 'BENEFIT'].includes(payload.type)) return '请选择消息类型'
+  if (!['SYSTEM', 'TRANSACTION', 'BENEFIT'].includes(payload.type)) return '请选择消息类型'
   if (!payload.title || payload.title.length > 200) return '标题必填，最多200个字符'
   if (!payload.content || payload.content.length > 2000) return '正文必填，最多2000个字符'
   if (!payload.userIds.length || payload.userIds.length > 50) return '请选择1至50名收件人'

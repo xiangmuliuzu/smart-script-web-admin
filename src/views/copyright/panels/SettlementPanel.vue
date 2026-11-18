@@ -4,7 +4,6 @@
       <el-form-item>
         <el-select v-model="query.status" clearable placeholder="全部状态" style="width: 150px">
           <el-option label="待确认" value="pending" />
-          <el-option label="有异议" value="disputed" />
           <el-option label="已入账" value="confirmed" />
         </el-select>
       </el-form-item>
@@ -73,15 +72,6 @@
         <template #default="{ row }">
           <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
             <el-button type="primary" size="small" @click="openDetail(row)">查看明细</el-button>
-            <el-button
-              v-if="row.status === 'disputed'"
-              v-permission="'smartscript:copyright:settlement:handle'"
-              type="danger"
-              size="small"
-              @click="openHandle(row)"
-            >
-              处理异常
-            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -104,10 +94,6 @@
             </el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ detail.createdAt || '—' }}</el-descriptions-item>
             <el-descriptions-item label="确认时间">{{ detail.confirmTime || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="异议时间">{{ detail.disputeTime || '—' }}</el-descriptions-item>
-            <el-descriptions-item v-if="detail.disputeReason" label="异议/处理说明" :span="2">
-              <pre class="remark-block">{{ detail.disputeReason }}</pre>
-            </el-descriptions-item>
           </el-descriptions>
 
           <div style="margin-top: 24px;">
@@ -131,23 +117,6 @@
       </div>
     </el-drawer>
 
-    <el-dialog v-model="handleVisible" title="处理异常" width="520px">
-      <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-        处理后将回到「待确认」，作者需在 App 再次确认入账。请填写处理说明。
-      </el-alert>
-      <el-form label-width="100px">
-        <el-form-item label="作者异议">
-          <el-input v-model="disputeReason" type="textarea" :rows="3" disabled />
-        </el-form-item>
-        <el-form-item label="处理说明" required>
-          <el-input v-model="handleRemark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="请输入处理说明，将同步给作者" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="handleVisible = false">取消</el-button>
-        <el-button type="primary" :loading="handleLoading" @click="submitHandle">确认处理</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -156,7 +125,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { getSettlementList, getSettlementDetail, handleSettlementAbnormal } from '@/api/copyright'
+import { getSettlementList, getSettlementDetail } from '@/api/copyright'
 
 defineOptions({ name: 'SettlementPanel' })
 
@@ -176,12 +145,6 @@ const loadFailed = ref(false)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref(null)
-
-const handleVisible = ref(false)
-const handleLoading = ref(false)
-const disputeReason = ref('')
-const handleRemark = ref('')
-const currentSettleId = ref(null)
 
 const money = value => {
   const n = Number(value)
@@ -257,31 +220,6 @@ async function openDetail(row) {
     detailVisible.value = false
   } finally {
     detailLoading.value = false
-  }
-}
-
-function openHandle(row) {
-  currentSettleId.value = row.settleId || row.settlementId
-  disputeReason.value = row.disputeReason || row.abnormalReason || '作者提出异议'
-  handleRemark.value = ''
-  handleVisible.value = true
-}
-
-async function submitHandle() {
-  if (!handleRemark.value.trim()) {
-    ElMessage.warning('请输入处理说明')
-    return
-  }
-  handleLoading.value = true
-  try {
-    await handleSettlementAbnormal(currentSettleId.value, { remark: handleRemark.value.trim() })
-    ElMessage.success('已处理，结算单回到待确认，请作者在 App 再次确认入账')
-    handleVisible.value = false
-    loadRows()
-  } catch (error) {
-    ElMessage.error(error?.message || '处理失败')
-  } finally {
-    handleLoading.value = false
   }
 }
 
