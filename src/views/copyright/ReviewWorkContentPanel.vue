@@ -23,7 +23,7 @@
           <div class="chapter-title">
             {{ iss.chapterNo === 0 ? '作品简介' : '第' + iss.chapterNo + '章 ' + (iss.chapterTitle || '') }}
           </div>
-          <div class="chapter-body" v-html="renderBody(iss)"></div>
+          <div class="chapter-body" v-html="safeBody(iss)"></div>
           <div class="issue-reason">
             AI 驳回原因：
             <el-tag
@@ -91,6 +91,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   content: { type: Object, default: null },
@@ -163,6 +164,17 @@ function renderBody(iss) {
     html = html.split(ew).join('<span class="issue-word">' + ew + '</span>')
   }
   return html
+}
+
+// 章节正文掺有作品名/命中词等用户可控文本，v-html 渲染前先消毒
+// renderBody 已转义全部文本，只会额外注入命中词高亮用的 <span class="issue-word">，故白名单只需这一项
+const PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['span'],
+  ALLOWED_ATTR: ['class']
+}
+
+function safeBody(iss) {
+  return DOMPurify.sanitize(renderBody(iss), PURIFY_CONFIG)
 }
 </script>
 

@@ -91,6 +91,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import { listSessions } from '@/api/adminChat'
+import { isRealtimeConnected, onRealtime } from '@/utils/realtimeSocket'
 
 defineOptions({ name: 'ChatSessions' })
 const props = defineProps({ embedded: Boolean })
@@ -137,7 +138,7 @@ function formatTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 19) : '—'
 }
 
-let generation = 0, inFlight = false, timer
+let generation = 0, inFlight = false
 async function loadList(silent = false) {
   silent = silent === true
   if (silent && inFlight) return
@@ -182,8 +183,31 @@ function openDetail(row) {
 
 function poll() { if (!document.hidden) loadList(true) }
 defineExpose({ refresh: loadList })
-onMounted(() => { loadList(); timer = setInterval(poll, 5000); document.addEventListener('visibilitychange', poll) })
-onBeforeUnmount(() => { generation++; clearInterval(timer); document.removeEventListener('visibilitychange', poll) })
+
+// 与 ChatDetail.vue 同口径：长连接可用时轮询退居兜底并拉长到 60s，断开时恢复 5s 原频率。
+const POLL_ACTIVE_MS = 5000
+const POLL_IDLE_MS = 60000
+let timer = null, offRealtime = []
+function applyPollInterval() {
+  if (timer) clearInterval(timer)
+  timer = setInterval(poll, isRealtimeConnected() ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+}
+
+onMounted(() => {
+  loadList()
+  applyPollInterval()
+  document.addEventListener('visibilitychange', poll)
+  offRealtime = [
+    onRealtime('connected', applyPollInterval),
+    onRealtime('disconnected', applyPollInterval)
+  ]
+})
+onBeforeUnmount(() => {
+  generation++
+  clearInterval(timer)
+  offRealtime.forEach(off => off())
+  document.removeEventListener('visibilitychange', poll)
+})
 </script>
 
 <style scoped>

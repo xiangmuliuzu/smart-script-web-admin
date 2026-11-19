@@ -69,7 +69,7 @@
           <h2>{{ previewTitle }}</h2>
           <p>合同编号：{{ previewData?.contractNo }}</p>
         </div>
-        <div class="contract-body" v-html="previewContent"></div>
+        <div class="contract-body" v-html="safePreviewContent"></div>
       </div>
       <div v-else class="preview-loading">
         <el-icon class="is-loading"><Loading /></el-icon>
@@ -82,6 +82,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import DOMPurify from 'dompurify'
 import { Loading } from '@element-plus/icons-vue'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -104,6 +105,38 @@ const previewVisible = ref(false)
 const previewContent = ref('')
 const previewData = ref(null)
 const previewTitle = computed(() => previewData.value?.contractType === 'transfer' ? '版权转让合同' : '版权授权合同')
+// 合同 HTML 掺有当事人姓名/作品名等用户可控文本，v-html 前先消毒
+// 白名单按库里合同实体的取值：完整文档骨架（含排版用的 <style>）+ 正文标签 + 签章 img/src
+const CONTRACT_PURIFY_CONFIG = {
+  WHOLE_DOCUMENT: true,
+  ALLOWED_TAGS: [
+    'html',
+    'head',
+    'body',
+    'meta',
+    'title',
+    'style',
+    'h1',
+    'h2',
+    'h3',
+    'p',
+    'div',
+    'span',
+    'strong',
+    'em',
+    'b',
+    'i',
+    'br',
+    'ul',
+    'ol',
+    'li',
+    'img'
+  ],
+  ALLOWED_ATTR: ['class', 'src', 'alt', 'lang', 'charset']
+}
+const safePreviewContent = computed(() =>
+  DOMPurify.sanitize(previewContent.value, CONTRACT_PURIFY_CONFIG)
+)
 
 const statusType = (status) => {
   const map = { pending: 'warning', partial_signed: 'primary', completed: 'success', archived: 'info', cancelled: 'danger' }
@@ -155,7 +188,7 @@ const preview = async (row) => {
     previewContent.value = html
   } catch {
     ElMessage.error('预览加载失败')
-    previewContent.value = '<p style="color: red;">加载失败</p>'
+    previewContent.value = '<p>预览加载失败，请稍后重试</p>'
   }
 }
 
