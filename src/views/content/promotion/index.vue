@@ -512,7 +512,7 @@
               <span>点击上传轮播素材</span>
             </div>
           </el-upload>
-          <div class="banner-uploader__tip">支持 jpg/png，不超过 2MB，建议 16:9；留空则默认使用作品封面</div>
+          <div class="banner-uploader__tip">支持 jpg/png，不超过 5MB，建议 16:9（1920×1080）；留空则默认使用作品封面</div>
         </el-form-item>
         <el-form-item label="位次" required>
           <el-select v-model="grantForm.slotNo" placeholder="请选择位次" style="width: 100%">
@@ -1252,8 +1252,8 @@ function beforeBannerImageUpload(file) {
     ElMessage.error('只能上传图片文件')
     return false
   }
-  if (file.size / 1024 / 1024 > 2) {
-    ElMessage.error('图片大小不能超过 2MB')
+  if (file.size / 1024 / 1024 > 5) {
+    ElMessage.error('图片大小不能超过 5MB')
     return false
   }
   return true
