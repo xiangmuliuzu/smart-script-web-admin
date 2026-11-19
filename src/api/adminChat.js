@@ -39,6 +39,11 @@ export function sendMessage(sessionId, data) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/messages`, method: 'post', data })
 }
 
+/** 管理员撤回自己 2 分钟内发送的文字消息 */
+export function recallMessage(sessionId, messageId) {
+  return request({ url: `${PREFIX}/sessions/${sessionId}/messages/${messageId}/recall`, method: 'put' })
+}
+
 /** 管理员标记会话已读 */
 export function markSessionRead(sessionId, throughMessageId) {
   return request({ url: `${PREFIX}/sessions/${sessionId}/read`, method: 'put', params: { throughMessageId } })

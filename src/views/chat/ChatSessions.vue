@@ -68,7 +68,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="lastMessageTime" label="最后消息时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.lastMessageTime) }}</template>
+        <template #default="{ row }">{{ formatTime(row.lastMessageTime || row.createdAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
