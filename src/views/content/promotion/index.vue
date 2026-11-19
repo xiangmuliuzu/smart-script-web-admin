@@ -177,7 +177,6 @@
               <div class="state-cell">
                 <el-tag size="small" :type="slotStateMeta(row.state).type">{{ slotStateMeta(row.state).text }}</el-tag>
                 <span v-if="row.state === 'locked' && row.current" class="sub">{{ lockLabel(row.current) }}</span>
-                <span v-else-if="row.state === 'active' && row.current?.exclusive === 0" class="sub">可被覆盖</span>
               </div>
             </template>
           </el-table-column>
