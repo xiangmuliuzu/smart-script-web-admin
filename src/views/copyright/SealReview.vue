@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="印章审核" description="审核创作者已提交的印章及审核材料；操作变更均记录到审核日志。" />
+    <PageHeader title="印章审核" description="审核创作者已提交的印章及审核材料；管理端仅可审核与查看，启用/停用由创作者自行操作。" />
 
     <FilterBar @query="handleQuery" @reset="handleReset">
       <el-form-item>
@@ -56,16 +56,13 @@
         <template #default="{ row }">{{ row.reviewTime || '—' }}</template>
       </el-table-column>
       <el-table-column prop="createTime" label="申请时间" width="170" show-overflow-tooltip />
-      <el-table-column label="操作" width="340" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">
             <el-button link type="primary" @click="openDetail(row)">查看材料</el-button>
             <el-button link type="primary" @click="openLogs(row)">审核记录</el-button>
             <el-button v-if="row.reviewStatus === 'pending'" v-permission="'smartscript:copyright:seals:audit'" link type="primary" @click="openReview(row)">审核</el-button>
             <el-button v-if="row.reviewStatus === 'approved' && row.sealStatus === 'abnormal'" v-permission="'smartscript:copyright:seals:status'" link type="warning" @click="openResolveAbnormal(row)">处理异常</el-button>
-            <el-button v-if="row.reviewStatus === 'approved' && ['disabled', 'enabled'].includes(row.sealStatus)" v-permission="'smartscript:copyright:seals:status'" :type="row.sealStatus === 'enabled' ? 'danger' : 'success'" link :loading="statusChangingSealId === row.sealId" :disabled="statusChangingSealId !== null && statusChangingSealId !== row.sealId" @click="changeStatus(row)">
-              {{ row.sealStatus === 'enabled' ? '停用' : '启用' }}
-            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -151,7 +148,7 @@
     </el-dialog>
 
     <el-dialog v-model="resolveVisible" title="处理印章异常" width="500px" destroy-on-close>
-      <el-alert title="处理后印章将恢复为停用状态；如需重新启用，请单独执行启用操作。" type="warning" :closable="false" show-icon />
+      <el-alert title="处理后印章将恢复为停用状态；启用/停用由创作者在客户端自行操作，管理端仅负责审核与查看。" type="warning" :closable="false" show-icon />
       <el-form label-width="90px" style="margin-top: 18px">
         <el-form-item label="处理说明" required>
           <el-input v-model="resolveReason" type="textarea" :rows="4" maxlength="500" show-word-limit placeholder="填写异常原因及处理结果" />
@@ -214,13 +211,13 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import PageContainer from '@/components/PageContainer.vue'
 import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
-import { getCopyrightSealList, getCopyrightSealDetail, getCopyrightSealLogs, reviewCopyrightSeal, updateCopyrightSealStatus, resolveAbnormalCopyrightSeal } from '@/api/copyright'
+import { getCopyrightSealList, getCopyrightSealDetail, getCopyrightSealLogs, reviewCopyrightSeal, resolveAbnormalCopyrightSeal } from '@/api/copyright'
 import { resolveMediaUrl } from '@/utils/request'
 
 
@@ -244,7 +241,6 @@ const reviewVisible = ref(false)
 const reviewSubmitting = ref(false)
 const resolveVisible = ref(false)
 const resolveSubmitting = ref(false)
-const statusChangingSealId = ref(null)
 const resolveReason = ref('')
 const reviewForm = ref({ sealId: null, action: 'approve', reason: '' })
 const previewVisible = ref(false)
@@ -428,24 +424,6 @@ async function submitReview() {
   }
 }
 
-async function changeStatus(row) {
-  if (statusChangingSealId.value !== null) return
-  const status = row.sealStatus === 'enabled' ? 'disabled' : 'enabled'
-  const action = status === 'enabled' ? '启用' : '停用'
-  statusChangingSealId.value = row.sealId
-  try {
-    await ElMessageBox.confirm(`确认${action}“${row.sealName}”吗？`, '印章状态变更', { type: 'warning' })
-    await updateCopyrightSealStatus(row.sealId, status)
-    ElMessage.success(`${action}成功`)
-    await loadRows()
-    if (selectedSealId === row.sealId) await Promise.all([loadDetail(), loadLogs()])
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.message || `${action}失败`)
-  } finally {
-    statusChangingSealId.value = null
-  }
-}
-
 function openResolveAbnormal(row) {
   reviewForm.value.sealId = row.sealId
   resolveReason.value = ''
@@ -518,6 +496,4 @@ onMounted(loadRows)
 .action-buttons { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
 .action-buttons .el-button { margin: 0; }
 :deep(.action-buttons .el-button + .el-button) { margin-left: 0; }
-:deep(.action-buttons .el-button--success.is-link),
-:deep(.action-buttons .el-button--danger.is-link) { color: #fff !important; font-weight: 600; }
 </style>
