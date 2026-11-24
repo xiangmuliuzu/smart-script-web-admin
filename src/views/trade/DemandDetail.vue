@@ -123,7 +123,10 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="申请原因" min-width="200">
+          <template #default="{ row }">{{ row.extendReason || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="hasDeliverable(row)"
@@ -136,17 +139,6 @@
               <el-button size="small" link type="success" @click="openReview(row, true)">通过验收</el-button>
               <el-button size="small" link type="danger" @click="openReview(row, false)">驳回重交</el-button>
             </template>
-            <template v-if="row.extendStatus === 'pending' && canEdit">
-              <el-button size="small" link type="success" @click="handleDecideExtend(row, true)">同意延时</el-button>
-              <el-button size="small" link type="danger" @click="handleDecideExtend(row, false)">驳回延时</el-button>
-            </template>
-            <el-button
-              v-if="canSelfExtend(row)"
-              size="small"
-              link
-              type="warning"
-              @click="openSelfExtend(row)"
-            >自主延时</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -209,7 +201,12 @@
     </el-card>
 
     <el-card shadow="never" class="section-card">
-      <template #header>延时记录（{{ extendApplies.length }} 条）</template>
+      <template #header>
+        <div class="extend-card-head">
+          <span>延时记录（{{ extendApplies.length }} 条）</span>
+          <el-button v-if="selfExtendStages.length" size="small" type="warning" @click="openSelfExtend()">自主延时</el-button>
+        </div>
+      </template>
       <el-table :data="extendApplies" v-loading="loading" size="small" border empty-text="无延时记录">
         <el-table-column label="轮次" width="80">
           <template #default="{ row }">第 {{ row.stageOrder }} 轮</template>
@@ -239,6 +236,15 @@
         <el-table-column prop="appliedAt" label="申请时间" width="160" />
         <el-table-column prop="dueAfter" label="新截止" width="160">
           <template #default="{ row }">{{ row.dueAfter || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <template v-if="row.status === 'pending' && row.applyType === 'request' && canEdit">
+              <el-button size="small" type="success" @click="handleDecideExtend(row, true)">同意延时</el-button>
+              <el-button size="small" type="danger" @click="handleDecideExtend(row, false)">驳回延时</el-button>
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
         </el-table-column>
       </el-table>
     </el-card>
@@ -329,7 +335,12 @@
     <!-- 自主延时：不经申请直接顺延本轮截止 -->
     <el-dialog v-model="extendVisible" title="自主延长本轮时限" width="460px">
       <el-form label-width="90px">
-        <el-form-item label="轮次">第 {{ extendRow?.stageOrder }} 轮</el-form-item>
+        <el-form-item label="轮次">
+          <el-select v-if="selfExtendStages.length > 1" v-model="extendStageId" @change="selectSelfExtendStage">
+            <el-option v-for="stage in selfExtendStages" :key="stage.stageId" :label="`第 ${stage.stageOrder} 轮`" :value="stage.stageId" />
+          </el-select>
+          <span v-else>第 {{ extendRow?.stageOrder }} 轮</span>
+        </el-form-item>
         <el-form-item label="当前截止">{{ extendRow?.dueAt || '-' }}</el-form-item>
         <el-form-item label="延长小时">
           <el-input-number v-model="extendHours" :min="1" :max="8760" controls-position="right" />
@@ -426,6 +437,7 @@ const reviewRow = ref(null)
 const extendVisible = ref(false)
 const extendHours = ref(24)
 const extendRow = ref(null)
+const extendStageId = ref(null)
 
 function hasDeliverable(row) {
   return !!(row.workId || row.deliverableUrl || row.deliverableDesc)
@@ -439,6 +451,8 @@ function canSelfExtend(row) {
     && !!row.startedAt
     && !row.extendStatus
 }
+
+const selfExtendStages = computed(() => stages.value.filter(canSelfExtend))
 
 async function openDeliverable(row) {
   deliverableRow.value = row
@@ -506,9 +520,15 @@ async function handleDecideExtend(row, approved) {
 }
 
 function openSelfExtend(row) {
-  extendRow.value = row
+  const stagesAvailable = selfExtendStages.value
+  extendRow.value = row || stagesAvailable.find(stage => String(stage.stageId) === String(extendStageId.value)) || stagesAvailable[0] || null
+  extendStageId.value = extendRow.value?.stageId ?? null
   extendHours.value = 24
   extendVisible.value = true
+}
+
+function selectSelfExtendStage(stageId) {
+  extendRow.value = selfExtendStages.value.find(stage => String(stage.stageId) === String(stageId)) || null
 }
 
 async function submitSelfExtend() {
@@ -568,6 +588,24 @@ onMounted(loadAll)
 <style scoped>
 .section-card {
   margin-bottom: 16px;
+}
+
+.extend-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+:deep(.el-button--primary),
+:deep(.el-button--success),
+:deep(.el-button--warning),
+:deep(.el-button--danger) {
+  color: #ffffff !important;
+}
+
+:deep(.el-button--default) {
+  color: #303133 !important;
 }
 
 .sub-title {
