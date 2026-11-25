@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="任务运营详情" description="任务全貌、逐轮验收、交付正文核对与延时处理（发布权已收归平台，验收/延时审批/自主延时在本页操作）">
+    <PageHeader title="任务运营详情" description="任务全貌、逐轮验收、交付正文核对与延时处理（需求方自助发布的单在此核对轮次与预算，发布审核入口在任务列表）">
       <template #actions>
         <el-button @click="goBack">返回任务列表</el-button>
         <el-button :loading="loading" @click="loadAll">刷新</el-button>
@@ -41,6 +41,9 @@
             <span v-if="detail.sourceWorkTitle">《{{ detail.sourceWorkTitle }}》</span>
             <a v-if="detail.sourceScriptUrl" :href="resolveMediaUrl(detail.sourceScriptUrl)" target="_blank" rel="noopener">{{ detail.sourceScriptName || '剧本文件' }}</a>
             <span v-if="!detail.sourceWorkTitle && !detail.sourceScriptUrl" class="text-muted">-</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.auditRemark" label="审核意见" :span="3">
+            <span class="danger-text">{{ detail.auditRemark }}{{ detail.auditAt ? '（' + detail.auditAt + '）' : '' }}</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="detail.failReason" label="失败原因" :span="3">
             <span class="danger-text">{{ detail.failReason }}</span>

@@ -2,7 +2,7 @@
   <PageContainer>
     <PageHeader
       title="任务管理"
-      description="平台代需求方发布的剧本/分镜接单任务（对应 sys_demand，接单制·先到先得）。发布、编辑、关闭与逐轮验收均在本页/运营详情页完成，用户端只能查看与接单"
+      description="剧本/分镜接单任务（对应 sys_demand，接单制·先到先得）。需求方可在 App 与企业端自助发布，提交后落在「待审核」，本页审核通过才进任务广场；逐轮验收与关闭征集均由运营完成"
     >
       <template #actions>
         <BlackButton v-hasPermi="['trade:demand:add']" @click="openCreate">发布任务</BlackButton>
@@ -94,6 +94,14 @@
       <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <div class="op-actions">
+            <el-button
+              v-if="row.status === 'pending_review'"
+              v-hasPermi="['trade:demand:review']"
+              class="op-span"
+              size="small"
+              type="primary"
+              @click="openAudit(row)"
+            >发布审核</el-button>
             <el-button size="small" @click="handleViewDetail(row)">查看详情</el-button>
             <el-button size="small" @click="handleOpenOperation(row)">运营详情</el-button>
             <el-button
@@ -156,6 +164,9 @@
           <el-descriptions-item label="是否逾期">
             <el-tag v-if="detail.overdue" type="danger" size="small">已逾期</el-tag>
             <span v-else>否</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.status === 'rejected'" label="审核意见" :span="2">
+            <span style="color:#dc2626">{{ detail.auditRemark || '未填写驳回原因' }}{{ detail.auditAt ? '（' + detail.auditAt + '）' : '' }}</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="detail.status === 'failed'" label="失败原因" :span="2">
             <span style="color:#dc2626">{{ detail.failReason || '到点未通过验收' }}{{ detail.failAt ? '（' + detail.failAt + '）' : '' }}</span>
@@ -363,6 +374,44 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 发布审核：需求方自助提交的单落在待审核，通过才进任务广场，驳回后由需求方修改重交 -->
+    <el-dialog v-model="auditVisible" title="发布审核" width="620px">
+      <div v-if="auditRow" class="audit-brief">
+        <div class="audit-brief-title">{{ auditRow.title }}</div>
+        <div class="audit-brief-meta">
+          需求方 {{ auditRow.client || ('#' + auditRow.clientId) }} · 预算 {{ auditRow.budgetText }} ·
+          {{ auditRow.totalEpisodes ?? '-' }} 集 · {{ auditRow.tags || '无标签' }}
+        </div>
+        <div class="audit-brief-requirement">{{ auditRow.requirement || '-' }}</div>
+        <div v-if="auditRoundHint" class="form-tip">{{ auditRoundHint }}</div>
+      </div>
+      <el-form label-width="90px">
+        <el-form-item label="审核结论">
+          <el-radio-group v-model="auditForm.approved">
+            <el-radio :value="true">通过并发布</el-radio>
+            <el-radio :value="false">驳回</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="!auditForm.approved" label="驳回原因" required>
+          <el-input
+            v-model="auditForm.rejectReason"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="写清需要修改之处，需求方在任务详情可见并据以修改重交"
+          />
+        </el-form-item>
+        <el-form-item v-if="auditForm.approved" label="提示">
+          <span class="form-tip">通过后任务立即进入任务广场，创作者可先到先得接单；后续逐轮验收仍在运营详情页。</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="auditVisible = false">取消</el-button>
+        <el-button type="primary" :loading="auditing" @click="submitAudit">确定</el-button>
+      </template>
+    </el-dialog>
   </PageContainer>
 </template>
 
@@ -382,7 +431,7 @@ import {
 import { resolveMediaUrl } from '@/utils/request'
 import { isRecruitExpired } from '@/utils/recruitExpiry'
 import {
-  getDemandList, getDemandStages, createDemand, updateDemand, closeDemand,
+  getDemandList, getDemandStages, createDemand, updateDemand, closeDemand, auditDemand,
   getDemandSourceWorks, uploadDemandScript
 } from '@/api/trade'
 
@@ -697,6 +746,60 @@ async function handleClose(row) {
   }
 }
 
+/* ==================== 发布审核 ==================== */
+
+const auditVisible = ref(false)
+const auditing = ref(false)
+const auditRow = ref(null)
+const auditRounds = ref([])
+const auditForm = reactive({ approved: true, rejectReason: '' })
+
+/** 审核要看预算与集数是否匹配，轮次明细按需拉一次；拉取失败只少一行提示，不挡结论提交 */
+async function openAudit(row) {
+  auditRow.value = { ...row }
+  auditForm.approved = true
+  auditForm.rejectReason = ''
+  auditRounds.value = []
+  auditVisible.value = true
+  try {
+    const res = await getDemandStages(row.demandId)
+    auditRounds.value = (res?.data ?? res ?? []).slice().sort((a, b) => a.stageOrder - b.stageOrder)
+  } catch {
+    auditRounds.value = []
+  }
+}
+
+const auditRoundHint = computed(() => {
+  const rounds = auditRounds.value
+  if (!rounds.length) return ''
+  const sum = rounds.reduce((acc, r) => acc + (Number(r.amount) || 0), 0)
+  const detail = rounds
+    .map((r, i) => `第${i + 1}轮至${r.episodeTo ?? '-'}集 ¥${(Number(r.amount) || 0).toFixed(2)}`)
+    .join(' / ')
+  return `${rounds.length} 轮验收：${detail}；轮次金额合计 ¥${sum.toFixed(2)}`
+})
+
+async function submitAudit() {
+  if (!auditForm.approved && !auditForm.rejectReason.trim()) {
+    ElMessage.warning('驳回时请填写原因，需求方据此修改重交')
+    return
+  }
+  auditing.value = true
+  try {
+    await auditDemand(auditRow.value.demandId, {
+      approved: auditForm.approved,
+      rejectReason: auditForm.approved ? null : auditForm.rejectReason.trim()
+    })
+    ElMessage.success(auditForm.approved ? '已通过审核，任务进入广场' : '已驳回，需求方可修改后重新提交')
+    auditVisible.value = false
+    loadList()
+  } catch {
+    // 错误已由 request 拦截器统一提示
+  } finally {
+    auditing.value = false
+  }
+}
+
 /* ==================== 列表 ==================== */
 
 async function loadList() {
@@ -759,6 +862,36 @@ onMounted(() => { loadList() })
 .text-muted {
   color: #909399;
   font-size: 13px;
+}
+
+/* 待审核的单把审核动作排在最前并整行展示，避免与只读入口挤成错行的第三颗按钮 */
+.op-span {
+  grid-column: 1 / -1;
+}
+
+.audit-brief {
+  padding: 12px;
+  margin-bottom: 16px;
+  background: #f7f8fa;
+  border-radius: 6px;
+}
+
+.audit-brief-title {
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.audit-brief-meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.audit-brief-requirement {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #1f2329;
+  white-space: pre-wrap;
 }
 
 .form-tip {

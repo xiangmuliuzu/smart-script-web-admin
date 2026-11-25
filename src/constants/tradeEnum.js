@@ -114,7 +114,10 @@ export const DEMAND_STATUS = [
   { value: 'completed', label: '已完成', tagType: 'primary' },
   { value: 'closed', label: '已关闭', tagType: 'info' },
   { value: 'selected', label: '已选定', tagType: 'primary' },
-  { value: 'failed', label: '已失败', tagType: 'danger' }
+  { value: 'failed', label: '已失败', tagType: 'danger' },
+  // 需求方自助发布的单先落在审核态，审核通过才进任务广场
+  { value: 'pending_review', label: '待审核', tagType: 'warning' },
+  { value: 'rejected', label: '审核未通过', tagType: 'danger' }
 ]
 
 /** 任务类型（sys_demand.task_type，与 APP/企业/创作者端同口径） */
