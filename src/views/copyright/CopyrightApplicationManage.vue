@@ -96,7 +96,7 @@
             <el-button size="small" type="primary" @click="handleDetail(row)">详情</el-button>
             <el-button
               v-if="canQueryStatus(row)"
-              v-permission="'smartscript:copyright:application:sync'"
+              v-permission="'content:copyright:application:query'"
               size="small"
               type="warning"
               :loading="syncingId === row.applyId"
@@ -485,7 +485,7 @@
           <el-button @click="detailVisible = false">关闭</el-button>
           <el-button
             v-if="canQueryStatus(currentRecord)"
-            v-permission="'smartscript:copyright:application:sync'"
+            v-permission="'content:copyright:application:query'"
             type="warning"
             :loading="syncingId === currentRecord?.applyId"
             @click="handleSync(currentRecord)"

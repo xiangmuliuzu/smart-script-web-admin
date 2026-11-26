@@ -64,8 +64,6 @@ export const componentMap = {
   'copyright/SettlementManage': SettlementManage,
   'copyright/SettlementWithdrawManage': SettlementWithdrawManage,
   'copyright/IncomeManage': IncomeManage,
-  // 兼容未跑菜单迁移的旧 component 标识
-  'copyright/FinanceAbnormal': IncomeManage,
   'copyright/CopyrightCertManage': CopyrightCertManage,
   'copyright/CopyrightApplicationManage': CopyrightApplicationManage,
   'copyright/CopyrightCenterConfig': CopyrightCenterConfig,

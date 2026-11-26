@@ -32,7 +32,7 @@
     >
       <template #actions>
         <el-button type="info" plain @click="openMessagesDrawer">第三方消息</el-button>
-        <el-button v-permission="'smartscript:copyright:centerConfig:add'" type="primary" @click="handleAdd">
+        <el-button v-permission="'content:copyright:config:add'" type="primary" @click="handleAdd">
           新增配置
         </el-button>
       </template>
@@ -74,7 +74,7 @@
               查看申请
             </el-button>
             <el-button
-              v-permission="'smartscript:copyright:centerConfig:edit'"
+              v-permission="'content:copyright:config:edit'"
               type="warning"
               size="small"
               @click="handleEdit(row)"
