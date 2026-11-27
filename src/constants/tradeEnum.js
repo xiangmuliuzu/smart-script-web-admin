@@ -18,6 +18,8 @@ export const ORDER_STATUS = [
   { value: 'quoted', label: '已报价', tagType: 'warning' },
   { value: 'confirmed', label: '已确认', tagType: 'primary' },
   { value: 'contract_pending', label: '待签约', tagType: 'warning' },
+  // 合同双签完成后订单进 paying（等买方付款），与用户端/企业端/APP 同口径
+  { value: 'paying', label: '付款中', tagType: 'warning' },
   { value: 'escrow_pending', label: '待托管', tagType: 'warning' },
   { value: 'delivering', label: '交割中', tagType: 'primary' },
   { value: 'completed', label: '已完成', tagType: 'success' },
@@ -112,7 +114,10 @@ export const DEMAND_STATUS = [
   { value: 'completed', label: '已完成', tagType: 'primary' },
   { value: 'closed', label: '已关闭', tagType: 'info' },
   { value: 'selected', label: '已选定', tagType: 'primary' },
-  { value: 'failed', label: '已失败', tagType: 'danger' }
+  { value: 'failed', label: '已失败', tagType: 'danger' },
+  // 需求方自助发布的单先落在审核态，审核通过才进任务广场
+  { value: 'pending_review', label: '待审核', tagType: 'warning' },
+  { value: 'rejected', label: '审核未通过', tagType: 'danger' }
 ]
 
 /** 任务类型（sys_demand.task_type，与 APP/企业/创作者端同口径） */
@@ -154,7 +159,7 @@ export const DEMAND_STAGE_STATUS = [
   { value: 'pending', label: '未开始', tagType: 'info' },
   { value: 'ai_reviewing', label: 'AI审核中', tagType: 'warning' },
   { value: 'submitted', label: '待人工验收', tagType: 'warning' },
-  { value: 'approved', label: '已通过', tagType: 'success' },
+  { value: 'approved', label: '任务验收通过', tagType: 'success' },
   { value: 'rejected', label: '已驳回', tagType: 'danger' }
 ]
 

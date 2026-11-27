@@ -96,7 +96,18 @@ export function getDemandSubmissions(demandId) {
   return request({ url: `${PREFIX}/trade/demand/${demandId}/submissions`, method: 'get' }).then(adaptDemandSubmissions)
 }
 
-/* ==================== 需求任务（发布权已收归平台，以下即运营侧全部动作） ==================== */
+/* ==================== 需求任务（运营侧动作） ==================== */
+
+/**
+ * 发布审核 PUT /trade/demand/{demandId}/audit
+ * 需求方自助提交的单落在待审核；通过后进入任务广场，驳回后可修改重交。
+ * @param {number|string} demandId
+ * @param {{approved: boolean, rejectReason?: string}} data 驳回时 rejectReason 必填
+ */
+export function auditDemand(demandId, data) {
+  if (isTradeMock()) return Promise.resolve({ code: 200, msg: 'success' })
+  return request({ url: `${PREFIX}/trade/demand/${demandId}/audit`, method: 'put', data })
+}
 
 /**
  * 发布任务 POST /trade/demand

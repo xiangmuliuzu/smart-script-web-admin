@@ -101,7 +101,7 @@ export function adaptInquiryDetail(detail) {
 }
 
 /* ==================== 报价/议价（缺口接口）==================== */
-/** SysQuote → Quote.vue：price→priceText, licenseType→licenseTypeLabel, quoterRole→quoterRoleLabel */
+/** SysQuote → 询盘页报价记录：price→priceText, licenseType→licenseTypeLabel, quoterRole→quoterRoleLabel */
 export function adaptQuotes(res) {
   return mapRows(res, (q) => ({
     ...q,

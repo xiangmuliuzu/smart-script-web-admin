@@ -1,6 +1,6 @@
 <template>
   <component :is="embedded ? 'section' : PageContainer">
-    <PageHeader title="用户沟通" description="查看用户会话，打开详情即可阅读并处理，可结束或重新打开会话；咨询由用户端发起，管理端仅回复处理">
+    <PageHeader title="用户沟通" description="查看用户会话，打开详情即可阅读并处理，可重新打开已结束的会话；咨询由用户端发起，管理端仅回复处理">
       <template #actions>
         <el-button :disabled="loading" @click="loadList()">刷新会话</el-button>
       </template>
@@ -68,7 +68,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="lastMessageTime" label="最后消息时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.lastMessageTime) }}</template>
+        <template #default="{ row }">{{ formatTime(row.lastMessageTime || row.createdAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
@@ -91,6 +91,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
 import { listSessions } from '@/api/adminChat'
+import { isRealtimeConnected, onRealtime } from '@/utils/realtimeSocket'
 
 defineOptions({ name: 'ChatSessions' })
 const props = defineProps({ embedded: Boolean })
@@ -104,12 +105,16 @@ const statusOptions = [
   { value: 0, label: '进行中' },
   { value: 2, label: '已结束' }
 ]
-// 业务类型（会话列表筛选与展示：WORK / SEAL / COPYRIGHT / ORDER / GENERAL）
+// 业务类型（会话列表筛选与展示）：值域取自后端与会话创建入口，缺一类就筛不出、只能显示英文原值。
+// WORK/SEAL/COPYRIGHT/ORDER/GENERAL 来自 APP 与用户端咨询入口，INQUIRY/DEMAND 由交易流程自动建会话。
 const businessTypeOptions = [
   { value: 'WORK', label: '作品' },
   { value: 'SEAL', label: '印章' },
   { value: 'COPYRIGHT', label: '版权' },
   { value: 'ORDER', label: '订单' },
+  { value: 'INQUIRY', label: '询盘' },
+  { value: 'DEMAND', label: '任务' },
+  { value: 'ACCOUNT', label: '账号' },
   { value: 'GENERAL', label: '通用' }
 ]
 
@@ -133,7 +138,7 @@ function formatTime(value) {
   return value ? String(value).replace('T', ' ').slice(0, 19) : '—'
 }
 
-let generation = 0, inFlight = false, timer
+let generation = 0, inFlight = false
 async function loadList(silent = false) {
   silent = silent === true
   if (silent && inFlight) return
@@ -178,8 +183,31 @@ function openDetail(row) {
 
 function poll() { if (!document.hidden) loadList(true) }
 defineExpose({ refresh: loadList })
-onMounted(() => { loadList(); timer = setInterval(poll, 5000); document.addEventListener('visibilitychange', poll) })
-onBeforeUnmount(() => { generation++; clearInterval(timer); document.removeEventListener('visibilitychange', poll) })
+
+// 与 ChatDetail.vue 同口径：长连接可用时轮询退居兜底并拉长到 60s，断开时恢复 5s 原频率。
+const POLL_ACTIVE_MS = 5000
+const POLL_IDLE_MS = 60000
+let timer = null, offRealtime = []
+function applyPollInterval() {
+  if (timer) clearInterval(timer)
+  timer = setInterval(poll, isRealtimeConnected() ? POLL_IDLE_MS : POLL_ACTIVE_MS)
+}
+
+onMounted(() => {
+  loadList()
+  applyPollInterval()
+  document.addEventListener('visibilitychange', poll)
+  offRealtime = [
+    onRealtime('connected', applyPollInterval),
+    onRealtime('disconnected', applyPollInterval)
+  ]
+})
+onBeforeUnmount(() => {
+  generation++
+  clearInterval(timer)
+  offRealtime.forEach(off => off())
+  document.removeEventListener('visibilitychange', poll)
+})
 </script>
 
 <style scoped>

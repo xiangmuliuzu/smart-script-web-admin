@@ -91,7 +91,11 @@
           <el-table-column prop="sellerName" label="作者" min-width="120" />
           <el-table-column prop="licenseType" label="授权类型" min-width="120" />
           <el-table-column prop="totalAmount" label="订单金额" width="120" />
-          <el-table-column prop="status" label="订单状态" width="120" />
+          <el-table-column label="订单状态" width="120">
+            <template #default="{ row }">
+              <StatusTag type="order" :status="row.status" />
+            </template>
+          </el-table-column>
           <el-table-column prop="payTime" label="付款时间" min-width="160" />
         </el-table>
         <el-pagination
@@ -115,6 +119,7 @@ import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import TableCard from '@/components/TableCard.vue'
+import StatusTag from '@/components/StatusTag.vue'
 import {
   getCopyrightAssets,
   getCopyrightAssetDetail,

@@ -74,14 +74,6 @@ export function resolveAbnormalCopyrightSeal(sealId, reason) {
   })
 }
 
-export function updateCopyrightSealStatus(sealId, status) {
-  return adminV1Request({
-    url: `${PRODUCT_PREFIX}/copyright/seals/${sealId}/status`,
-    method: 'put',
-    data: { status }
-  })
-}
-
 // 提现审核API
 export function getWithdrawList(params) {
   const { pageNo, ...filters } = params || {}

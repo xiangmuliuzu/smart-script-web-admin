@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="任务运营详情" description="任务全貌、逐轮验收、交付正文核对与延时处理（发布权已收归平台，验收/延时审批/自主延时在本页操作）">
+    <PageHeader title="任务运营详情" description="任务全貌、逐轮验收、交付正文核对与延时处理（需求方自助发布的单在此核对轮次与预算，发布审核入口在任务列表）">
       <template #actions>
         <el-button @click="goBack">返回任务列表</el-button>
         <el-button :loading="loading" @click="loadAll">刷新</el-button>
@@ -14,7 +14,7 @@
           <el-descriptions-item label="任务编号">{{ detail.demandNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="任务标题">{{ detail.title || '-' }}</el-descriptions-item>
           <el-descriptions-item label="任务状态">
-            <el-tag v-if="detail.isOverdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
+            <el-tag v-if="detail.overdue" type="danger" size="small" style="margin-right:4px">逾期</el-tag>
             <StatusTag type="demand" :status="detail.status" />
           </el-descriptions-item>
           <el-descriptions-item label="任务类型">
@@ -31,11 +31,19 @@
           <el-descriptions-item label="需求方电话">{{ detail.contactInfo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="总集数">{{ detail.totalEpisodes ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="完成时限">{{ detail.durationHours ? detail.durationHours + ' 小时' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="征集截止">
+            <span v-if="detail.deadline">{{ detail.deadline }}</span>
+            <span v-else class="text-muted">不限</span>
+            <el-tag v-if="recruitExpired" type="warning" size="small" style="margin-left:4px">已截止</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="当前截止">{{ detail.dueAt || '-' }}</el-descriptions-item>
           <el-descriptions-item label="源剧本" :span="3">
             <span v-if="detail.sourceWorkTitle">《{{ detail.sourceWorkTitle }}》</span>
             <a v-if="detail.sourceScriptUrl" :href="resolveMediaUrl(detail.sourceScriptUrl)" target="_blank" rel="noopener">{{ detail.sourceScriptName || '剧本文件' }}</a>
             <span v-if="!detail.sourceWorkTitle && !detail.sourceScriptUrl" class="text-muted">-</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detail.auditRemark" label="审核意见" :span="3">
+            <span class="danger-text">{{ detail.auditRemark }}{{ detail.auditAt ? '（' + detail.auditAt + '）' : '' }}</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="detail.failReason" label="失败原因" :span="3">
             <span class="danger-text">{{ detail.failReason }}</span>
@@ -57,6 +65,14 @@
       <el-table :data="stages" v-loading="loading" size="small" border>
         <el-table-column label="轮次" width="70">
           <template #default="{ row }">第 {{ row.stageOrder }} 轮</template>
+        </el-table-column>
+        <el-table-column label="关联作品上架状态" min-width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.workId" :type="row.workShelfStatus === 'on_shelf' ? 'success' : 'info'" size="small">
+              {{ row.workShelfStatus === 'on_shelf' ? '已上架' : '未上架' }}
+            </el-tag>
+            <span v-else class="text-muted">无关联作品</span>
+          </template>
         </el-table-column>
         <el-table-column label="验收集数" width="90">
           <template #default="{ row }">至第 {{ row.episodeTo }} 集</template>
@@ -110,7 +126,10 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="申请原因" min-width="200">
+          <template #default="{ row }">{{ row.extendReason || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="hasDeliverable(row)"
@@ -123,17 +142,6 @@
               <el-button size="small" link type="success" @click="openReview(row, true)">通过验收</el-button>
               <el-button size="small" link type="danger" @click="openReview(row, false)">驳回重交</el-button>
             </template>
-            <template v-if="row.extendStatus === 'pending' && canEdit">
-              <el-button size="small" link type="success" @click="handleDecideExtend(row, true)">同意延时</el-button>
-              <el-button size="small" link type="danger" @click="handleDecideExtend(row, false)">驳回延时</el-button>
-            </template>
-            <el-button
-              v-if="canSelfExtend(row)"
-              size="small"
-              link
-              type="warning"
-              @click="openSelfExtend(row)"
-            >自主延时</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -196,7 +204,12 @@
     </el-card>
 
     <el-card shadow="never" class="section-card">
-      <template #header>延时记录（{{ extendApplies.length }} 条）</template>
+      <template #header>
+        <div class="extend-card-head">
+          <span>延时记录（{{ extendApplies.length }} 条）</span>
+          <el-button v-if="selfExtendStages.length" size="small" type="warning" @click="openSelfExtend()">自主延时</el-button>
+        </div>
+      </template>
       <el-table :data="extendApplies" v-loading="loading" size="small" border empty-text="无延时记录">
         <el-table-column label="轮次" width="80">
           <template #default="{ row }">第 {{ row.stageOrder }} 轮</template>
@@ -226,6 +239,15 @@
         <el-table-column prop="appliedAt" label="申请时间" width="160" />
         <el-table-column prop="dueAfter" label="新截止" width="160">
           <template #default="{ row }">{{ row.dueAfter || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <template v-if="row.status === 'pending' && row.applyType === 'request' && canEdit">
+              <el-button size="small" type="success" @click="handleDecideExtend(row, true)">同意延时</el-button>
+              <el-button size="small" type="danger" @click="handleDecideExtend(row, false)">驳回延时</el-button>
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
         </el-table-column>
       </el-table>
     </el-card>
@@ -302,7 +324,7 @@
       </el-form>
       <div class="text-muted">
         {{ reviewApproved
-          ? '通过后本轮款项生成结算单（创作者确认后入可提现），并激活下一轮计时；无下一轮则整单完成。'
+          ? '通过后本轮款项生成结算单（创作者确认后入可提现），并激活下一轮计时；无下一轮则整单完成。该操作只验收任务交付，不会改变关联作品的书城上架状态。'
           : '驳回后本轮恢复计时并顺延审核耗时，等待创作者修改重交。' }}
       </div>
       <template #footer>
@@ -316,7 +338,12 @@
     <!-- 自主延时：不经申请直接顺延本轮截止 -->
     <el-dialog v-model="extendVisible" title="自主延长本轮时限" width="460px">
       <el-form label-width="90px">
-        <el-form-item label="轮次">第 {{ extendRow?.stageOrder }} 轮</el-form-item>
+        <el-form-item label="轮次">
+          <el-select v-if="selfExtendStages.length > 1" v-model="extendStageId" @change="selectSelfExtendStage">
+            <el-option v-for="stage in selfExtendStages" :key="stage.stageId" :label="`第 ${stage.stageOrder} 轮`" :value="stage.stageId" />
+          </el-select>
+          <span v-else>第 {{ extendRow?.stageOrder }} 轮</span>
+        </el-form-item>
         <el-form-item label="当前截止">{{ extendRow?.dueAt || '-' }}</el-form-item>
         <el-form-item label="延长小时">
           <el-input-number v-model="extendHours" :min="1" :max="8760" controls-position="right" />
@@ -340,6 +367,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { enumLabel, enumTagType, DEMAND_TASK_TYPE_HINT, normalizeDemandTaskType } from '@/constants/tradeEnum'
 import { resolveMediaUrl } from '@/utils/request'
+import { isRecruitExpired } from '@/utils/recruitExpiry'
 import { useUserStore } from '@/stores/user'
 import {
   getDemandDetail, getDemandStages, getDemandPayments, getDemandExtendApplies,
@@ -394,6 +422,9 @@ const stalledRounds = computed(() =>
     .map((s) => s.stageOrder)
 )
 
+// 征集截止已过但仍未被接单：广场已不曝光，只等定时任务收口，本页据此提示运营
+const recruitExpired = computed(() => isRecruitExpired(detail.value))
+
 /* ==================== 交付核对 / 验收 / 延时 ==================== */
 
 const deliverableVisible = ref(false)
@@ -409,6 +440,7 @@ const reviewRow = ref(null)
 const extendVisible = ref(false)
 const extendHours = ref(24)
 const extendRow = ref(null)
+const extendStageId = ref(null)
 
 function hasDeliverable(row) {
   return !!(row.workId || row.deliverableUrl || row.deliverableDesc)
@@ -422,6 +454,8 @@ function canSelfExtend(row) {
     && !!row.startedAt
     && !row.extendStatus
 }
+
+const selfExtendStages = computed(() => stages.value.filter(canSelfExtend))
 
 async function openDeliverable(row) {
   deliverableRow.value = row
@@ -457,7 +491,7 @@ async function submitReview() {
       approved: reviewApproved.value,
       rejectReason: reviewApproved.value ? null : rejectReason.value.trim()
     })
-    ElMessage.success(reviewApproved.value ? '本轮已通过验收并放款' : '已驳回，本轮恢复计时等待重交')
+    ElMessage.success(reviewApproved.value ? '本轮任务交付已验收并放款，关联作品不会自动上架' : '已驳回，本轮恢复计时等待重交')
     reviewVisible.value = false
     loadAll()
   } catch {
@@ -489,9 +523,15 @@ async function handleDecideExtend(row, approved) {
 }
 
 function openSelfExtend(row) {
-  extendRow.value = row
+  const stagesAvailable = selfExtendStages.value
+  extendRow.value = row || stagesAvailable.find(stage => String(stage.stageId) === String(extendStageId.value)) || stagesAvailable[0] || null
+  extendStageId.value = extendRow.value?.stageId ?? null
   extendHours.value = 24
   extendVisible.value = true
+}
+
+function selectSelfExtendStage(stageId) {
+  extendRow.value = selfExtendStages.value.find(stage => String(stage.stageId) === String(stageId)) || null
 }
 
 async function submitSelfExtend() {
@@ -551,6 +591,24 @@ onMounted(loadAll)
 <style scoped>
 .section-card {
   margin-bottom: 16px;
+}
+
+.extend-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+:deep(.el-button--primary),
+:deep(.el-button--success),
+:deep(.el-button--warning),
+:deep(.el-button--danger) {
+  color: #ffffff !important;
+}
+
+:deep(.el-button--default) {
+  color: #303133 !important;
 }
 
 .sub-title {

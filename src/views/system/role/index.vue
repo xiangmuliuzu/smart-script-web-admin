@@ -29,7 +29,13 @@
         </el-table-column>
       </el-table>
     </el-card>
-    <el-dialog v-model="dialog" :title="form.roleId ? '编辑角色' : '新增角色'" width="520px">
+    <!-- class="role-dialog" 经 $attrs 落在 .el-dialog 上（见文末非 scoped 样式）：用来固定弹窗尺寸与内部滚动 -->
+    <el-dialog
+      v-model="dialog"
+      :title="form.roleId ? '编辑角色' : '新增角色'"
+      width="520px"
+      class="role-dialog"
+    >
       <el-form :model="form" label-width="90px">
         <el-form-item label="角色名称" required><el-input v-model="form.roleName" /></el-form-item>
         <el-form-item label="权限字符" required><el-input v-model="form.roleKey" /></el-form-item>
@@ -42,14 +48,18 @@
           </div>
         </el-form-item>
         <el-form-item label="菜单权限">
-          <el-tree
-            ref="menuTreeRef"
-            :data="menuOptions"
-            node-key="id"
-            show-checkbox
-            default-expand-all
-            :props="{ label: 'label', children: 'children' }"
-          />
+          <!-- 弹窗高度固定：表单区与菜单树各自滚动，弹窗本体与页面滚动条脱钩；
+               树区固定高度，避免展开全部节点把整页撑长、跟着页面滚走。 -->
+          <div class="menu-permission-tree">
+            <el-tree
+              ref="menuTreeRef"
+              :data="menuOptions"
+              node-key="id"
+              show-checkbox
+              default-expand-all
+              :props="{ label: 'label', children: 'children' }"
+            />
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -191,6 +201,46 @@ onMounted(load)
   color: #8c8c8c;
 }
 
+/* 弹窗本体不随页面滚动：高度上限交给视口，内部表单区单独滚动 */
+.el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.el-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 菜单权限树：固定高度、自身滚动条；权限字符等表单项保持可见 */
+.menu-permission-tree {
+  width: 100%;
+  height: 320px;
+  overflow: auto;
+  padding: 4px 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
 .page { padding: 16px; }
 .toolbar { margin-bottom: 12px; }
+</style>
+
+<!-- 非 scoped：el-dialog 的 DOM 在 <body> 下（Teleport），scoped 选择器带不到；
+     class="role-dialog" 经 $attrs 落在 .el-dialog 上，只作用于本页弹窗。 -->
+<style>
+/* 弹窗吃掉视口高度、内容超长时在弹窗内滚动，浮层本身不再产生滚动条 */
+.role-dialog.el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+  margin: 24px auto;
+}
+
+.role-dialog .el-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
 </style>

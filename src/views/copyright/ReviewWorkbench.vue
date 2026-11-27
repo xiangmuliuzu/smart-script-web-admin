@@ -2,8 +2,12 @@
   <div class="review-workbench-container">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h2 class="page-title">作品审核工作台</h2>
+      <h2 class="page-title">{{ reviewTarget === 'storyboard' ? '分镜审核工作台' : '作品审核工作台' }}</h2>
       <div class="header-actions">
+        <el-radio-group v-model="reviewTarget" size="default" @change="switchReviewTarget">
+          <el-radio-button label="work">作品审核</el-radio-button>
+          <el-radio-button label="storyboard">分镜审核</el-radio-button>
+        </el-radio-group>
         <el-button size="default" @click="handleExportReport">导出报告</el-button>
       </div>
     </div>
@@ -42,17 +46,18 @@
         <el-form-item>
           <el-select v-model="filterForm.status" placeholder="全部状态" style="width: 140px">
             <el-option label="全部状态" value="" />
-            <el-option label="待审核" value="pending" />
-            <el-option label="AI审核中" value="ai_reviewing" />
-            <el-option label="待人工复核" value="manual_review" />
-            <el-option label="已通过" value="approved" />
-            <el-option label="已驳回" value="rejected" />
+            <el-option label="待人工审核" value="pending" />
+            <el-option v-if="reviewTarget !== 'storyboard'" label="AI审核中" value="ai_reviewing" />
+            <el-option v-if="reviewTarget !== 'storyboard'" label="待人工复核" value="manual_review" />
+            <el-option label="审核通过" value="approved" />
+            <el-option label="审核驳回" value="rejected" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-select v-model="filterForm.type" placeholder="全部类型" style="width: 140px">
             <el-option label="全部类型" value="" />
             <el-option label="剧本" value="script" />
+            <el-option label="分镜" value="storyboard" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -87,7 +92,7 @@
         :data="worksList"
         style="width: 100%"
       >
-        <el-table-column prop="reviewId" label="编号" width="100" />
+        <el-table-column :prop="reviewTarget === 'storyboard' ? 'storyboardId' : 'reviewId'" label="编号" width="100" />
         <el-table-column prop="workTitle" label="作品名称" min-width="180" />
         <el-table-column label="类型" width="120">
           <template #default="{ row }">
@@ -152,7 +157,7 @@
     <!-- 审核详情弹窗 -->
     <el-dialog
       v-model="reviewDialogVisible"
-      title="作品审核"
+      :title="reviewTarget === 'storyboard' ? '分镜审核' : '作品审核'"
       width="600px"
     >
       <el-descriptions :column="2" border>
@@ -239,6 +244,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import ReviewWorkContentPanel from './ReviewWorkContentPanel.vue'
+import { listStoryboard, reviewStoryboard } from '@/api/content'
 
 // 筛选表单
 const filterForm = ref({
@@ -247,6 +253,7 @@ const filterForm = ref({
   startDate: '',
   endDate: ''
 })
+const reviewTarget = ref('work')
 
 // 类型映射（sys_work.work_type 枚举）
 const getTypeText = (type) => {
@@ -255,7 +262,8 @@ const getTypeText = (type) => {
     novel: '小说',
     movie: '电影剧本',
     tv: '电视剧剧本',
-    short: '短剧剧本'
+    short: '短剧剧本',
+    storyboard: '分镜'
   }
   return typeMap[type] || type || '-'
 }
@@ -385,6 +393,11 @@ const handleSearch = () => {
   loadWorks(buildQuery())
 }
 
+const switchReviewTarget = (target) => {
+  filterForm.value.type = target === 'storyboard' ? 'storyboard' : ''
+  loadWorks(buildQuery())
+}
+
 // 构建筛选参数
 const buildQuery = () => {
   const q = {}
@@ -440,13 +453,29 @@ const handleReview = async (row) => {
   reviewContent.value = null
   reviewDialogVisible.value = true
   reviewContentLoading.value = true
-  reviewContent.value = await loadReviewContent(row.reviewId)
+  reviewContent.value = reviewTarget.value === 'storyboard'
+    ? storyboardReviewContent(row)
+    : await loadReviewContent(row.reviewId)
   reviewContentLoading.value = false
 }
 
 // 提交审核结果
 const handleSubmitReview = async () => {
   try {
+    if (reviewTarget.value === 'storyboard') {
+      if (reviewForm.value.action === 'reject' && !reviewForm.value.remark.trim()) {
+        ElMessage.warning('请填写驳回原因')
+        return
+      }
+      await reviewStoryboard(currentReview.value.storyboardId, {
+        status: reviewForm.value.action === 'approve' ? 'approved' : 'rejected',
+        rejectReason: reviewForm.value.remark
+      })
+      ElMessage.success(reviewForm.value.action === 'approve' ? '分镜审核通过' : '分镜已驳回')
+      reviewDialogVisible.value = false
+      await loadWorks()
+      return
+    }
     const res = await adminFetch('/api/v1/admin/review/operate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -482,13 +511,26 @@ const detailIssues = computed(() => (detailContent.value && detailContent.value.
 const reviewAiInfo = computed(() => (reviewContent.value && reviewContent.value.aiInfo) || null)
 const reviewIssues = computed(() => (reviewContent.value && reviewContent.value.issues) || null)
 
+function storyboardReviewContent(row) {
+  let aiInfo = null
+  try { aiInfo = row?.aiResult ? (typeof row.aiResult === 'string' ? JSON.parse(row.aiResult) : row.aiResult) : null } catch { aiInfo = null }
+  return {
+    work: { summary: row?.content || '' },
+    chapters: [],
+    aiInfo,
+    issues: Array.isArray(aiInfo?.issues) ? aiInfo.issues : []
+  }
+}
+
 // 处理详情
 const handleDetail = async (row) => {
   currentDetail.value = row
   detailContent.value = null
   detailDialogVisible.value = true
   detailContentLoading.value = true
-  detailContent.value = await loadReviewContent(row.reviewId)
+  detailContent.value = reviewTarget.value === 'storyboard'
+    ? storyboardReviewContent(row)
+    : await loadReviewContent(row.reviewId)
   detailContentLoading.value = false
 }
 
@@ -527,8 +569,19 @@ const handleExportLogs = async () => {
 }
 
 // 加载作品列表
-const loadWorks = async (query = {}) => {
+const loadWorks = async (query = buildQuery()) => {
   try {
+    if (reviewTarget.value === 'storyboard') {
+      const result = await listStoryboard({ pageNum: 1, pageSize: 100, status: query.status || undefined })
+      worksList.value = (result?.rows || []).map(item => ({
+        ...item,
+        workTitle: item.workTitle || '—',
+        workType: 'storyboard',
+        createTime: item.createTime || item.updateTime || '',
+        authorName: item.authorName || '—'
+      }))
+      return
+    }
     const params = new URLSearchParams(query).toString()
     const url = '/api/v1/admin/review/list?page=1&pageSize=100' + (params ? '&' + params : '')
     const res = await adminFetch(url)

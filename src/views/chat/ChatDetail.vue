@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <PageHeader title="会话详情" description="阅读即已读，由打开详情的管理员处理，可结束或重新打开会话">
+    <PageHeader title="会话详情" description="阅读即已读，由打开详情的管理员处理，可重新打开已结束的会话">
       <template #actions>
         <el-button @click="goBack">返回列表</el-button>
       </template>
@@ -26,7 +26,8 @@
           <div class="chat-messages">
             <div v-if="!messages.length" class="chat-empty">暂无消息</div>
             <template v-for="m in messages" :key="m.messageId">
-              <div v-if="m.msgType === 'SYSTEM'" class="msg-system">{{ m.content }}</div>
+              <div v-if="m.recalled" class="msg-system">{{ isMine(m) ? '你撤回了一条消息' : '对方撤回了一条消息' }}</div>
+              <div v-else-if="m.msgType === 'SYSTEM'" class="msg-system">{{ m.content }}</div>
               <div
                 v-else
                 class="msg-row"
@@ -39,8 +40,13 @@
                   <div class="msg-meta">
                     <span>{{ m.senderName || (isMine(m) ? '我' : '管理员') }}</span>
                     <span class="msg-time">{{ formatTime(m.createdAt) }}</span>
+                    <el-button v-if="canQuote(m)" link type="primary" size="small" class="msg-quote-btn" @click="startQuote(m)">引用</el-button>
+                    <el-button v-if="canRecall(m)" link type="primary" size="small" class="msg-recall-btn" :disabled="recalling" @click="tryRecall(m)">撤回</el-button>
                   </div>
-                  <div class="msg-bubble">{{ m.content }}</div>
+                  <div class="msg-bubble">
+                    <div v-if="m.quoteMessageId" class="bubble-quote">{{ m.quoteRecalled ? '原消息已撤回' : (m.quoteSender || '引用') + '：' + (m.quoteText || '') }}</div>
+                    {{ m.content }}
+                  </div>
                 </div>
               </div>
             </template>
@@ -48,6 +54,10 @@
         </el-scrollbar>
 
         <div class="chat-input">
+          <div v-if="quoting" class="quoting-bar">
+            <span>引用 {{ isMine(quoting) ? '我' : quoting.senderName || '对方' }}：{{ quoting.content }}</span>
+            <el-button link size="small" @click="quoting = null">取消引用</el-button>
+          </div>
           <el-input
             v-model="draft"
             type="textarea"
@@ -97,8 +107,7 @@
         <div class="side-block">
           <div class="side-title">会话操作</div>
           <div v-permission="['chat:session:status']" class="status-actions">
-            <el-button v-if="!isClosed" type="danger" class="close-btn" :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('close')">结束会话</el-button>
-            <el-button v-else :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('reopen')">重新打开</el-button>
+            <el-button v-if="isClosed" :loading="acting" :disabled="loading || !isHandler" @click="handleChangeStatus('reopen')">重新打开</el-button>
           </div>
         </div>
       </el-card>
@@ -113,7 +122,7 @@ import { ElMessage } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
 import PageContainer from '@/components/PageContainer.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import { getSession, openSession, listMessages, sendMessage, markSessionRead, changeStatus } from '@/api/adminChat'
+import { getSession, openSession, listMessages, sendMessage, recallMessage, markSessionRead, changeStatus } from '@/api/adminChat'
 import { useUserStore } from '@/stores/user'
 import { avatarUrl } from '@/utils/avatarUrl'
 import { isRealtimeConnected, onRealtime } from '@/utils/realtimeSocket'
@@ -157,14 +166,16 @@ function statusTagType(status) {
   return 'info'
 }
 function businessTypeLabel(type) {
-  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', GENERAL: '通用' }
+  const map = { WORK: '作品', SEAL: '印章', COPYRIGHT: '版权', ORDER: '订单', INQUIRY: '询盘', DEMAND: '任务', ACCOUNT: '账号', GENERAL: '通用' }
   return map[type] || (type || '通用')
 }
-// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL 或无路由时不出按钮
+// 任务 21：关联业务跳转——业务类型对应管理端页面；GENERAL/ACCOUNT 或无路由时不出按钮
 const businessRouteMap = {
   WORK: '/copyright/ai-review/review',
   COPYRIGHT: '/copyright/assets',
   ORDER: '/trade/orders',
+  INQUIRY: '/trade/inquiry',
+  DEMAND: '/trade/demand',
   SEAL: '/copyright/seals'
 }
 const businessRoute = computed(() => {
@@ -179,6 +190,32 @@ function formatTime(value) {
 }
 // 默认靠左；仅当前管理员自己发出的消息靠右（以发送者身份判定，免疫移交后多管理员场景）
 const isMine = (m) => String(m.senderId) === String(userStore.userId)
+
+// 撤回入口：仅本人 2 分钟内发送的普通文本；最终窗口由后端裁决
+const RECALL_WINDOW_MS = 120000
+const recalling = ref(false)
+// 引用（回复）：任意未撤回的普通消息可引用；SYSTEM 通知不可。
+const quoting = ref(null)
+const canQuote = (m) => !m.recalled && m.msgType !== 'SYSTEM'
+const startQuote = (m) => { quoting.value = m }
+const canRecall = (m) => {
+  if (m.recalled || !isMine(m) || m.msgType === 'SYSTEM') return false
+  const time = new Date(String(m.createdAt || m.createTime || '').replace('T', ' ').replace(/-/g, '/')).getTime()
+  return !Number.isNaN(time) && Date.now() - time <= RECALL_WINDOW_MS
+}
+async function tryRecall(m) {
+  if (recalling.value) return
+  recalling.value = true
+  try {
+    await recallMessage(sessionId, m.messageId)
+    ElMessage.success('消息已撤回')
+    await Promise.all([loadSession(), loadMessages()])
+  } catch (e) {
+    ElMessage.error(e?.msg || e?.message || '撤回失败')
+  } finally {
+    recalling.value = false
+  }
+}
 
 async function scrollToBottom() {
   await nextTick()
@@ -238,8 +275,9 @@ async function handleSend() {
   }
   sending.value = true
   try {
-    await sendMessage(sessionId, { content, msgType: 'TEXT' })
+    await sendMessage(sessionId, { content, msgType: 'TEXT', ...(quoting.value ? { quoteMessageId: quoting.value.messageId } : {}) })
     draft.value = ''
+    quoting.value = null
     await Promise.all([loadSession(), loadMessages()])
   } catch {
     // 请求封装统一提示服务端错误
@@ -339,14 +377,20 @@ onUnmounted(() => {
 .msg-body { max-width: 70%; }
 .msg-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #a0a5ac; margin-bottom: 4px; }
 .msg-row.mine .msg-meta { flex-direction: row-reverse; }
+/* 操作入口对齐用户端/企业端：平时隐藏，悬停消息才浮现；引用双方消息都可，撤回只在自己的消息上 */
+.msg-meta .msg-quote-btn, .msg-meta .msg-recall-btn { display: none; }
+.msg-row:hover .msg-quote-btn { display: inline-flex; }
+.msg-row.mine:hover .msg-recall-btn { display: inline-flex; }
 .msg-bubble { padding: 9px 13px; border-radius: 8px; background: #f2f3f5; color: #303133; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg-row.mine .msg-bubble { background: #1f2329; color: #fff; }
+.bubble-quote { border-left: 2px solid #c0c4cc; background: #fff; color: #909399; border-radius: 2px; padding: 2px 8px; margin: 2px 0 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-row.mine .bubble-quote { border-left-color: rgba(255, 255, 255, .6); background: rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .8); }
+.quoting-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; padding: 4px 10px; border-left: 2px solid #1f2329; background: #f4f4f5; border-radius: 2px; font-size: 12px; color: #606266; }
+.quoting-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-input { border-top: 1px solid #f0f0f0; padding: 12px 16px; }
 .chat-input-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
 .closed-tip { color: #f56c6c; font-size: 12px; margin-right: auto; }
 .black-button { background-color: #1f2329 !important; border-color: #1f2329 !important; color: #fff !important; }
-.close-btn { color: #fff !important; }
-.close-btn:hover { color: #000 !important; }
 .chat-side { width: 320px; min-width: 320px; }
 .side-block { padding: 4px 0 18px; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
 .side-block:last-child { border-bottom: 0; margin-bottom: 0; }
