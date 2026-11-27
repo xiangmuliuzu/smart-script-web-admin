@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@vue/compiler-sfc'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 async function setup(exports, overrides = {}) {
   const source = await readFile(
@@ -13,7 +13,7 @@ async function setup(exports, overrides = {}) {
   const code = descriptor.scriptSetup.content
     .replace(/^import[\s\S]*?from ['"][^'"]+['"]\r?$/gm, '')
   const context = {
-    reactive, ref,
+    reactive, ref, computed,
     URLSearchParams, FormData,
     onMounted() {}, onBeforeUnmount() {}, defineExpose() {},
     ElMessage: { error() {}, warning() {}, success() {}, info() {} },
